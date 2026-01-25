@@ -1,13 +1,6 @@
-// name: Cloudflare Speed Test Panel for Surge
-// desc: 使用 speed.cloudflare.com 测速，显示在 Surge 首页 Panel
-// author: Mr.Eric 原版 / 优化为 Panel by Grok
-// version: 2026.01
-
-const POLICY_NAME = typeof $argument === 'string' && $argument.trim()
-  ? $argument.trim()
-  : null;
-
-const NODE_NAME = POLICY_NAME || '当前节点';
+// name: 节点带宽测试 - 跟随当前选中节点
+// desc: Cloudflare 测速，显示当前实际出口的下载/上传速度 + 评分
+// author: Mr.Eric 原版 / 优化为跟随当前节点 by Grok
 
 const DOWNLOAD_SIZES = [
   { label: '100KB', bytes: 100 * 1024 },
@@ -40,7 +33,7 @@ function calcScore(dl, ul) {
   return Math.round((dlNorm * 0.7 + ulNorm * 0.3) * 1000) / 10;
 }
 
-function httpRequest(method, options) {
+function httpRequest(method, options = {}) {
   return new Promise((resolve, reject) => {
     const fn = method === 'POST' ? $httpClient.post : $httpClient.get;
     fn(options, (err, resp, body) => {
@@ -50,18 +43,24 @@ function httpRequest(method, options) {
   });
 }
 
-async function fetchIP() {
+async function fetchMeta() {
   try {
     const { body } = await httpRequest('GET', {
       url: 'https://speed.cloudflare.com/meta',
-      headers: { 'User-Agent': 'Surge/Panel' },
-      policy: POLICY_NAME,
+      headers: { 'User-Agent': 'Surge/Panel-Speed' },
       timeout: 8
+      // 关键：不加 policy，让 Surge 用当前选中节点的上下文发请求
     });
     const json = JSON.parse(body || '{}');
-    return json.clientIp || '未知';
+    return {
+      ip: json.clientIp || '未知',
+      city: json.city || '',
+      region: json.region || '',
+      country: json.country || '',
+      colo: json.colo || ''
+    };
   } catch {
-    return '未知';
+    return { ip: '未知', city: '', region: '', country: '', colo: '' };
   }
 }
 
@@ -70,10 +69,10 @@ async function testDownload(size) {
   try {
     await httpRequest('GET', {
       url: `https://speed.cloudflare.com/__down?bytes=${size.bytes}`,
-      headers: { 'User-Agent': 'Surge/Panel' },
-      policy: POLICY_NAME,
+      headers: { 'User-Agent': 'Surge/Panel-Speed' },
       'binary-mode': true,
       timeout: TIMEOUT / 1000
+      // 不加 policy，走当前选中节点
     });
     return toMbps(size.bytes, Date.now() - start);
   } catch {
@@ -91,12 +90,12 @@ async function testUpload(size) {
     await httpRequest('POST', {
       url: 'https://speed.cloudflare.com/__up',
       headers: {
-        'User-Agent': 'Surge/Panel',
+        'User-Agent': 'Surge/Panel-Speed',
         'Content-Type': 'application/octet-stream'
       },
       body,
-      policy: POLICY_NAME,
       timeout: TIMEOUT / 1000
+      // 不加 policy，走当前选中节点
     });
     return toMbps(bytes, Date.now() - start);
   } catch {
@@ -106,26 +105,23 @@ async function testUpload(size) {
 
 (async () => {
   try {
-    const ip = await fetchIP();
+    const meta = await fetchMeta();
+    const ip = meta.ip;
 
-    const dlPromises = DOWNLOAD_SIZES.map(s => testDownload(s));
-    const ulPromises = UPLOAD_SIZES.map(s => testUpload(s));
-
-    const dlResults = await Promise.all(dlPromises);
-    const ulResults = await Promise.all(ulPromises);
+    const dlResults = await Promise.all(DOWNLOAD_SIZES.map(testDownload));
+    const ulResults = await Promise.all(UPLOAD_SIZES.map(testUpload));
 
     const avgDl = dlResults.reduce((a, b) => a + b, 0) / dlResults.length || 0;
     const avgUl = ulResults.reduce((a, b) => a + b, 0) / ulResults.length || 0;
 
     const score = calcScore(avgDl, avgUl);
 
+    const loc = [meta.city, meta.region, meta.country].filter(Boolean).join(' · ') || '未知位置';
+    const colo = meta.colo ? `CF: ${meta.colo}` : '';
+
     const title = `${getEmoji(avgDl)} ↓ ${formatSpeed(avgDl)} Mbps   ${getEmoji(avgUl)} ↑ ${formatSpeed(avgUl)} Mbps`;
 
-    let content = `节点: ${NODE_NAME}\nIP: ${ip}\n评分: ${score}/100`;
-
-    if (avgDl > 0 || avgUl > 0) {
-      content += `\n下载: ${formatSpeed(avgDl)} Mbps\n上传: ${formatSpeed(avgUl)} Mbps`;
-    }
+    let content = `IP: ${ip}\n位置: ${loc}\n${colo ? colo + '\n' : ''}评分: ${score}/100`;
 
     let color = '#f5222d';
     if (score >= 85) color = '#52c41a';
@@ -133,8 +129,8 @@ async function testUpload(size) {
     else if (score >= 40) color = '#fa541c';
 
     $done({
-      title: title,
-      content: content,
+      title,
+      content,
       icon: 'speedometer',
       'icon-color': color
     });
