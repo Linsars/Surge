@@ -1,25 +1,38 @@
 // ==UserScript==
-// @name         节点名后追加参数 - 港台除外 + 无地区加自测（超全面地区关键词 v2）
-// @description  非香港/台湾节点追加 | GPT，无任何可识别地区/城市/机场代码的追加 | 自测
+// @name         节点名后追加参数 - 港台除外 + 无地区加自测（超全面 + 可面板自定义）
+// @description  非香港/台湾节点追加自定义文本，无任何可识别地区/城市/机场代码的追加 | 自测
 // @author       Linsar
-// @version      1.5
+// @version      1.6
 // ==/UserScript==
 
 async function operator(proxies) {
-    // ====================== 追加内容 ======================
-    const RN       = ' | GPT';      // 有地区但非港台 → 追加这个
-    const NO_REGION = ' | 自测';    // 完全没匹配任何地区/城市/机场关键词 → 追加这个
-    // ======================================================
+    // ====================== 可在 Sub-Store 面板自定义的参数 ======================
+    // 在 Sub-Store 的“脚本” → “参数” 或 “Arguments” 字段填入键值对，例如：
+    // with_region= | GPT
+    // no_region= | 自测
+    // 或直接写：with_region= 0.5x   no_region= ★自选
+    // ============================================================================
 
-    // 香港/台湾关键词（命中这些的节点完全不动，优先级最高）
+    // 默认值（如果面板没填参数，就用这些）
+    const DEFAULT_WITH_REGION = ' | GPT';
+    const DEFAULT_NO_REGION   = ' | 自测';
+
+    // 从环境/参数读取用户自定义值（Sub-Store 支持 $arguments 或类似机制）
+    // 如果你的面板用的是 $arguments 对象，这里兼容常见写法
+    const args = (typeof $arguments !== 'undefined') ? $arguments : {};
+
+    // 读取自定义追加文本，fallback 到默认值
+    const RN       = args.with_region   || args.RN       || DEFAULT_WITH_REGION;
+    const NO_REGION = args.no_region    || args.NO_REGION || DEFAULT_NO_REGION;
+
+    // ====================== 香港/台湾关键词（命中这些的节点完全不动） ======================
     const hkTwKeywords = [
         '香港', '港', 'HK', 'HKG', 'HongKong', 'Hong Kong', 'hk', '港铁', 'HKT', 'PCCW', '香港电讯',
         '台湾', '台灣', '台', 'TW', 'Taiwan', 'Taipei', 'TPE', '中華電信', 'CHT', 'Hinet', '遠傳',
         '新北', '桃园', '高雄', '台中', 'Kaohsiung', '台南', '彰化', '基隆', '新竹', '屏东', '宜兰'
     ];
 
-    // 超全面地区关键词：国家/地区中英文 + 主流 IATA 机场代码 + 常见城市 + 缩写变体
-    // 来源：机场订阅常见命名 + 全球热门落地 + IATA 代码（LAX/NRT/FRA 等超常见）
+    // 超全面地区关键词（已扩展到极致，基本覆盖所有常见机场命名）
     const regionKeywords = [
         // 亚洲主流（除港台）
         '日本', 'jp', 'japan', '东京', '大阪', '京都', '名古屋', '札幌', '福冈', '冲绳', 'NRT', 'HND', 'KIX', 'NGO', 'CTS', 'FUK', 'OKA',
@@ -35,7 +48,7 @@ async function operator(proxies) {
         '沙特', 'saudi', 'riyadh', 'jeddah', 'RUH', 'JED',
 
         // 北美
-        '美国', '美國', 'us', 'usa', 'united states', '美国西海岸', '美国东海岸', '洛杉矶', '纽约', '芝加哥', '西雅图', '旧金山', '达拉斯', '迈阿密', '拉斯维加斯', '休斯顿', '波士顿', '亚特兰大', '凤凰城', '华盛顿', 'LAX', 'JFK', 'EWR', 'ORD', 'SEA', 'SFO', 'DFW', 'MIA', 'LAS', 'IAH', 'BOS', 'ATL', 'PHX', 'IAD', 'DCA',
+        '美国', '美國', 'us', 'usa', 'united states', '洛杉矶', '纽约', '芝加哥', '西雅图', '旧金山', '达拉斯', '迈阿密', '拉斯维加斯', '休斯顿', '波士顿', '亚特兰大', '凤凰城', '华盛顿', 'LAX', 'JFK', 'EWR', 'ORD', 'SEA', 'SFO', 'DFW', 'MIA', 'LAS', 'IAH', 'BOS', 'ATL', 'PHX', 'IAD', 'DCA',
         '加拿大', 'ca', 'canada', '多伦多', '温哥华', '蒙特利尔', 'YYZ', 'YVR', 'YUL',
 
         // 欧洲主流
@@ -51,11 +64,11 @@ async function operator(proxies) {
         '土耳其', 'tr', 'turkey', '伊斯坦布尔', '安卡拉', 'IST', 'SAW', 'ESB',
         '波兰', 'pl', 'poland', '华沙', 'WAW',
 
-        // 大洋洲 & 其他热门
+        // 大洋洲 & 其他
         '澳大利亚', 'au', 'australia', '悉尼', '墨尔本', '布里斯班', 'SYD', 'MEL', 'BNE',
         '新西兰', 'nz', 'new zealand', '奥克兰', 'AKL',
 
-        // 更多常见机场代码（即使不带城市名也常单独出现）
+        // 额外常见机场代码（单独出现也识别）
         'AMS', 'FRA', 'LHR', 'CDG', 'SIN', 'NRT', 'HND', 'KIX', 'ICN', 'BKK', 'KUL', 'MNL', 'CGK', 'DEL', 'YYZ', 'YVR', 'DXB', 'AUH', 'IST', 'JFK', 'LAX', 'SFO', 'SEA', 'ORD', 'MIA'
     ];
 
@@ -70,13 +83,13 @@ async function operator(proxies) {
             return p;
         }
 
-        // 无任何地区/城市/机场关键词 → | 自测
+        // 无任何地区/城市/机场关键词 → 用自定义的 NO_REGION
         if (!anyRegionRegex.test(name)) {
             p.name = name + NO_REGION;
             return p;
         }
 
-        // 有地区信息，但不是港台 → | GPT
+        // 有地区信息，但不是港台 → 用自定义的 RN
         p.name = name + RN;
         return p;
     });
