@@ -16,7 +16,6 @@
  * - [format] 自定义格式, 从 节点(proxy) 和 落地 API 响应(api)中取数据. 默认为: {{api.country}} {{api.isp}} - {{proxy.name}}
  *            当使用 internal 时, 默认为 {{api.countryCode}} {{api.aso}} - {{proxy.name}}
  * - [regex] 使用正则表达式从落地 API 响应(api)中取数据. 格式为 a:x;b:y 此时将使用正则表达式 x 和 y 来从 api 中取数据, 赋值给 a 和 b. 然后可在 format 中使用 {{api.a}} 和 {{api.b}}
- * - [geo] 控制是否在节点上附加 _geo 字段并修改节点名字，1=开启（默认覆盖名字+附加_geo），0=关闭（不改名字也不附加），默认1
  * - [incompatible] 在节点上附加 _incompatible 字段来标记当前客户端不兼容该协议, 默认不附加
  * - [remove_incompatible] 移除当前客户端不兼容的协议. 默认不移除.
  * - [remove_failed] 移除失败的节点. 默认不移除.
@@ -61,7 +60,6 @@ async function operator(proxies = [], targetPlatform, context) {
   const remove_failed = $arguments.remove_failed
   const remove_incompatible = $arguments.remove_incompatible
   const incompatibleEnabled = $arguments.incompatible
-  const geoEnabled = $arguments.geo !== '0'   // 改成开关，0 关闭，其它（包括不写/写1）都开启
   const cacheEnabled = $arguments.cache
   const cache = scriptResourceCache
 
@@ -86,14 +84,9 @@ async function operator(proxies = [], targetPlatform, context) {
     })
   }
 
-  if (!geoEnabled || !incompatibleEnabled) {
+  if (!incompatibleEnabled) {
     proxies = proxies.map(p => {
-      if (!geoEnabled) {
-        delete p._geo
-      }
-      if (!incompatibleEnabled) {
-        delete p._incompatible
-      }
+      delete p._incompatible
       return p
     })
   }
@@ -122,6 +115,7 @@ async function operator(proxies = [], targetPlatform, context) {
               $.info(`[${proxy.name}] 不使用失败缓存`)
             } else {
               $.info(`[${proxy.name}] 使用失败缓存`)
+              proxy.name = '未知'  // 失败缓存也改成未知
               return
             }
           }
@@ -157,13 +151,14 @@ async function operator(proxies = [], targetPlatform, context) {
 
         $.log(`[${proxy.name}] api: ${JSON.stringify(api, null, 2)}`)
         if (status == 200) {
-          proxy.name = formatter({ proxy, api, format, regex })   // 强制覆盖名字
+          proxy.name = formatter({ proxy, api, format, regex })   // 成功 → 覆盖名字
           proxy._geo = api
           if (cacheEnabled) {
             $.info(`[${proxy.name}] 设置成功缓存`)
             cache.set(id, { api })
           }
         } else {
+          proxy.name = '未知'  // 非 200 → 改成未知
           if (cacheEnabled) {
             $.info(`[${proxy.name}] 设置失败缓存`)
             cache.set(id, {})
@@ -174,6 +169,7 @@ async function operator(proxies = [], targetPlatform, context) {
       }
     } catch (e) {
       $.error(`[${proxy.name}] ${e.message ?? e}`)
+      proxy.name = '未知'  // 异常 → 改成未知
       if (cacheEnabled) {
         $.info(`[${proxy.name}] 设置失败缓存`)
         cache.set(id, {})
