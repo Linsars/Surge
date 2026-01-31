@@ -1,0 +1,176 @@
+// ==UserScript==
+// 参数说明（用 # 开头，多个用 & 连接）
+// name=      前缀文字（最前面）          示例：name=小林机场
+// hname=     后缀文字（最末尾）          示例：hname=香港
+// fgf=       分隔符（前缀/国旗/名字/序号 都用这个）  默认｜    示例：fgf=-
+// GM=        命名模式控制
+//            GM=生肖      → 十二生肖循环 + 重复时加¹²³…¹⁰¹¹…
+//            GM=塔罗      → 塔罗牌（英文超简版，无 The）循环 + 重复时加¹²³…¹⁰¹¹…
+//            GM=塔罗X     → 塔罗牌（中文简洁版）循环 + 重复时加¹²³…¹⁰¹¹…
+//            GM=罪        → 七宗罪循环 + 重复时加¹²³…¹⁰¹¹…
+//            GM=天使      → 十二天使（英文名）循环 + 重复时加¹²³…¹⁰¹¹…
+//            GM=天使X     → 十二天使（中文名）循环 + 重复时加¹²³…¹⁰¹¹…
+//            GM=任意文字  → 全部使用你输入的文字作为基础名 + 重复时加¹²³…¹⁰¹¹…
+//            不传或其它值 → 只加前缀/后缀，不改原名，也不加序号
+
+const args = $arguments || {};
+const PREFIX    = args.name   ? decodeURI(args.name)   + (args.fgf || "｜") : "";
+const SUFFIX    = args.hname  ? (args.fgf || "｜") + decodeURI(args.hname) : "";
+const SEP       = args.fgf    ? decodeURI(args.fgf)   : "｜";
+
+const GM_MODE = args.GM ? decodeURI(args.GM).trim() : "";
+const USE_CUSTOM = !!GM_MODE;
+
+// 十二生肖
+const ZODIAC = [
+  "子鼠", "丑牛", "寅虎", "卯兔", "辰龙", "巳蛇",
+  "午马", "未羊", "申猴", "酉鸡", "戌狗", "亥猪"
+];
+
+// 塔罗牌 - 英文超简版（无 The）
+const TAROT_EN = [
+  "Fool", "Magician", "High Priestess", "Empress", "Emperor", "Hierophant",
+  "Lovers", "Chariot", "Strength", "Hermit", "Wheel of Fortune", "Justice",
+  "Hanged Man", "Death", "Temperance", "Devil", "Tower", "Star",
+  "Moon", "Sun", "Judgement", "World"
+];
+
+// 塔罗牌 - 中文简洁版
+const TAROT_CN = [
+  "愚者", "魔术师", "女祭司", "皇后", "皇帝", "教皇",
+  "恋人", "战车", "力量", "隐士", "命运之轮", "正义",
+  "倒吊人", "死神", "节制", "恶魔", "塔", "星星",
+  "月亮", "太阳", "审判", "世界"
+];
+
+// 七宗罪
+const SINS = [
+  "傲慢", "嫉妒", "暴怒", "懒惰", "贪婪", "暴食", "色欲"
+];
+
+// 十二天使 - 英文名
+const ANGELS_EN = [
+  "Michael", "Gabriel", "Raphael", "Uriel", "Raguel", "Sariel",
+  "Remiel", "Zadkiel", "Jophiel", "Chamuel", "Haniel", "Barachiel"
+];
+
+// 十二天使 - 中文名
+const ANGELS_CN = [
+  "米迦勒", "加百列", "拉斐尔", "乌列尔", "拉贵尔", "萨列尔",
+  "雷米尔", "扎基尔", "约菲尔", "卡麦尔", "哈尼尔", "巴拉基勒"
+];
+
+const SUPER_DIGITS = {
+  '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴',
+  '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹'
+};
+
+function toSuperscript(num) {
+  if (num <= 0) return '';
+  const str = num.toString();
+  let result = '';
+  for (let char of str) {
+    result += SUPER_DIGITS[char] || char;
+  }
+  return result;
+}
+
+function operator(proxies) {
+  if (!proxies?.length) return proxies;
+
+  const result = [];
+
+  if (!USE_CUSTOM) {
+    proxies.forEach(proxy => {
+      const newName = PREFIX + proxy.name.trim() + SUFFIX;
+      proxy.name = newName;
+      result.push(proxy);
+    });
+  } else {
+    let getBaseName;
+
+    if (GM_MODE === "生肖") {
+      getBaseName = (index) => {
+        const zIdx = index % 12;
+        const cycle = Math.floor(index / 12);
+        let z = ZODIAC[zIdx];
+        if (cycle > 0) z += cycle;
+        return z;
+      };
+    }
+    else if (GM_MODE === "塔罗") {
+      getBaseName = (index) => {
+        const tIdx = index % 22;
+        const cycle = Math.floor(index / 22);
+        let card = TAROT_EN[tIdx];
+        if (cycle > 0) card += cycle;
+        return card;
+      };
+    }
+    else if (GM_MODE === "塔罗X") {
+      getBaseName = (index) => {
+        const tIdx = index % 22;
+        const cycle = Math.floor(index / 22);
+        let card = TAROT_CN[tIdx];
+        if (cycle > 0) card += cycle;
+        return card;
+      };
+    }
+    else if (GM_MODE === "罪") {
+      getBaseName = (index) => {
+        const sIdx = index % 7;
+        const cycle = Math.floor(index / 7);
+        let sin = SINS[sIdx];
+        if (cycle > 0) sin += cycle;
+        return sin;
+      };
+    }
+    else if (GM_MODE === "天使") {
+      getBaseName = (index) => {
+        const aIdx = index % 12;
+        const cycle = Math.floor(index / 12);
+        let angel = ANGELS_EN[aIdx];
+        if (cycle > 0) angel += cycle;
+        return angel;
+      };
+    }
+    else if (GM_MODE === "天使X") {
+      getBaseName = (index) => {
+        const aIdx = index % 12;
+        const cycle = Math.floor(index / 12);
+        let angel = ANGELS_CN[aIdx];
+        if (cycle > 0) angel += cycle;
+        return angel;
+      };
+    }
+    else {
+      getBaseName = () => GM_MODE;
+    }
+
+    const nameGroups = {};
+    proxies.forEach((proxy, idx) => {
+      const base = getBaseName(idx);
+      proxy._base = base;
+      if (!nameGroups[base]) nameGroups[base] = [];
+      nameGroups[base].push(proxy);
+    });
+
+    Object.keys(nameGroups).forEach(base => {
+      const nodes = nameGroups[base];
+      const count = nodes.length;
+
+      nodes.forEach((node, i) => {
+        let part = base;
+        if (count > 1) {
+          const sup = toSuperscript(i + 1);
+          part += sup;
+        }
+        node.name = PREFIX + part + SUFFIX;
+        delete node._base;
+        result.push(node);
+      });
+    });
+  }
+
+  return result;
+}
