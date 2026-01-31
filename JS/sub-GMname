@@ -1,62 +1,69 @@
 // ==UserScript==
 // @name         智慧重命名 - 支持 GPT 区判断（超级全面版）
-// @version      1.2
-// @description  为substore代理节点重命名，支持生肖/塔罗/罪/天使循环 + 对非港台&不支持GPT地区追加文字
+// @version      1.3
+// @description  为substore代理节点重命名，支持多种循环命名 + 对非港台&不支持GPT地区追加文字（参数不区分大小写）
 // @author       Linsar
 // ==/UserScript==
 // 参数说明（用 # 开头，多个用 & 连接）
-// QZ=      前缀文字（最前面）          示例：QZ=小林机场
-// HZ=      后缀文字（最末尾）          示例：HZ=香港
-// fgf=     分隔符（前缀/国旗/名字/序号 都用这个）  默认｜    示例：fgf=｜
-// GM=      命名模式控制
+// QZ=      前缀文字（最前面）          示例：qz=小林机场 或 QZ=小林机场
+// HZ=      后缀文字（最末尾）          示例：hz=香港
+// fgf=     分隔符（前缀/国旗/名字/序号 都用这个）  默认｜    示例：fgf=｜ 或 FGF= - 
+// GM=      命名模式控制（不区分大小写）
 //          GM=生肖      → 十二生肖循环 + 重复时加¹²³…¹⁰¹¹…
-//          GM=塔罗      → 塔罗牌（英文超简版，无 The）循环 + 重复时加¹²³…¹⁰¹¹…
-//          GM=塔罗X     → 塔罗牌（中文简洁版）循环 + 重复时加¹²³…¹⁰¹¹…
-//          GM=罪        → 七宗罪循环 + 重复时加¹²³…¹⁰¹¹…
-//          GM=天使      → 十二天使（英文名）循环 + 重复时加¹²³…¹⁰¹¹…
-//          GM=天使X     → 十二天使（中文名）循环 + 重复时加¹²³…¹⁰¹¹…
-//          GM=任意文字  → 全部使用你输入的文字作为基础名 + 重复时加¹²³…¹⁰¹¹…
+//          GM=塔罗      → 塔罗牌（英文超简版，无 The）循环
+//          GM=塔罗X     → 塔罗牌（中文简洁版）循环
+//          GM=罪        → 七宗罪循环
+//          GM=天使      → 十二天使（英文名）循环
+//          GM=天使X     → 十二天使（中文名）循环
+//          GM=血族      → 西方吸血鬼传说阶位（简洁英文）循环
+//          GM=节气      → 中国古代二十四节气循环
+//          GM=唐朝      → 中国古代唐朝官职循环
+//          GM=斗罗      → 小说斗破苍穹中等级循环
+//          GM=斗破      → 小说斗罗大陆中等级循环
+//          GM=任意文字  → 全部使用你输入的文字作为基础名 + 重复时加序号
 //          不传或其它值 → 只加前缀/后缀，不改原名，也不加序号
-// ZN=      是否对非港台&非GPT支持节点追加文字   1=开启，0=关闭（默认）   示例：ZN=1
-// ZNre=    自定义追加的文本（仅 ZN=1 时生效，没传则用默认 " | GPT"）  示例：ZNre= | NF+GPT
+// ZN=      是否对非港台&非GPT支持节点追加文字   1=开启，0=关闭（默认）   示例：zn=1
+// ZNre=    自定义追加的文本（仅 ZN=1 时生效，没传则用默认 " | GPT"）  示例：znre= | NF+GPT
 // ======================================================================
 
 const args = $arguments || {};
 
-// ── 基础命名参数 ────────────────────────────────────────
-const PREFIX    = args.QZ   ? decodeURI(args.QZ)   + (args.fgf || "｜") : "";
-const SUFFIX    = args.HZ   ? (args.fgf || "｜") + decodeURI(args.HZ) : "";
-const SEP       = args.fgf  ? decodeURI(args.fgf)  : "｜";
+// 将所有参数 key 转为大写，方便不区分大小写处理
+const args_upper = {};
+for (const key in args) {
+    if (Object.prototype.hasOwnProperty.call(args, key)) {
+        args_upper[key.toUpperCase()] = args[key];
+    }
+}
 
-const GM_MODE   = args.GM ? decodeURI(args.GM).trim() : "";
+// ── 基础命名参数 ────────────────────────────────────────
+const PREFIX = args_upper.QZ   ? decodeURI(args_upper.QZ)   + (args_upper.FGF || "｜") : "";
+const SUFFIX = args_upper.HZ   ? (args_upper.FGF || "｜") + decodeURI(args_upper.HZ) : "";
+const SEP    = args_upper.FGF  ? decodeURI(args_upper.FGF)  : "｜";
+
+const GM_MODE   = args_upper.GM ? decodeURI(args_upper.GM).trim() : "";
 const USE_CUSTOM = !!GM_MODE;
 
 // ── 追加文字控制 ────────────────────────────────────────
-const APPEND_ENABLED = (args.ZN === "1" || args.ZN === 1);
+const APPEND_ENABLED = (args_upper.ZN === "1" || args_upper.ZN === 1);
 
 const DEFAULT_APPEND = " | GPT";
 let APPEND_TEXT = DEFAULT_APPEND;
 
-if (APPEND_ENABLED && args.ZNre !== undefined) {
-    const custom = decodeURI(args.ZNre);
+if (APPEND_ENABLED && args_upper.ZNRE !== undefined) {
+    const custom = decodeURI(args_upper.ZNRE);
     if (custom.trim() !== "") {
         APPEND_TEXT = custom;
     }
 }
 
 // 香港/台湾 + 全球 OpenAI/ChatGPT 不支持/被禁地区关键词（不区分大小写，2026最新）
-// 优先放常见节点命名写法：国家名、简称、城市、英文/中文
 const hkTwKeywords = [
-    // 香港/台湾（全面覆盖城市、机场代码、常见写法）
     '香港', '港', 'HK', 'HKG', 'HongKong', 'Hong Kong', 'Hong-Kong', '九龙', '新界',
     '台湾', '台灣', '台', 'TW', 'Taiwan', 'Taipei', 'TPE', 'TaiPei', '桃園', '桃园',
     '高雄', 'Kaohsiung', 'KHH', '台中', 'Taichung', 'RMQ', '台南', 'Tainan', 'TNN',
     '新北', '彰化', 'Changhua', '基隆', 'Keelung', '宜兰', '花莲', 'Hualien', '台东',
-
-    // 中国大陆（最常见）
     '中国', '大陆', 'CN', 'China', 'Mainland', '北京', '上海', '广州', '深圳', '成都', '杭州',
-
-    // OpenAI 明确不支持/被禁的主要国家（高频节点名）
     '俄罗斯', '俄国', 'RU', 'Russia', 'Moscow', '莫斯科', '圣彼得堡', 'SPB',
     '伊朗', 'IR', 'Iran', 'Tehran', '德黑兰', '波斯',
     '朝鲜', '北朝鲜', '北韩', 'KP', 'Korea North', 'DPRK', 'Pyongyang', '平壤',
@@ -71,9 +78,7 @@ const hkTwKeywords = [
     '厄立特里亚', 'ER', 'Eritrea',
     '中非', 'Central African Republic', 'CF',
     '乍得', 'Chad', 'TD',
-
-    // 其他常见不支持/曾受限地区（节点命名中出现概率较高）
-    '沙特', 'Saudi Arabia', 'SA', 'Riyadh', '利雅得',  // 曾波动
+    '沙特', 'Saudi Arabia', 'SA', 'Riyadh', '利雅得',
     '埃及', 'Egypt', 'EG', 'Cairo', '开罗',
     '老挝', 'Laos', 'LA', 'Vientiane',
     '哈萨克斯坦', 'Kazakhstan', 'KZ', 'Almaty', '阿拉木图',
@@ -119,6 +124,34 @@ const ANGELS_EN = [
 const ANGELS_CN = [
     "米迦勒", "加百列", "拉斐尔", "乌列尔", "拉贵尔", "萨列尔",
     "雷米尔", "扎基尔", "约菲尔", "卡麦尔", "哈尼尔", "巴拉基勒"
+];
+
+const VAMPIRE_RANKS = [
+    "Fledgling", "Neonate", "Ancilla", "Elder", "Methuselah", "Antediluvian",
+    "Baron", "Count", "Duke", "Prince", "Archon", "Justicar"
+];
+
+const SOLAR_TERMS = [
+    "立春", "雨水", "惊蛰", "春分", "清明", "谷雨",
+    "立夏", "小满", "芒种", "夏至", "小暑", "大暑",
+    "立秋", "处暑", "白露", "秋分", "寒露", "霜降",
+    "立冬", "小雪", "大雪", "冬至", "小寒", "大寒"
+];
+
+const TANG_OFFICIALS = [
+    "宰相", "尚书", "侍郎", "郎中", "员外郎", "御史", "太守", "刺史",
+    "县令", "主簿", "司空", "司徒", "司马", "太尉", "中书令", "门下侍中",
+    "尚书令", "给事中", "谏议大夫", "大夫", "卿", "将军", "校尉", "都督"
+];
+
+const DOUPO_LEVELS = [
+    "斗之气", "斗者", "斗师", "大斗师", "斗灵", "斗王",
+    "斗皇", "斗宗", "斗尊", "斗圣", "斗帝"
+];
+
+const DOULUO_LEVELS = [
+    "魂士", "魂师", "大魂师", "魂尊", "魂宗", "魂王",
+    "魂帝", "魂圣", "魂斗罗", "封号斗罗", "神级"
 ];
 
 const SUPER_DIGITS = {
@@ -203,6 +236,51 @@ function operator(proxies) {
                 let angel = ANGELS_CN[aIdx];
                 if (cycle > 0) angel += cycle;
                 return angel;
+            };
+        }
+        else if (GM_MODE === "血族") {
+            getBaseName = (index) => {
+                const vIdx = index % VAMPIRE_RANKS.length;
+                const cycle = Math.floor(index / VAMPIRE_RANKS.length);
+                let rank = VAMPIRE_RANKS[vIdx];
+                if (cycle > 0) rank += cycle;
+                return rank;
+            };
+        }
+        else if (GM_MODE === "节气") {
+            getBaseName = (index) => {
+                const sIdx = index % SOLAR_TERMS.length;
+                const cycle = Math.floor(index / SOLAR_TERMS.length);
+                let term = SOLAR_TERMS[sIdx];
+                if (cycle > 0) term += cycle;
+                return term;
+            };
+        }
+        else if (GM_MODE === "唐朝") {
+            getBaseName = (index) => {
+                const oIdx = index % TANG_OFFICIALS.length;
+                const cycle = Math.floor(index / TANG_OFFICIALS.length);
+                let official = TANG_OFFICIALS[oIdx];
+                if (cycle > 0) official += cycle;
+                return official;
+            };
+        }
+        else if (GM_MODE === "斗罗") {
+            getBaseName = (index) => {
+                const dIdx = index % DOUPO_LEVELS.length;
+                const cycle = Math.floor(index / DOUPO_LEVELS.length);
+                let level = DOUPO_LEVELS[dIdx];
+                if (cycle > 0) level += cycle;
+                return level;
+            };
+        }
+        else if (GM_MODE === "斗破") {
+            getBaseName = (index) => {
+                const dIdx = index % DOULUO_LEVELS.length;
+                const cycle = Math.floor(index / DOULUO_LEVELS.length);
+                let level = DOULUO_LEVELS[dIdx];
+                if (cycle > 0) level += cycle;
+                return level;
             };
         }
         else {
