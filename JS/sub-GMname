@@ -1,4 +1,9 @@
 // ==UserScript==
+// @name         智慧重命名 - 支持 GPT 区判断（超级全面版）
+// @version      1.2
+// @description  为substore代理节点重命名，支持生肖/塔罗/罪/天使循环 + 对非港台&不支持GPT地区追加文字
+// @author       Linsar
+// ==/UserScript==
 // 参数说明（用 # 开头，多个用 & 连接）
 // QZ=      前缀文字（最前面）          示例：QZ=小林机场
 // HZ=      后缀文字（最末尾）          示例：HZ=香港
@@ -12,7 +17,7 @@
 //          GM=天使X     → 十二天使（中文名）循环 + 重复时加¹²³…¹⁰¹¹…
 //          GM=任意文字  → 全部使用你输入的文字作为基础名 + 重复时加¹²³…¹⁰¹¹…
 //          不传或其它值 → 只加前缀/后缀，不改原名，也不加序号
-// ZN=      是否对非港台节点追加文字   1=开启，0=关闭（默认）   示例：ZN=1
+// ZN=      是否对非港台&非GPT支持节点追加文字   1=开启，0=关闭（默认）   示例：ZN=1
 // ZNre=    自定义追加的文本（仅 ZN=1 时生效，没传则用默认 " | GPT"）  示例：ZNre= | NF+GPT
 // ======================================================================
 
@@ -34,18 +39,52 @@ let APPEND_TEXT = DEFAULT_APPEND;
 
 if (APPEND_ENABLED && args.ZNre !== undefined) {
     const custom = decodeURI(args.ZNre);
-    if (custom.trim() !== "") {  // 如果传了非空，才覆盖默认
+    if (custom.trim() !== "") {
         APPEND_TEXT = custom;
     }
-    // 如果传了空字符串，就保持默认 " | GPT"
 }
 
-// 香港/台湾常见关键词（不区分大小写）
+// 香港/台湾 + 全球 OpenAI/ChatGPT 不支持/被禁地区关键词（不区分大小写，2026最新）
+// 优先放常见节点命名写法：国家名、简称、城市、英文/中文
 const hkTwKeywords = [
-    '香港', '港', 'HK', 'HKG', 'HongKong', 'Hong Kong',
-    '台湾', '台灣', '台', 'TW', 'Taiwan', 'Taipei', 'TPE',
-    '新北', '桃园', '高雄', '台中', 'Kaohsiung', '台南', '彰化', '基隆'
+    // 香港/台湾（全面覆盖城市、机场代码、常见写法）
+    '香港', '港', 'HK', 'HKG', 'HongKong', 'Hong Kong', 'Hong-Kong', '九龙', '新界',
+    '台湾', '台灣', '台', 'TW', 'Taiwan', 'Taipei', 'TPE', 'TaiPei', '桃園', '桃园',
+    '高雄', 'Kaohsiung', 'KHH', '台中', 'Taichung', 'RMQ', '台南', 'Tainan', 'TNN',
+    '新北', '彰化', 'Changhua', '基隆', 'Keelung', '宜兰', '花莲', 'Hualien', '台东',
+
+    // 中国大陆（最常见）
+    '中国', '大陆', 'CN', 'China', 'Mainland', '北京', '上海', '广州', '深圳', '成都', '杭州',
+
+    // OpenAI 明确不支持/被禁的主要国家（高频节点名）
+    '俄罗斯', '俄国', 'RU', 'Russia', 'Moscow', '莫斯科', '圣彼得堡', 'SPB',
+    '伊朗', 'IR', 'Iran', 'Tehran', '德黑兰', '波斯',
+    '朝鲜', '北朝鲜', '北韩', 'KP', 'Korea North', 'DPRK', 'Pyongyang', '平壤',
+    '古巴', 'Cuba', 'CU', 'Havana', '哈瓦那',
+    '叙利亚', 'SY', 'Syria', 'Damascus', '大马士革',
+    '阿富汗', 'AF', 'Afghanistan', 'Kabul', '喀布尔',
+    '白俄罗斯', '白俄', 'BY', 'Belarus', 'Minsk', '明斯克',
+    '缅甸', 'Burma', 'Myanmar', 'MM', 'Yangon', '仰光', '内比都',
+    '利比亚', 'LY', 'Libya', 'Tripoli', '的黎波里',
+    '也门', 'Yemen', 'YE', 'Sanaa',
+    '苏丹', 'Sudan', 'SD', 'Khartoum',
+    '厄立特里亚', 'ER', 'Eritrea',
+    '中非', 'Central African Republic', 'CF',
+    '乍得', 'Chad', 'TD',
+
+    // 其他常见不支持/曾受限地区（节点命名中出现概率较高）
+    '沙特', 'Saudi Arabia', 'SA', 'Riyadh', '利雅得',  // 曾波动
+    '埃及', 'Egypt', 'EG', 'Cairo', '开罗',
+    '老挝', 'Laos', 'LA', 'Vientiane',
+    '哈萨克斯坦', 'Kazakhstan', 'KZ', 'Almaty', '阿拉木图',
+    '埃塞俄比亚', 'Ethiopia', 'ET', 'Addis Ababa',
+    '委内瑞拉', 'Venezuela', 'VE', 'Caracas',
+    '巴林', 'Bahrain', 'BH',
+    '吉布提', 'Djibouti',
+    '马其顿', 'North Macedonia', 'MK',
+    '南苏丹', 'South Sudan', 'SS'
 ];
+
 const hkTwRegex = new RegExp(hkTwKeywords.join('|'), 'i');
 
 // ── 循环命名数组 ────────────────────────────────────────
@@ -195,11 +234,11 @@ function operator(proxies) {
         });
     }
 
-    // 第二阶段：如果 ZN=1，则对非港台节点追加 APPEND_TEXT
+    // 第二阶段：如果 ZN=1，则对**非港台 & 非支持区**节点追加 APPEND_TEXT
     if (APPEND_ENABLED) {
         result = result.map(p => {
             if (hkTwRegex.test(p.name)) {
-                return p;
+                return p;  // 匹配到港台或不支持区关键词 → 不加
             }
             p.name += APPEND_TEXT;
             return p;
