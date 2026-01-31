@@ -1,13 +1,13 @@
 // ==UserScript==
-// @name         节点名后追加参数 - 港台除外 + 无地区加自测（简化硬编码版）
-// @description  非香港/台湾节点追加 | GPT，无任何地区信息追加 | 自测
+// @name         节点名后追加参数 - 港台除外 + 无地区加改名
+// @description  非香港/台湾节点追加 | GPT，无任何地区信息追加 | 改名
 // @author       Linsar
 // @version      2.0
 // ==/UserScript==
 
 async function operator(proxies) {
     const APPEND_WITH_REGION = ' | GPT';   // 有地区但非港台 → 追加这个
-    const APPEND_NO_REGION   = ' | 自测'; // 完全没地区关键词 → 追加这个
+    const APPEND_NO_REGION   = ' | 改名'; // 完全没地区关键词 → 追加这个
 
     // 香港/台湾关键词（命中这些的不动）
     const hkTwKeywords = [
@@ -67,7 +67,7 @@ async function operator(proxies) {
             return p;
         }
 
-        // 无任何地区关键词：追加 | 自测
+        // 无任何地区关键词：追加 | 改名
         if (!regionRegex.test(name)) {
             name += APPEND_NO_REGION;
         } 
