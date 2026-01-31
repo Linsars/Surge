@@ -1,8 +1,8 @@
 // ==UserScript==
 // 参数说明（用 # 开头，多个用 & 连接）
-// name=      前缀文字（最前面）          示例：name=小林机场
-// hname=     后缀文字（最末尾）          示例：hname=香港
-// fgf=       分隔符（前缀/国旗/名字/序号 都用这个）  默认｜    示例：fgf=-
+// QZ=      前缀文字（最前面）          示例：QZ=小林机场
+// HZ=     后缀文字（最末尾）          示例：HZ=香港
+// fgf=       分隔符（前缀/国旗/名字/序号 都用这个）  默认｜    示例：fgf=｜
 // GM=        命名模式控制
 //            GM=生肖      → 十二生肖循环 + 重复时加¹²³…¹⁰¹¹…
 //            GM=塔罗      → 塔罗牌（英文超简版，无 The）循环 + 重复时加¹²³…¹⁰¹¹…
@@ -14,8 +14,8 @@
 //            不传或其它值 → 只加前缀/后缀，不改原名，也不加序号
 
 const args = $arguments || {};
-const PREFIX    = args.name   ? decodeURI(args.name)   + (args.fgf || "｜") : "";
-const SUFFIX    = args.hname  ? (args.fgf || "｜") + decodeURI(args.hname) : "";
+const PREFIX    = args.QZ   ? decodeURI(args.QZ)   + (args.fgf || "｜") : "";
+const SUFFIX    = args.HZ  ? (args.fgf || "｜") + decodeURI(args.HZ) : "";
 const SEP       = args.fgf    ? decodeURI(args.fgf)   : "｜";
 
 const GM_MODE = args.GM ? decodeURI(args.GM).trim() : "";
