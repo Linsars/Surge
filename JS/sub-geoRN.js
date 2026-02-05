@@ -30,7 +30,7 @@ let APPEND_TEXT = args_upper.ZNRE !== undefined ? decodeURI(args_upper.ZNRE) : "
 if (APPEND_TEXT.trim() === "") APPEND_TEXT = " | GPT";
 
 // 节点名 fallback 关键词
-const hkTwKeywords = ['香港','港','HK','HKG','Taiwan','TW','台湾','中国','大陆','CN','Russia','RU','伊朗','IR','朝鲜','KP','古巴','CU','叙利亚','SY','阿富汗','AF','白俄罗斯','BY','缅甸','MM'];
+const hkTwKeywords = ['香港','港','🇭🇰','HK','HKG','Taiwan','TW','台湾','中国','大陆','CN','Russia','RU','伊朗','IR','朝鲜','KP','古巴','CU','叙利亚','SY','阿富汗','AF','白俄罗斯','BY','缅甸','MM'];
 const hkTwRegex = new RegExp(hkTwKeywords.join('|'), 'i');
 
 // ── 循环命名数组 ────────────────────────────────────────
@@ -374,24 +374,25 @@ async function operator(proxies = []) {
     if (APPEND_ENABLED) {
         result = result.map(p => {
             let append = APPEND_TEXT;
-            let isUnsupported = true;
+            let isSupported = false;
 
             if (GEO_ENABLED && p._geo?.countryCode) {
-                const cc = p._geo.countryCode.toUpperCase();
-                // 支持列表（可自定义）
-                const supported = ['US','CA','GB','AU','JP','KR','SG','TW','HK','FR','DE','IT','ES','NL','SE','CH','IE','PT','BE','AT','DK','NO','FI','IL','AE','QA','SA','BR','MX'];
-                if (supported.includes(cc)) {
-                    isUnsupported = false;
+                // geo 开了，用测出来的 countryCode 判断
+                // 只要有 countryCode 且不是空字符串，就算支持（相当于“已成功测到归属地”）
+                if (p._geo.countryCode.trim() !== '') {
+                    isSupported = true;
                 }
-            } else if (!GEO_ENABLED || !p._geo) {
-                // fallback 到节点名
+            } else {
+                // geo 没开，回退用节点名关键词判断
                 if (hkTwRegex.test(p.name)) {
-                    isUnsupported = false;
+                    isSupported = true;
                 }
             }
 
-            if (isUnsupported) {
-                if (!p._geo?.countryCode) append = " | 未知" + append;
+            if (!isSupported) {
+                if (GEO_ENABLED && !p._geo?.countryCode) {
+                    append = " | 未知" + append;
+                }
                 p.name += append;
             }
 
