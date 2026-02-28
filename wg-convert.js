@@ -1,48 +1,110 @@
-// ==Surge==
-// @name         WireGuard 链接转 Surge 配置
-// @version      1.0.1
-// @author       Linsar & Eric
-// @description  把 wg:// 开头的链接粘贴到 inputText 变量里，运行后输出 Surge 可用的 WireGuard 配置
-// ==/Surge==
+// Surge Module Script: wg-to-surge.js
+// 支持：argument 里一行一个 wg:// 链接，直接回车分隔
 
-// 如果你想通过远程参数传 wg 链接，可以改用 $argument
-// 这里先用最简单的方式：假设用户已在 Surge 里设置了 persistent 变量 inputText
+let argument = $argument || '';
 
-const inputText = $persistentStore.read("inputText") || `
-  // 这里可以留空，或者放默认示例
-  wg://你的链接在这里
-`;
-
-const 代理列表 = ["[Proxy]"];
-const wireguard节点列表 = [];
-
-function 提取WG链接(文本) {
-  const wg正则 = /wg:\/\/[^\s'"]+/g;
-  return 文本.match(wg正则) || [];
+if (!argument.trim()) {
+  $notification.post(
+    "WG → Surge WireGuard",
+    "参数为空",
+    "请在模块参数（argument）中填入 wg:// 开头的链接，\n一行一个节点（直接回车分隔）\n\n示例：\nwg://vpn-hk-xxx:51820?...#香港\nwg://vpn-jp-xxx:51820?...#日本",
+    ""
+  );
+  $done();
 }
 
-function 解析WG链接转Surge格式(网址) {
-  try {
-    const wg内容 = 网址.slice(5);
-    const [主机端口, 查询与标题] = wg内容.split('?');
-    const [主机, 端口] = 主机端口.split(':');
-    const [查询字符串, 标题] = 查询与标题 ? 查询与标题.split('#') : ['', ''];
+// 按行分割（Surge 的 argument 会保留换行）
+let lines = argument.split('\n').map(line => line.trim()).filter(Boolean);
 
-    const 原始参数 = Object.fromEntries(
-      查询字符串.split('&').map(键值对 => {
-        const [键, ...其余] = 键值对.split('=');
-        const 值 = 其余.join('=');
-        if (['publicKey', 'privateKey', 'presharedKey'].includes(键)) {
-          return [键, 值];
+let wgLinks = lines.filter(link => link.startsWith('wg://') && link.length > 10);
+
+if (wgLinks.length === 0) {
+  $notification.post(
+    "没有找到有效节点",
+    "检查输入格式",
+    "确保每行都是 wg:// 开头的完整链接",
+    ""
+  );
+  $done();
+}
+
+// 开始转换
+const proxyLines = ["[Proxy]"];
+const wgSections = [];
+
+function parseWgUrl(url) {
+  try {
+    const wgStr = url.slice(5);
+    const [hostPort, queryAndFrag] = wgStr.split('?');
+    if (!queryAndFrag) return;
+
+    const [host, port] = hostPort.split(':');
+    const [query, fragment = ''] = queryAndFrag.split('#');
+
+    const params = Object.fromEntries(
+      query.split('&').map(p => {
+        let [k, ...v] = p.split('=');
+        let val = v.join('=');
+        if (['publicKey', 'privateKey', 'presharedKey'].includes(k)) {
+          return [k, val];
         }
-        return [键, decodeURIComponent(值.replace(/\+/g, '%20'))];
+        return [k, decodeURIComponent(val.replace(/\+/g, ' '))];
       })
     );
 
-    const 名称 = decodeURIComponent(标题 || 'WG节点');
-    const 公钥 = 原始参数.publicKey || '';
-    const 私钥 = 原始参数.privateKey || '';
-    const 预共享密钥 = 原始参数.presharedKey || '';
-    const IP段 = 原始参数.ip || '0.0.0.0/32';
-    const 本机IP = IP段.split(',')[0].split('/')[0];
-    const MTU = 原始参数.mtu || '128
+    const name = decodeURIComponent(fragment) || 'WG节点';
+    const pubKey = params.publicKey || '';
+    const priKey = params.privateKey || '';
+    const psk    = params.presharedKey || '';
+    const ipStr  = params.ip || '0.0.0.0/32';
+    const selfIp = ipStr.split(',')[0].split('/')[0].trim();
+    const mtu    = params.mtu || '1280';
+    const dns    = (params.dns || '').replace(/\s+/g, '');
+
+    proxyLines.push(`${name} = wireguard, section-name = ${name}`);
+
+    let section = [
+      `[WireGuard ${name}]`,
+     ge Module Script: wg-to-sur
+     ge Module Script: wg-to    ];
+    if (dns) section.push(`dns-server = ${dns}`);
+    section.push(`mtu = ${mtu}`);
+
+    let peer =';
+
+if (!argument.trim()) {
+  $notification.post(
+    "WG → Surge WireGuard",
+    "参数为空",
+    "
+    if (psk) peer +=t: wg-to-surge.js
+// 支持：argu
+    peer +=ule Script: wg-to-sur
+    section.push(peer);
+
+    wgSections.push(section.join('\n'));
+  } catch (e) {
+    console.log(`解析出错: ${url.slice(0, 60)}... → ${e.message}`);
+  }
+}
+
+wgLinks.forEach(parseWgUrl);
+
+if (wgSections.length === 0) {
+  $notification.post("转换失败", "所有节点解析出错", "请检查链接是否完整", "");
+  $done();
+}
+
+const result = proxyLines.join('\n') + '\n\n' + wgSections.join('\n\n\n');
+
+$notification.post(
+ s = argument.split('\n').map(line
+  "长按下方内容 → 拷贝",
+  result,
+  ""
+);
+
+// 可选：保存到持久化变量，方便以后查看
+$persistentStore.write(result, "WG转换结果");
+
+$done();
