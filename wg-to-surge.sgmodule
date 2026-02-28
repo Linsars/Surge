@@ -5,25 +5,14 @@
 #!homepage = 
 #!icon = https://raw.githubusercontent.com/fmz200/wool_scripts/main/icons/wireguard.png
 #!date = 2025-03-01
-
-[Script]
-http-response ^https?://example\.com/wg-convert$ script-path=https://raw.githubusercontent.com/Linsars/Surge/main/wg-convert.js, tag=WG转Surge, img-url=leaf.fill, enabled=true
-
-[MITM]
-hostname = example.com
-#!name = WG链接转Surge WireGuard
-#!desc = 传入 wg:// 链接（或多条用回车分隔，或订阅链接），运行后弹出可复制的Surge配置
-#!author = Linsar & Eric
-#!homepage = 
-#!icon = https://raw.githubusercontent.com/fmz200/wool_scripts/main/icons/wireguard.png
-#!arguments = links
-#!arguments-desc = links: 填入 wg:// 开头的节点链接（多条用回车分隔），或直接填订阅链接
-#!date = 2026-03-01
-
-[Script]
-wg-convert = type=generic, timeout=30, script-path=https://raw.githubusercontent.com/Linsars/Surge/main/wg-convert.js, argument={{{links}}}, tag=WG转配置, img-url=wand.and.stars, enabled=true
-
 # 使用方式：
 # 在 Surge → 模块 → wg-convert → 参数（arguments）填写：
 # wg://...#香港
 # 或 https://你的机场订阅?token=xxx
+#!name = WG链接转Surge配置
+#!desc = 把 wg:// 节点粘贴到参数里（一行一个，直接回车分隔），运行后弹出可复制配置
+#!author = 你自己或Linsar
+#!icon = https://raw.githubusercontent.com/fmz200/wool_scripts/main/icons/wireguard.png
+
+[Script]
+wg-to-surge = type=generic, timeout=20, script-path=https://raw.githubusercontent.com/Linsars/Surge/main/wg-convert.js, argument={{{links}}}, tag=WG转换, enabled=true
