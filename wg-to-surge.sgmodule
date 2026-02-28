@@ -1,7 +1,7 @@
 #!name = WireGuard 链接转 Surge 配置
 #!desc = 把 wg:// 链接粘贴到 inputText 里，运行后自动生成 Surge WireGuard 节点
 #!openUrl = 
-#!author = Linsar & 男神
+#!author = Linsar & Eric
 #!homepage = 
 #!icon = https://raw.githubusercontent.com/fmz200/wool_scripts/main/icons/wireguard.png
 #!date = 2025-03-01
