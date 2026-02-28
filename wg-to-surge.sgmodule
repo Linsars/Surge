@@ -1,18 +1,11 @@
-#!name = WireGuard 链接转 Surge 配置
-#!desc = 把 wg:// 链接粘贴到 inputText 里，运行后自动生成 Surge WireGuard 节点
-#!openUrl = 
-#!author = Linsar & Eric
-#!homepage = 
-#!icon = https://raw.githubusercontent.com/fmz200/wool_scripts/main/icons/wireguard.png
-#!date = 2025-03-01
-# 使用方式：
-# 在 Surge → 模块 → wg-convert → 参数（arguments）填写：
-# wg://...#香港
-# 或 https://你的机场订阅?token=xxx
-#!name = WG链接转Surge配置
-#!desc = 把 wg:// 节点粘贴到参数里（一行一个，直接回车分隔），运行后弹出可复制配置
-#!author = 你自己或Linsar
-#!icon = https://raw.githubusercontent.com/fmz200/wool_scripts/main/icons/wireguard.png
+
+#!name=WireGuard 链接转 Surge 配置
+#!desc=粘贴 wg:// 节点（一行一个，回车分隔），运行后弹出可复制的 Surge WireGuard 配置
+#!author=Linsar & Eric
+#!arguments=links
+#!arguments-desc=links: 在下方输入框粘贴 wg:// 开头的完整链接，一行一个节点（支持直接从剪贴板多行粘贴）。示例：\nwg://vpn-hk-xxx:51820?...#香港\nwg://120.233.41.75:16818?...#HK-急速直连\n运行后会弹出通知，长按正文复制配置。
+#!icon=https://raw.githubusercontent.com/fmz200/wool_scripts/main/icons/wireguard.png
+#!date=2026-03-01
 
 [Script]
-wg-to-surge = type=generic, timeout=20, script-path=https://raw.githubusercontent.com/Linsars/Surge/main/wg-convert.js, argument={{{links}}}, tag=WG转换, enabled=true
+wg-convert = type=generic, timeout=30, script-path=https://raw.githubusercontent.com/Linsars/Surge/main/wg-convert.js, argument={{{links}}}, tag=WG转换, img-url=wand.and.stars, enabled=true
