@@ -1,7 +1,7 @@
 // ==Surge==
 // @name         WireGuard 链接转 Surge 配置
 // @version      1.0.1
-// @author       Linsar & 男神
+// @author       Linsar & Eric
 // @description  把 wg:// 开头的链接粘贴到 inputText 变量里，运行后输出 Surge 可用的 WireGuard 配置
 // ==/Surge==
 
