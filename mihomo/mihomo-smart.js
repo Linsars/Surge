@@ -139,7 +139,7 @@ function generateProxyGroups() {
       icon: "https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Airport.png" },
 
     { ...groupBaseOption, name: "GitGPT", type: USE_SMART_KERNEL ? "smart" : "url-test",
-      proxies: ["🤖 AI 专用节点"], "include-all": true, filter: "(?i)^(?!.*(中国|大陆|内地|俄罗斯|伊朗|朝鲜|叙利亚|古巴|委内瑞拉|白俄罗斯|缅甸|阿富汗|利比亚|苏丹|索马里|也门|伊拉克|CN|RU|KP|IR|SY|CU|VE|BY|MM|AF|LY|SD|SO|YE|IQ|新疆|西藏)).*(AI|ChatGPT|Grok|GPT|Claude|Gemini|US|JP|EU|SG|KR|CN|HK|MO|RU|KP|IR|SY|CU|VE|BY|MM|AF|LY|SD|SO|YE|IQ).*",
+      proxies: ["🤖 AI 专用节点", "🇭🇰 香港节点"], "include-all": true, filter: "(?i)^(?!.*(中国|大陆|内地|俄罗斯|伊朗|朝鲜|叙利亚|古巴|委内瑞拉|白俄罗斯|缅甸|阿富汗|利比亚|苏丹|索马里|也门|伊拉克|CN|HK|MO|RU|KP|IR|SY|CU|VE|BY|MM|AF|LY|SD|SO|YE|IQ|新疆|西藏)).*(AI|ChatGPT|Grok|GPT|Claude|Gemini|US|JP|EU|SG|KR).*",
       icon: "https://www.clashverge.dev/assets/icons/chatgpt.svg" },
 
     { ...groupBaseOption, name: "外国媒体", type: USE_SMART_KERNEL ? "smart" : "url-test",
@@ -196,7 +196,7 @@ function generateProxyGroups() {
       icon: "https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/European_Union.png" },
 
     { ...groupBaseOption, name: "🤖 AI 专用节点", type: USE_SMART_KERNEL ? "smart" : "url-test",
-      "include-all": true, hidden: true, filter: "(?i)^(?!.*(中国|大陆|内地|俄罗斯|伊朗|朝鲜|叙利亚|古巴|委内瑞拉|白俄罗斯|缅甸|阿富汗|利比亚|苏丹|索马里|也门|伊拉克|CN|RU|KP|IR|SY|CU|VE|BY|MM|AF|LY|SD|SO|YE|IQ|新疆|西藏)).*(AI|ChatGPT|Grok|GPT|Claude|Gemini|US|JP|EU|SG|KR|CN|HK|MO|RU|KP|IR|SY|CU|VE|BY|MM|AF|LY|SD|SO|YE|IQ).*",
+      "include-all": true, hidden: true, filter: "(?i)^(?!.*(中国|大陆|内地|俄罗斯|伊朗|朝鲜|叙利亚|古巴|委内瑞拉|白俄罗斯|缅甸|阿富汗|利比亚|苏丹|索马里|也门|伊拉克|CN|HK|MO|RU|KP|IR|SY|CU|VE|BY|MM|AF|LY|SD|SO|YE|IQ|新疆|西藏)).*(AI|ChatGPT|Grok|GPT|Claude|Gemini|US|JP|EU|SG|KR).*",
       icon: "https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/AI.png" },
 
     { ...groupBaseOption, name: "延迟选优", type: USE_SMART_KERNEL ? "smart" : "url-test",
