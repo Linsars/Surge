@@ -6,24 +6,104 @@
 //		传统 Clash 内核（自动转为 url-test + 清理 Meta 专属字段）
 //					const USE_SMART_KERNEL = false; 
 // 2. 保存 → 在客户端重新加载配置即可
-
 const USE_SMART_KERNEL = true;
+
+function detectLocalIPv6(config) {
+  try {
+    if (typeof process !== "undefined" && process.env && (process.env.DISABLE_IPV6_NODES === "1" || process.env.DISABLE_IPV6_NODES === "true")) {
+      return false;
+    }
+    if (typeof process !== "undefined" && process.env && (process.env.FORCE_ENABLE_IPV6 === "1" || process.env.FORCE_ENABLE_IPV6 === "true")) {
+      return true;
+    }
+  } catch (e) {}
+  try {
+    if (typeof require === "function") {
+      const os = require("os");
+      const ifs = os.networkInterfaces();
+      for (const name of Object.keys(ifs || {})) {
+        for (const addr of ifs[name] || []) {
+          if (!addr) continue;
+          const fam = String(addr.family || "").toLowerCase();
+          const address = String(addr.address || "");
+          if ((fam === "ipv6" || fam === "6") && address && !address.startsWith("fe80") && address !== "::1") {
+            return true;
+          }
+        }
+      }
+    }
+  } catch (e) {}
+  if (config && config.dns && config.dns.ipv6 === true) return true;
+  return false;
+}
+
+function extractIPv6Proxies(config, enableIPv6) {
+  if (!config || !Array.isArray(config.proxies)) return;
+  config._all_proxies = config._all_proxies || JSON.parse(JSON.stringify(config.proxies));
+  const ipv6List = [];
+  for (const p of config.proxies) {
+    const name = (p && p.name) ? String(p.name) : "";
+    if (name.includes("[IPv6]")) {
+      ipv6List.push(name);
+      config._ipv6_disabled = config._ipv6_disabled || [];
+      config._ipv6_disabled.push(p);
+    }
+  }
+  config._ipv6_disabled_names = ipv6List;
+  console.log(`[IPv6检测] enableIPv6=${enableIPv6}; found IPv6 nodes=${ipv6List.length}`);
+}
+function filterProxies(list, config) {
+  if (!Array.isArray(list)) return list;
+  const disabled = Array.isArray(config?._ipv6_disabled_names) && config._has_ipv6 === false
+    ? new Set(config._ipv6_disabled_names)
+    : null;
+  if (!disabled) return list;
+  return list.filter(name => !disabled.has(name));
+}
+
+function neutralizeIPv6Proxies(config) {
+  if (!config || !Array.isArray(config.proxies)) return;
+  const disable = config._has_ipv6 === false;
+  for (const p of config.proxies) {
+    const name = (p && p.name) ? String(p.name) : "";
+    if (!name.includes("[IPv6]")) {
+      if (config._has_ipv6 && p._orig_server) {
+        p.server = p._orig_server;
+        p.port = p._orig_port;
+        delete p._orig_server;
+        delete p._orig_port;
+      }
+      continue;
+    }
+
+    if (disable) {
+      if (!p._orig_server) {
+        p._orig_server = p.server;
+        p._orig_port = p.port;
+      }
+      p.server = "127.0.0.1";
+      p.port = 9;
+    } else {
+      if (p._orig_server) {
+        p.server = p._orig_server;
+        p.port = p._orig_port;
+        delete p._orig_server;
+        delete p._orig_port;
+      }
+    }
+  }
+  console.log(`[IPv6保护] neutralizeIPv6Proxies applied; has_ipv6=${config._has_ipv6}`);
+}
 
 const ntpConfig = {
   enable: true,
   "write-to-system": true
 };
 
-const dnsConfig = {
-  enable: true,
-  listen: "0.0.0.0:1053",
-  ipv6: true,
-  "use-system-hosts": true,
-  "prefer-h3": true,
-  "respect-rules": true,
-  "enhanced-mode": "fake-ip",
-  "fake-ip-range": "198.18.0.1/16",
-  "fake-ip-filter": [
+let dnsConfig;
+
+function buildDnsConfig(hasIPv6) {
+  const fakeIpFilter = [
     "+.lan", "+.local", "dns.msftncsi.com", "+.msftconnecttest.com", "+.msftncsi.com",
     "localhost.ptlogin2.qq.com", "localhost.sec.qq.com", "localhost.work.weixin.qq.com",
     "stun.+.+.+", "stun.+.+", "miwifi.com", "+.music.163.com", "*.126.net",
@@ -33,30 +113,76 @@ const dnsConfig = {
     "netis.cc", "+.ntp.org.cn", "+.openwrt.pool.ntp.org",
     "+.+.+.srv.nintendo.net", "+.+.stun.playstation.net",
     "speedtest.cros.wr.pvp.net", "+.xboxlive.com"
-  ],
-  "default-nameserver": ["223.5.5.5", "119.29.29.29", "1.1.1.1", "8.8.8.8"],
-  nameserver: [
-    "https://223.5.5.5/dns-query",
-    "https://doh.pub/dns-query",
-    "https://dns.alidns.com/dns-query"
-  ],
-  "proxy-server-nameserver": [
-    "https://doh.pub/dns-query",
-    "https://1.1.1.1/dns-query"
-  ],
-  "nameserver-policy": {
-    "geosite:private,cn,geolocation-cn": [
-      "https://doh.pub/dns-query",
-      "https://dns.alidns.com/dns-query"
-    ],
-    "geosite:netflix,openai,pornhub,tiktok,youtube,telegram,gfw,geolocation-!cn": [
-      "https://1.1.1.1/dns-query",
-      "https://194.242.2.2/dns-query",
-      "https://public.dns.iij.jp/dns-query",
-      "https://doh.opendns.com/dns-query"
-    ]
+  ];
+
+  if (hasIPv6) {
+    return {
+      enable: true,
+      listen: "0.0.0.0:1053",
+      ipv6: true,
+      "use-system-hosts": true,
+      "prefer-h3": true,
+      "respect-rules": true,
+      "enhanced-mode": "fake-ip",
+      "fake-ip-range": "198.18.0.1/16",
+      "fake-ip-filter": fakeIpFilter,
+      nameserver: [ 
+        "https://cloudflare-dns.com/dns-query", 
+        "https://1.1.1.1/dns-query", 
+        "https://doh.opendns.com/dns-query", 
+        "https://dns.google/dns-query" ], 
+      "default-nameserver": [
+        "1.1.1.1", "8.8.8.8"], 
+      "proxy-server-nameserver": [ 
+        "https://cloudflare-dns.com/dns-query", 
+        "https://1.1.1.1/dns-query" ],
+      "nameserver-policy": {
+        "geosite:private,cn,geolocation-cn": [
+          "https://doh.pub/dns-query",
+          "https://dns.alidns.com/dns-query"
+        ],
+        "geosite:netflix,openai,pornhub,tiktok,youtube,telegram,gfw,geolocation-!cn": [
+          "https://1.1.1.1/dns-query",
+          "https://194.242.2.2/dns-query",
+          "https://public.dns.iij.jp/dns-query",
+          "https://doh.opendns.com/dns-query"
+        ]
+      }
+    };
+  } else {
+    return {
+      enable: true,
+      listen: "0.0.0.0:1053",
+      ipv6: false,
+      "use-system-hosts": true,
+      "prefer-h3": true,
+      "respect-rules": true,
+      "enhanced-mode": "redir-host",
+      "fake-ip-range": "198.18.0.1/16",
+      "fake-ip-filter": fakeIpFilter,
+      "default-nameserver": ["1.1.1.1", "8.8.8.8"],
+      nameserver: [
+        "https://1.1.1.1/dns-query"
+      ],
+      "proxy-server-nameserver": [
+        "https://doh.pub/dns-query",
+        "https://1.1.1.1/dns-query"
+      ],
+      "nameserver-policy": {
+        "geosite:private,cn,geolocation-cn": [
+          "https://doh.pub/dns-query",
+          "https://dns.alidns.com/dns-query"
+        ],
+        "geosite:netflix,openai,pornhub,tiktok,youtube,telegram,gfw,geolocation-!cn": [
+          "https://1.1.1.1/dns-query",
+          "https://194.242.2.2/dns-query",
+          "https://public.dns.iij.jp/dns-query",
+          "https://doh.opendns.com/dns-query"
+        ]
+      }
+    };
   }
-};
+}
 
 const ruleProviders = {
   private:        { type:"http", behavior:"ipcidr",  format:"mrs", interval:604800, url:"https://github.com/MetaCubeX/meta-rules-dat/raw/refs/heads/meta/geo/geoip/private.mrs",      path:"./ruleset/private.mrs" },
@@ -91,7 +217,6 @@ const rules = [
   "DOMAIN-SUFFIX,github.io,GitGPT",
   "DOMAIN,copilot.microsoft.com,GitGPT",
   "DOMAIN,sydney.bing.com,GitGPT",
-
   "RULE-SET,adblock,REJECT",
   "RULE-SET,private,DIRECT",
   "RULE-SET,cn,DIRECT",
@@ -115,58 +240,54 @@ const rules = [
   "RULE-SET,steam,游戏代理",
   "RULE-SET,steamcn,游戏直连",
   "RULE-SET,game_download,游戏直连",
-
   "GEOIP,LAN,DIRECT,no-resolve",
   "GEOIP,CN,DIRECT,no-resolve",
-
   "MATCH,漏网之鱼"
 ];
 
 const groupBaseOption = {
   interval: 300,
-  timeout: 3000,
+  timeout: 5000,
   url: "http://connectivitycheck.gstatic.com/generate_204",
   lazy: true,
   "max-failed-times": 3,
   hidden: false
 };
 
-// ==================== 动态生成代理组（核心适配逻辑） ====================
-function generateProxyGroups() {
+function generateProxyGroups(config) {
   const groups = [
     { ...groupBaseOption, name: "节点选择", type: USE_SMART_KERNEL ? "smart" : "url-test",
-      proxies: ["🇭🇰 香港节点", "🇨🇳 台湾节点", "🇺🇲 美国节点", "🇯🇵 日本节点", "🇰🇷 韩国节点", "🌏 东南亚节点", "🇪🇺 欧盟节点"],
+      proxies: filterProxies(["IPv6-隐藏组","🇭🇰 香港节点", "🇨🇳 台湾节点", "🇺🇲 美国节点", "🇯🇵 日本节点", "🇰🇷 韩国节点", "🌏 东南亚节点", "🇪🇺 欧盟节点"], config),
       icon: "https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Airport.png" },
 
     { ...groupBaseOption, name: "GitGPT", type: USE_SMART_KERNEL ? "smart" : "url-test",
-      proxies: ["🤖 AI 专用节点", "🇭🇰 香港节点"], "include-all": true, filter: "(?i)^(?!.*(中国|大陆|内地|俄罗斯|伊朗|朝鲜|叙利亚|古巴|委内瑞拉|白俄罗斯|缅甸|阿富汗|利比亚|苏丹|索马里|也门|伊拉克|CN|HK|MO|RU|KP|IR|SY|CU|VE|BY|MM|AF|LY|SD|SO|YE|IQ|新疆|西藏)).*(AI|ChatGPT|Grok|GPT|Claude|Gemini|US|JP|EU|SG|KR).*",
+      proxies: filterProxies(["🤖 AI 专用节点", "🇭🇰 香港节点"], config), "include-all": true, filter: "(?i)^(?!.*(中国|大陆|内地|俄罗斯|伊朗|朝鲜|叙利亚|古巴|委内瑞拉|白俄罗斯|缅甸|阿富汗|利比亚|苏丹|索马里|也门|伊拉克|CN|HK|MO|RU|KP|IR|SY|CU|VE|BY|MM|AF|LY|SD|SO|YE|IQ|新疆|西藏)).*(AI|ChatGPT|Grok|GPT|Claude|Gemini|US|JP|EU|SG|KR).*",
       icon: "https://www.clashverge.dev/assets/icons/chatgpt.svg" },
 
     { ...groupBaseOption, name: "外国媒体", type: USE_SMART_KERNEL ? "smart" : "url-test",
-      proxies: ["节点选择", "延迟选优", "故障转移", "🇭🇰 香港节点", "🇨🇳 台湾节点", "🇺🇲 美国节点", "🇯🇵 日本节点", "🇰🇷 韩国节点", "🌏 东南亚节点", "🇪🇺 欧盟节点"],
+      proxies: filterProxies(["节点选择", "延迟选优", "故障转移", "🇭🇰 香港节点", "🇨🇳 台湾节点", "🇺🇲 美国节点", "🇯🇵 日本节点", "🇰🇷 韩国节点", "🌏 东南亚节点", "🇪🇺 欧盟节点"], config),
       icon: "https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Server.png" },
 
     { ...groupBaseOption, name: "Bilibili", type: USE_SMART_KERNEL ? "smart" : "url-test",
-      proxies: ["DIRECT"], "include-all": true, filter: "港|澳|台|HK|TW|MO",
+      proxies: filterProxies(["DIRECT"], config), "include-all": true, filter: "港|澳|台|HK|TW|MO",
       icon: "https://fastly.jsdelivr.net/gh/Orz-3/mini@master/Color/Bili.png" },
 
     { ...groupBaseOption, name: "Telegram", type: USE_SMART_KERNEL ? "smart" : "url-test",
-      proxies: ["节点选择", "🇭🇰 香港节点", "延迟选优", "故障转移", "DIRECT"],
+      proxies: filterProxies(["节点选择", "🇭🇰 香港节点", "延迟选优", "故障转移", "DIRECT"], config),
       icon: "https://fastly.jsdelivr.net/gh/clash-verge-rev/clash-verge-rev.github.io@main/docs/assets/icons/telegram.svg" },
 
     { ...groupBaseOption, name: "游戏代理", type: USE_SMART_KERNEL ? "smart" : "url-test",
-      proxies: ["节点选择", "延迟选优", "故障转移", "🇭🇰 香港节点", "🇨🇳 台湾节点", "🇺🇲 美国节点", "🇯🇵 日本节点", "🇰🇷 韩国节点", "🌏 东南亚节点", "🇪🇺 欧盟节点"],
+      proxies: filterProxies(["节点选择", "延迟选优", "故障转移", "🇭🇰 香港节点", "🇨🇳 台湾节点", "🇺🇲 美国节点", "🇯🇵 日本节点", "🇰🇷 韩国节点", "🌏 东南亚节点", "🇪🇺 欧盟节点"], config),
       icon: "https://www.twitch.tv/favicon.ico" },
 
     { ...groupBaseOption, name: "游戏直连", type: USE_SMART_KERNEL ? "smart" : "url-test",
-      proxies: ["DIRECT", "节点选择", "延迟选优", "故障转移"],
+      proxies: filterProxies(["DIRECT", "节点选择", "延迟选优", "故障转移"], config),
       icon: "https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Download.png" },
 
     { ...groupBaseOption, name: "漏网之鱼", type: USE_SMART_KERNEL ? "smart" : "url-test",
-      proxies: ["节点选择", "延迟选优", "故障转移", "DIRECT"], "include-all": true,
+      proxies: filterProxies(["节点选择", "延迟选优", "故障转移", "DIRECT"], config), "include-all": true,
       icon: "https://fastly.jsdelivr.net/gh/clash-verge-rev/clash-verge-rev.github.io@main/docs/assets/icons/fish.svg" },
 
-    // ==================== 隐藏组====================
     { ...groupBaseOption, name: "🇭🇰 香港节点", type: USE_SMART_KERNEL ? "smart" : "url-test",
       "include-all": true, hidden: true, filter: "(?i)(🇭🇰|香港|香港特別行政區|香港特区|\\b(Hong Kong|HKSAR|HK|HKG)\\b|\\b(Kowloon|New Territories|Hong Kong Island)\\b|九龍|九龙|新界|港島|港岛|中環|中环|Central|Causeway Bay|銅鑼灣|铜锣湾|尖沙咀|Tsim Sha Tsui|旺角|Mong Kok|太子|Prince Edward|沙田|Sha Tin|荃灣|Tsuen Wan|元朗|Yuen Long|屯門|Tuen Mun|大埔|Tai Po|觀塘|观塘|Kwun Tong|黃大仙|黄大仙|Wong Tai Sin|西貢|Sai Kung|大嶼山|Lantau|長洲|Cheung Chau|南丫島|Lamma|鴨脷洲|Ap Lei Chau|赤柱|Stanley|淺水灣|浅水湾|Repulse Bay|上環|Sheung Wan|堅尼地城|Kennedy Town|天水圍|Tin Shui Wai)",
       icon: "https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Hong_Kong.png" },
@@ -200,28 +321,31 @@ function generateProxyGroups() {
       icon: "https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/AI.png" },
 
     { ...groupBaseOption, name: "延迟选优", type: USE_SMART_KERNEL ? "smart" : "url-test",
-      "include-all": true, hidden: true, icon: "https://fastly.jsdelivr.net/gh/clash-verge-rev/clash-verge-rev.github.io@main/docs/assets/icons/speed.svg" },
+      "include-all": true, hidden: true, proxies: filterProxies([], config), icon: "https://fastly.jsdelivr.net/gh/clash-verge-rev/clash-verge-rev.github.io@main/docs/assets/icons/speed.svg" },
 
     { ...groupBaseOption, name: "故障转移", type: USE_SMART_KERNEL ? "smart" : "url-test",
-      "include-all": true, hidden: true, icon: "https://fastly.jsdelivr.net/gh/clash-verge-rev/clash-verge-rev.github.io@main/docs/assets/icons/ambulance.svg" },
+      "include-all": true, hidden: true, proxies: filterProxies([], config), icon: "https://fastly.jsdelivr.net/gh/clash-verge-rev/clash-verge-rev.github.io@main/docs/assets/icons/ambulance.svg" },
 
     { ...groupBaseOption, name: "负载均衡(散列)", type: USE_SMART_KERNEL ? "smart" : "url-test",
-      "include-all": true, hidden: true, icon: "https://fastly.jsdelivr.net/gh/clash-verge-rev/clash-verge-rev.github.io@main/docs/assets/icons/merry_go.svg" },
+      "include-all": true, hidden: true, proxies: filterProxies([], config), icon: "https://fastly.jsdelivr.net/gh/clash-verge-rev/clash-verge-rev.github.io@main/docs/assets/icons/merry_go.svg" },
 
     { ...groupBaseOption, name: "负载均衡(轮询)", type: USE_SMART_KERNEL ? "smart" : "url-test",
-      "include-all": true, hidden: true, icon: "https://fastly.jsdelivr.net/gh/clash-verge-rev/clash-verge-rev.github.io@main/docs/assets/icons/balance.svg" }
+      "include-all": true, hidden: true, proxies: filterProxies([], config), icon: "https://fastly.jsdelivr.net/gh/clash-verge-rev/clash-verge-rev.github.io@main/docs/assets/icons/balance.svg" }
   ];
 
-  // 根据内核类型处理 Meta 专属字段
+  const ipv6Names = Array.isArray(config?._ipv6_disabled_names) ? config._ipv6_disabled_names : [];
+  if (ipv6Names.length > 0) {
+    groups.push({ ...groupBaseOption, name: "IPv6-隐藏组", type: USE_SMART_KERNEL ? "smart" : "url-test",
+      "include-all": true, proxies: ipv6Names, hidden: true, icon: "https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Server.png" });
+  }
+
   groups.forEach(group => {
     if (USE_SMART_KERNEL) {
-      // Meta 内核：添加 Smart 专属优化
       group["policy-priority"] = "";
       group.uselightgbm = true;
       group.collectdata = false;
       group.strategy = "round-robin";
     } else {
-      // 传统内核：清理所有 Meta 专属字段
       delete group.uselightgbm;
       delete group.collectdata;
       delete group["policy-priority"];
@@ -233,48 +357,61 @@ function generateProxyGroups() {
   return groups;
 }
 
-// ==================== 主函数 ====================
+
 function main(config) {
-  const proxyCount = config?.proxies?.length ?? 0;
-  const proxyProviderCount = typeof config?.["proxy-providers"] === "object" ? Object.keys(config["proxy-providers"]).length : 0;
-  
-  if (proxyCount === 0 && proxyProviderCount === 0) {
-    throw new Error("配置文件中未找到任何代理（config.proxies 或 config['proxy-providers'] 为空）");
+  try {
+    const hasIPv6 = detectLocalIPv6(config);
+    config._has_ipv6 = !!hasIPv6;
+    extractIPv6Proxies(config, hasIPv6);
+    neutralizeIPv6Proxies(config);
+    dnsConfig = buildDnsConfig(hasIPv6);
+
+    const proxyCount = config?.proxies?.length ?? 0;
+    const proxyProviderCount = typeof config?.["proxy-providers"] === "object" ? Object.keys(config["proxy-providers"]).length : 0;
+    if (proxyCount === 0 && proxyProviderCount === 0) {
+      throw new Error("配置文件中未找到任何代理（config.proxies 或 config['proxy-providers'] 为空）");
+    }
+
+    config["ntp"] = ntpConfig;
+    config["dns"] = dnsConfig;
+    config["rule-providers"] = ruleProviders;
+    config["rules"] = rules;
+    config["proxy-groups"] = generateProxyGroups(config);
+
+    if (USE_SMART_KERNEL) {
+      config["sniffer"] = config["sniffer"] || {
+        enable: true,
+        "force-dns-mapping": true,
+        "parse-pure-ip": true,
+        "override-destination": true,
+        sniff: {
+          TLS: { ports: [443, 8443] },
+          HTTP: { ports: [80, "8080-8880"], "override-destination": true },
+          QUIC: { ports: [443, 8443] }
+        },
+        "skip-domain": ["Mijia Cloud", "+.oray.com"]
+      };
+
+      config["unified-delay"] = true;
+      config["tcp-concurrent"] = true;
+
+      config["profile"] = config["profile"] || {};
+      config["profile"]["store-selected"] = true;
+      config["profile"]["store-fake-ip"] = true;
+      config["profile"]["smart-collector-size"] = 100;
+    }
+
+    if (!config._has_ipv6) {
+      config.profile = config.profile || {};
+      config.profile.selected = "DIRECT";
+      console.log("[IPv6保护] 无 IPv6 出口，已将 profile.selected 设为 DIRECT");
+    }
+    console.log(`[混合内核脚本] 当前模式：${USE_SMART_KERNEL ? '✅ Meta Smart 内核' : '✅ 传统 Clash 内核'}`);
+    return config;
+  } catch (err) {
+    console.log("[脚本错误]", err && err.stack ? err.stack : err);
+    throw err;
   }
-
-  // 应用基础配置
-  config["ntp"] = ntpConfig;
-  config["dns"] = dnsConfig;
-  config["rule-providers"] = ruleProviders;
-  config["rules"] = rules;
-  config["proxy-groups"] = generateProxyGroups();   // ← 动态生成
-
-  // 只有 Meta 内核才开启的增强特性
-  if (USE_SMART_KERNEL) {
-    config["sniffer"] = config["sniffer"] || {
-      enable: true,
-      "force-dns-mapping": true,
-      "parse-pure-ip": true,
-      "override-destination": true,
-      sniff: {
-        TLS: { ports: [443, 8443] },
-        HTTP: { ports: [80, "8080-8880"], "override-destination": true },
-        QUIC: { ports: [443, 8443] }
-      },
-      "skip-domain": ["Mijia Cloud", "+.oray.com"]
-    };
-
-    config["unified-delay"] = true;
-    config["tcp-concurrent"] = true;
-
-    config["profile"] = config["profile"] || {};
-    config["profile"]["store-selected"] = true;
-    config["profile"]["store-fake-ip"] = true;
-    config["profile"]["smart-collector-size"] = 100;
-  }
-
-  console.log(`[混合内核脚本] 当前模式：${USE_SMART_KERNEL ? '✅ Meta Smart 内核（完整智能）' : '✅ 传统 Clash 内核（url-test 兼容）'}`);
-  return config;
 }
 
 if (typeof module !== "undefined" && module.exports) {
