@@ -257,7 +257,7 @@ const groupBaseOption = {
 function generateProxyGroups(config) {
   const groups = [
     { ...groupBaseOption, name: "节点选择", type: USE_SMART_KERNEL ? "smart" : "url-test",
-      proxies: filterProxies(["IPv6-隐藏组","🇭🇰 香港节点", "🇨🇳 台湾节点", "🇺🇲 美国节点", "🇯🇵 日本节点", "🇰🇷 韩国节点", "🌏 东南亚节点", "🇪🇺 欧盟节点"], config),
+      proxies: filterProxies(["🇭🇰 香港节点", "🇨🇳 台湾节点", "🇺🇲 美国节点", "🇯🇵 日本节点", "🇰🇷 韩国节点", "🌏 东南亚节点", "🇪🇺 欧盟节点"], config),
       icon: "https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Airport.png" },
 
     { ...groupBaseOption, name: "GitGPT", type: USE_SMART_KERNEL ? "smart" : "url-test",
@@ -335,8 +335,7 @@ function generateProxyGroups(config) {
 
   const ipv6Names = Array.isArray(config?._ipv6_disabled_names) ? config._ipv6_disabled_names : [];
   if (ipv6Names.length > 0) {
-    groups.push({ ...groupBaseOption, name: "IPv6-隐藏组", type: USE_SMART_KERNEL ? "smart" : "url-test",
-      "include-all": true, proxies: ipv6Names, hidden: true, icon: "https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Server.png" });
+    groups.push({ ...groupBaseOption, name: "IPv6-隐藏组", type: USE_SMART_KERNEL ? "smart" : "url-test", proxies: ipv6Names, hidden: true, icon: "https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Server.png" });
   }
 
   groups.forEach(group => {
