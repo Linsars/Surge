@@ -15,11 +15,11 @@ const SIX_YIN_ENCRYPTED = "";
 const SIX_YIN_EXTERNAL_URL = "https://raw.githubusercontent.com/Linsars/Surge/main/%E5%85%AD%E9%9F%B31.2.1%E7%89%88%EF%BC%88%E6%9C%80%E9%AB%98%E6%94%AF%E6%8C%81%E6%97%A0%E6%8D%9F%E9%9F%B3%E8%B4%A8%EF%BC%89.js";
 
 /* ======= 公共工具函数 ======= */
-const { EVENT_NAMES, request, on, send, utils, env, version } = globalThis.lx || {};
+/*const { EVENT_NAMES, request, on, send, utils, env, version } = globalThis.lx || {};
 
 function log(...args) {
   if (DEV_ENABLE) console.log('[MergedSource]', ...args);
-}
+}*/
 
 function httpFetch(url, options = { method: 'GET', timeout: GLOBAL_TIMEOUT, headers: {} }) {
   return new Promise((resolve, reject) => {
@@ -353,3 +353,4 @@ globalThis.MergedMusicSources = {
 };
 
 log('Linsar合并音源脚本加载完成');
+
