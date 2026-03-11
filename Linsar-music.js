@@ -1,6 +1,6 @@
 /**
- * @name Linsar music dev
- * @version 1.0.2-merged
+ * @name Linsar music dev (LX-style)
+ * @version 1.0.3-merged
  * @author Linsar
  *
  * 说明
@@ -8,16 +8,18 @@
  *  - 六音脚本将从 SIX_YIN_EXTERNAL_URL 拉取并 eval 作为兜底（可改为内嵌字符串）
  */
 
+/* Configuration */
 const DEV_ENABLE = false;
 const GLOBAL_TIMEOUT = 10000;
 const SIX_YIN_ENCRYPTED = "";
 const SIX_YIN_EXTERNAL_URL = "https://raw.githubusercontent.com/Linsars/Surge/main/%E5%85%AD%E9%9F%B31.2.1%E7%89%88%EF%BC%88%E6%9C%80%E9%AB%98%E6%94%AF%E6%8C%81%E6%97%A0%E6%8D%9F%E9%9F%B3%E8%B4%A8%EF%BC%89.js";
 const ALLOW_REMOTE_EVAL = false;
 
-if (!globalThis.lx) {
-  globalThis.MergedMusicSources = { available: false, reason: 'Not running inside LX' };
+const LX_GLOBAL = globalThis.lx || globalThis.LX || null;
+if (!LX_GLOBAL) {
+  globalThis.MergedMusicSources = { available: false, reason: 'Not running inside LX-style environment' };
 } else {
-  const { EVENT_NAMES, request, on, send, utils, env, version } = globalThis.lx;
+  const { EVENT_NAMES, request, on, send, utils, env, version } = LX_GLOBAL;
 
   function log(...args) { if (DEV_ENABLE) console.log('[MergedSource]', ...args); }
 
@@ -60,18 +62,6 @@ if (!globalThis.lx) {
   }
 
   function ensureString(v) { return v == null ? '' : String(v); }
-
-  const QUALITY_MAP = { '128k': '128', '192k': '192', '320k': '320', 'flac': '740', 'flac24bit': '999' };
-  function getQualityFallbackChain(q) {
-    switch (q) {
-      case 'flac24bit': return ['flac24bit','flac','320k','192k','128k'];
-      case 'flac': return ['flac','320k','192k','128k'];
-      case '320k': return ['320k','192k','128k'];
-      case '192k': return ['192k','128k'];
-      case '128k': return ['128k'];
-      default: return ['320k','128k'];
-    }
-  }
 
   const FishMusic = {
     API_URL: "https://m-api.ceseet.me",
@@ -216,19 +206,14 @@ if (!globalThis.lx) {
 
   async function tryLoadSixYin() {
     if (SixYinLoaded !== null) return SixYinLoaded;
-    if (!ALLOW_REMOTE_EVAL) {
-      SixYinLoaded = false;
-      return SixYinLoaded;
-    }
+    if (!ALLOW_REMOTE_EVAL) { SixYinLoaded = false; return SixYinLoaded; }
     if (SIX_YIN_ENCRYPTED && SIX_YIN_ENCRYPTED.trim()) {
       try {
         const wrapper = `(function(globalThis){\n${SIX_YIN_ENCRYPTED}\n})(globalThis);`;
         eval(wrapper);
         SixYinLoaded = typeof globalThis.SixYinGetMusicUrl === 'function';
         return SixYinLoaded;
-      } catch (e) {
-        SixYinLoaded = false;
-      }
+      } catch (e) { SixYinLoaded = false; }
     }
     if (SIX_YIN_EXTERNAL_URL && SIX_YIN_EXTERNAL_URL.trim()) {
       try {
@@ -237,50 +222,23 @@ if (!globalThis.lx) {
         if (code && code.trim()) {
           try {
             eval(`(function(globalThis){\n${code}\n})(globalThis);`);
-            if (typeof globalThis.SixYinGetMusicUrl === 'function') {
-              SixYinLoaded = true;
-              return SixYinLoaded;
-            }
+            if (typeof globalThis.SixYinGetMusicUrl === 'function') { SixYinLoaded = true; return SixYinLoaded; }
             const candidates = ['sixYinGetMusicUrl','SixYinGetMusicUrl','sixyin_get_music_url','getSixYinUrl'];
             for (const name of candidates) {
-              if (typeof globalThis[name] === 'function') {
-                globalThis.SixYinGetMusicUrl = globalThis[name];
-                SixYinLoaded = true;
-                return SixYinLoaded;
-              }
+              if (typeof globalThis[name] === 'function') { globalThis.SixYinGetMusicUrl = globalThis[name]; SixYinLoaded = true; return SixYinLoaded; }
             }
-            SixYinLoaded = true;
-            return SixYinLoaded;
-          } catch (e) {
-            SixYinLoaded = false;
-          }
-        } else {
-          SixYinLoaded = false;
-        }
-      } catch (e) {
-        SixYinLoaded = false;
-      }
+            SixYinLoaded = true; return SixYinLoaded;
+          } catch (e) { SixYinLoaded = false; }
+        } else { SixYinLoaded = false; }
+      } catch (e) { SixYinLoaded = false; }
     }
     SixYinLoaded = false;
     return SixYinLoaded;
   }
 
-  const SourceRegistry = {
-    fish_music: FishMusic,
-    huibq: Huibq,
-    aggregate: AggregateAPI,
-    suyin: Suyin,
-    qsvip: Qishui
-  };
+  const SourceRegistry = { fish_music: FishMusic, huibq: Huibq, aggregate: AggregateAPI, suyin: Suyin, qsvip: Qishui };
 
-  const DefaultChain = {
-    kw: ['huibq','aggregate','qsvip','fish_music'],
-    wy: ['huibq','aggregate','fish_music','qsvip'],
-    tx: ['suyin','huibq','aggregate','qsvip'],
-    mg: ['huibq','aggregate','qsvip'],
-    kg: ['huibq','aggregate','fish_music'],
-    local: ['fish_music']
-  };
+  const DefaultChain = { kw: ['huibq','aggregate','qsvip','fish_music'], wy: ['huibq','aggregate','fish_music','qsvip'], tx: ['suyin','huibq','aggregate','qsvip'], mg: ['huibq','aggregate','qsvip'], kg: ['huibq','aggregate','fish_music'], local: ['fish_music'] };
 
   async function handleGetMusicUrlUnified(source, musicInfo, quality) {
     if (!musicInfo) throw new Error('missing musicInfo');
@@ -292,10 +250,7 @@ if (!globalThis.lx) {
       try {
         const url = await adapter.musicUrl(source, musicInfo, quality);
         if (url && typeof url === 'string' && url.startsWith('http')) return url;
-      } catch (e) {
-        lastErr = e;
-        continue;
-      }
+      } catch (e) { lastErr = e; continue; }
     }
     try {
       const ok = await tryLoadSixYin();
@@ -310,32 +265,28 @@ if (!globalThis.lx) {
   }
 
   on(EVENT_NAMES.request, async ({ action, source, info }) => {
-    try {
-      if (action !== 'musicUrl' && action !== 'pic' && action !== 'lyric' && action !== 'search') throw new Error('unsupported action');
-      if (!info || !info.musicInfo) throw new Error('missing info');
-      const quality = info.type || '320k';
-      if (action === 'pic' && source === 'local') {
-        const url = await FishMusic.getLocalFileUrl(info.musicInfo.songmid);
-        return url;
-      }
-      if (action === 'lyric' && source === 'local') {
-        const songmid = info.musicInfo.songmid;
-        if (!songmid || !songmid.startsWith('server_')) throw new Error('unsupported local file');
-        const songId = songmid.replace('server_', '');
-        const requestBody = { p: songId };
-        const b = BufferUtil.bufToString(BufferUtil.from(JSON.stringify(requestBody))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-        const t = 'l';
-        const targetUrl = `${FishMusic.API_URL}/local/${t}?q=${b}`;
-        const resp = await httpFetch(targetUrl, { method: 'GET', headers: { 'User-Agent': env ? `lx-music-${env}/${version}` : `lx-music-request/${version}` }, timeout: GLOBAL_TIMEOUT });
-        const body = resp.body;
-        if (body && body.code === 0 && body.data) return { lyric: ensureString(body.data), tlyric: '', rlyric: '', lxlyric: '' };
-        throw new Error('get music lyric failed');
-      }
-      const url = await handleGetMusicUrlUnified(source, info.musicInfo, quality);
+    if (action !== 'musicUrl' && action !== 'pic' && action !== 'lyric' && action !== 'search') throw new Error('unsupported action');
+    if (!info || !info.musicInfo) throw new Error('missing info');
+    const quality = info.type || '320k';
+    if (action === 'pic' && source === 'local') {
+      const url = await FishMusic.getLocalFileUrl(info.musicInfo.songmid);
       return url;
-    } catch (err) {
-      throw err;
     }
+    if (action === 'lyric' && source === 'local') {
+      const songmid = info.musicInfo.songmid;
+      if (!songmid || !songmid.startsWith('server_')) throw new Error('unsupported local file');
+      const songId = songmid.replace('server_', '');
+      const requestBody = { p: songId };
+      const b = BufferUtil.bufToString(BufferUtil.from(JSON.stringify(requestBody))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      const t = 'l';
+      const targetUrl = `${FishMusic.API_URL}/local/${t}?q=${b}`;
+      const resp = await httpFetch(targetUrl, { method: 'GET', headers: { 'User-Agent': env ? `lx-music-${env}/${version}` : `lx-music-request/${version}` }, timeout: GLOBAL_TIMEOUT });
+      const body = resp.body;
+      if (body && body.code === 0 && body.data) return { lyric: ensureString(body.data), tlyric: '', rlyric: '', lxlyric: '' };
+      throw new Error('get music lyric failed');
+    }
+    const url = await handleGetMusicUrlUnified(source, info.musicInfo, quality);
+    return url;
   });
 
   const mergedSources = {
@@ -354,12 +305,5 @@ if (!globalThis.lx) {
 
   send(EVENT_NAMES.inited, { status: true, openDevTools: DEV_ENABLE, sources: mergedSources });
 
-  globalThis.MergedMusicSources = {
-    tryLoadSixYin,
-    handleGetMusicUrlUnified,
-    SourceRegistry,
-    DefaultChain,
-    httpFetch,
-    available: true
-  };
+  globalThis.MergedMusicSources = { tryLoadSixYin, handleGetMusicUrlUnified, SourceRegistry, DefaultChain, httpFetch, available: true };
 }
