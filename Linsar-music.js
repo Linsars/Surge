@@ -1,309 +1,357 @@
 /**
  * @name Linsar music dev (LX-style)
- * @version 1.0.3-merged
+ * @version 1.0.4-merged
  * @author Linsar
  *
  * 说明
  *  - 将此文件导入到 LX 自定义源或者 歌一刀自定义源
  *  - 六音脚本将从 SIX_YIN_EXTERNAL_URL 拉取并 eval 作为兜底（可改为内嵌字符串）
  */
-
-/* Configuration */
-const DEV_ENABLE = false;
-const GLOBAL_TIMEOUT = 10000;
-const SIX_YIN_ENCRYPTED = "";
-const SIX_YIN_EXTERNAL_URL = "https://raw.githubusercontent.com/Linsars/Surge/main/%E5%85%AD%E9%9F%B31.2.1%E7%89%88%EF%BC%88%E6%9C%80%E9%AB%98%E6%94%AF%E6%8C%81%E6%97%A0%E6%8D%9F%E9%9F%B3%E8%B4%A8%EF%BC%89.js";
-const ALLOW_REMOTE_EVAL = false;
-
-const LX_GLOBAL = globalThis.lx || globalThis.LX || null;
-if (!LX_GLOBAL) {
-  globalThis.MergedMusicSources = { available: false, reason: 'Not running inside LX-style environment' };
-} else {
-  const { EVENT_NAMES, request, on, send, utils, env, version } = LX_GLOBAL;
-
-  function log(...args) { if (DEV_ENABLE) console.log('[MergedSource]', ...args); }
-
-  const BufferUtil = (utils && utils.buffer) ? utils.buffer : {
-    from: (s) => {
-      const utf8 = unescape(encodeURIComponent(s));
-      const arr = new Uint8Array(utf8.length);
-      for (let i = 0; i < utf8.length; ++i) arr[i] = utf8.charCodeAt(i);
-      return arr;
-    },
-    bufToString: (buf) => {
-      if (typeof btoa === 'function') {
-        let binary = '';
-        const bytes = (buf instanceof Uint8Array) ? buf : new Uint8Array(buf);
-        for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-        return btoa(binary);
-      }
-      return '';
-    }
-  };
-
-  async function httpFetch(url, options = { method: 'GET', timeout: GLOBAL_TIMEOUT, headers: {} }) {
-    return new Promise((resolve, reject) => {
-      try {
-        request(url, options, (err, resp) => {
-          if (err) return reject(new Error(err && err.message ? err.message : String(err)));
-          let body = resp && resp.body;
-          if (typeof body === 'string') {
-            const t = body.trim();
-            if (t && (t.startsWith('{') || t.startsWith('[') || t.startsWith('"'))) {
-              try { body = JSON.parse(t); } catch (e) { /* keep string */ }
-            }
-          }
-          resolve({ statusCode: resp.statusCode, headers: resp.headers || {}, body });
-        });
-      } catch (e) {
-        reject(new Error(e && e.message ? e.message : String(e)));
-      }
-    });
+const { EVENT_NAMES, request, on, send, utils } = globalThis.lx || {};
+const CONFIG = {
+  DEV_ENABLE: false,
+  UPDATE_ENABLE: false,
+  API_URL: "https://m-api.ceseet.me",
+  GD_API_BASE: "https://music-api.gdstudio.xyz/api.php",
+  QSVIP_PROXY: "https://proxy.qishui.vsaa.cn/qishui/proxy",
+  QQ_API_KEY: "",
+  CACHE_TTL: 5 * 60 * 1000,
+  REQUEST_TIMEOUT: 15000,
+  LIUYIN_RAW_URL: "https://raw.githubusercontent.com/Linsars/Surge/main/liuyin1.2.1Max.js"
+};
+const MUSIC_QUALITY = {
+  tx: ["128k", "320k", "flac", "flac24bit"],
+  kg: ["128k", "320k", "flac", "flac24bit"],
+  kw: ["128k", "320k", "flac", "flac24bit"],
+  wy: ["128k", "320k", "flac"],
+  mg: ["128k", "320k"],
+  qsvip: ["128k", "320k", "flac", "flac24bit"],
+  local: []
+};
+const MUSIC_SOURCES = Object.keys(MUSIC_QUALITY).concat(["local", "liuyin"]);
+const cache = new Map();
+function setCache(key, value, ttl = CONFIG.CACHE_TTL) {
+  cache.set(key, { value, expire: Date.now() + ttl });
+}
+function getCache(key) {
+  const v = cache.get(key);
+  if (!v) return null;
+  if (Date.now() > v.expire) {
+    cache.delete(key);
+    return null;
   }
-
-  function ensureString(v) { return v == null ? '' : String(v); }
-
-  const FishMusic = {
-    API_URL: "https://m-api.ceseet.me",
-    API_KEY: "",
-    async musicUrl(source, musicInfo, quality) {
-      const songId = musicInfo.hash ?? musicInfo.songmid ?? musicInfo.id;
-      if (!songId) throw new Error('fish_music: missing song id');
-      const src = source || (musicInfo.source || 'wy');
-      const url = `${this.API_URL}/url/${encodeURIComponent(src)}/${encodeURIComponent(songId)}/${encodeURIComponent(quality)}`;
-      const resp = await httpFetch(url, { method: 'GET', headers: { 'X-Request-Key': this.API_KEY, 'User-Agent': env ? `lx-music-${env}/${version}` : `lx-music-request/${version}` }, timeout: GLOBAL_TIMEOUT });
-      const body = resp.body;
-      if (!body || isNaN(Number(body.code))) throw new Error('fish_music: unknown response');
-      switch (Number(body.code)) {
-        case 0: return ensureString(body.data || body.url || '');
-        case 1: throw new Error('fish_music: block ip');
-        default: throw new Error(`fish_music: ${body.msg || 'error'}`);
-      }
-    },
-    async getLocalFileUrl(songmid) {
-      if (!songmid || !songmid.startsWith('server_')) throw new Error('unsupported local file');
-      const songId = songmid.replace('server_', '');
-      const requestBody = { p: songId };
-      const b = BufferUtil.bufToString(BufferUtil.from(JSON.stringify(requestBody))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-      const t = 'c';
-      const targetUrl = `${this.API_URL}/local/${t}?q=${b}`;
-      const resp = await httpFetch(targetUrl, { method: 'GET', headers: { 'X-Request-Key': this.API_KEY }, timeout: GLOBAL_TIMEOUT });
-      const body = resp.body;
-      if (body && body.code === 0 && body.data && body.data.file) {
-        const t2 = 'u';
-        const b2 = BufferUtil.bufToString(BufferUtil.from(JSON.stringify(requestBody))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-        return `${this.API_URL}/local/${t2}?q=${b2}`;
-      }
-      throw new Error('local file not found');
-    }
-  };
-
-  const Huibq = {
-    API_URL: 'https://render.niuma666bet.buzz',
-    API_KEY: 'share-v2',
-    async musicUrl(source, musicInfo, quality) {
-      const songId = musicInfo.hash ?? musicInfo.songmid ?? musicInfo.id;
-      if (!songId) throw new Error('huibq: missing song id');
-      const url = `${this.API_URL}/url/${encodeURIComponent(source)}/${encodeURIComponent(songId)}/${encodeURIComponent(quality)}`;
-      const resp = await httpFetch(url, { method: 'GET', headers: { 'X-Request-Key': this.API_KEY, 'User-Agent': env ? `lx-music-${env}/${version}` : `lx-music-request/${version}` }, timeout: GLOBAL_TIMEOUT });
-      const body = resp.body;
-      if (!body || isNaN(Number(body.code))) throw new Error('huibq: unknown response');
-      if (Number(body.code) === 0) return ensureString(body.url || body.data || '');
-      throw new Error(`huibq: ${body.msg || 'error'}`);
-    }
-  };
-
-  const AggregateAPI = {
-    BASE: 'https://api.music.lerd.dpdns.org',
-    async musicUrl(source, musicInfo, quality) {
-      const url = `${this.BASE}/${source}`;
-      const body = JSON.stringify({ info: musicInfo, quality });
-      const resp = await httpFetch(url, { method: 'POST', body, headers: { 'Content-Type': 'application/json' }, timeout: GLOBAL_TIMEOUT });
-      const parsed = resp.body;
-      if (!parsed) throw new Error('aggregate: empty response');
-      if (parsed.code === 200 && parsed.data) return ensureString(parsed.data.url || parsed.data);
-      if (parsed.code === 303 && parsed.data) {
-        try {
-          const S = parsed.data;
-          const D = S.request;
-          const F = S.response;
-          if (!D || !D.url) throw new Error('aggregate: invalid 303 payload');
-          const sresp = await httpFetch(encodeURI(D.url), D.options || { method: 'GET', timeout: GLOBAL_TIMEOUT });
-          const z = sresp.body;
-          if (F && F.check && Array.isArray(F.check.key)) {
-            const ok = F.check.key.reduce((acc, k) => acc && (z && (z[k] !== undefined)), true);
-            if (ok) {
-              let u = z;
-              for (const k of F.url) {
-                if (u && (k in u)) u = u[k];
-                else { u = null; break; }
-              }
-              if (u && typeof u === 'string' && u.startsWith('http')) return u;
-            }
+  return v.value;
+}
+const httpFetch = (url, options = { method: "GET" }) =>
+  new Promise((resolve, reject) => {
+    try {
+      const opts = Object.assign({}, options);
+      if (!opts.timeout) opts.timeout = CONFIG.REQUEST_TIMEOUT;
+      request(url, opts, (err, resp) => {
+        if (err) return reject(err);
+        let body = resp.body;
+        if (typeof body === "string") {
+          const t = body.trim();
+          if ((t.startsWith("{") || t.startsWith("[")) && t.length < 2000000) {
+            try { body = JSON.parse(t); } catch (e) {}
           }
-        } catch (e) {
-          throw new Error(`aggregate: 303 follow failed: ${e.message}`);
+        }
+        resolve({ statusCode: resp.statusCode, headers: resp.headers || {}, body });
+      });
+    } catch (e) {
+      reject(e);
+    }
+  });
+const handleBase64Encode = (data) => {
+  try {
+    const buf = utils && utils.buffer ? utils.buffer.from(data, "utf-8") : Buffer.from(data, "utf-8");
+    return (utils && utils.buffer && utils.buffer.bufToString) ? utils.buffer.bufToString(buf, "base64") : buf.toString("base64");
+  } catch (e) {
+    return Buffer.from(String(data), "utf-8").toString("base64");
+  }
+};
+function pickId(musicInfo) {
+  if (!musicInfo) return "";
+  return (musicInfo.id || musicInfo.songmid || musicInfo.songId || musicInfo.hash || musicInfo.rid || musicInfo.mid || musicInfo.mediaId || "").toString();
+}
+function mapQualityForApi(type) {
+  if (!type) return "320k";
+  const t = String(type).toLowerCase();
+  if (["128k", "320k", "flac", "flac24bit"].includes(t)) return t;
+  return "320k";
+}
+async function handleLocalMusicUrl(musicInfo) {
+  if (!musicInfo || !musicInfo.songmid) throw new Error("missing musicInfo");
+  if (!musicInfo.songmid.startsWith("server_")) throw new Error("unsupported local file");
+  const songId = musicInfo.songmid.replace("server_", "");
+  const requestBody = { p: songId };
+  const b = handleBase64Encode(JSON.stringify(requestBody)).replace(/\+/g, "-").replace(/\//g, "_");
+  const checkUrl = `${CONFIG.API_URL}/local/c?q=${b}`;
+  const resp = await httpFetch(checkUrl, { method: "GET", headers: { "X-Request-Key": CONFIG.API_KEY || "" } });
+  if (resp && resp.body && resp.body.code === 0 && resp.body.data && resp.body.data.file) {
+    return `${CONFIG.API_URL}/local/u?q=${b}`;
+  }
+  throw new Error("404 Not Found");
+}
+async function handleQsvipMusicUrl(musicInfo, quality) {
+  const id = pickId(musicInfo);
+  if (!id) return "";
+  const q = (function map(t) {
+    switch ((t || "").toLowerCase()) {
+      case "128k": return "low";
+      case "320k": return "standard";
+      case "flac": return "lossless";
+      case "flac24bit": return "hi_res";
+      default: return "standard";
+    }
+  })(quality);
+  const url = `${CONFIG.GD_API_BASE}&types=song&source=qishui&id=${encodeURIComponent(id)}&level=${encodeURIComponent(q)}`;
+  try {
+    const r = await httpFetch(url, { method: "GET" });
+    if (r && r.body) {
+      if (r.body.url) return r.body.url;
+      if (r.body.data && Array.isArray(r.body.data) && r.body.data[0] && r.body.data[0].url) return r.body.data[0].url;
+    }
+  } catch (e) {}
+  const fallback = `http://api.vsaa.cn/api/music.qishui.vip?act=song&id=${encodeURIComponent(id)}&quality=${encodeURIComponent(q)}`;
+  try {
+    const r2 = await httpFetch(fallback, { method: "GET" });
+    if (r2 && r2.body && r2.body.data && r2.body.data[0] && r2.body.data[0].url) return r2.body.data[0].url;
+  } catch (e) {}
+  return "";
+}
+async function getUrlFromGdApi(apiSource, songId, br) {
+  const url = `${CONFIG.GD_API_BASE}?types=url&source=${apiSource}&id=${encodeURIComponent(songId)}&br=${encodeURIComponent(br)}`;
+  const r = await httpFetch(url, { method: "GET" });
+  if (r && r.body) {
+    if (typeof r.body === "object" && r.body.url) return r.body.url;
+    if (typeof r.body === "object" && r.body.data && r.body.data.url) return r.body.data.url;
+    if (typeof r.body === "string") {
+      try {
+        const parsed = JSON.parse(r.body);
+        if (parsed.url) return parsed.url;
+        if (parsed.data && parsed.data.url) return parsed.data.url;
+      } catch (e) {}
+    }
+  }
+  throw new Error("parse error");
+}
+async function handleTxMusicUrl(musicInfo, quality) {
+  const songId = musicInfo.hash || musicInfo.songmid || pickId(musicInfo);
+  if (!songId) throw new Error("missing id");
+  const brMap = { "128k": "128", "320k": "320", "flac": "740", "flac24bit": "999" };
+  const br = brMap[mapQualityForApi(quality)] || "320";
+  try {
+    return await getUrlFromGdApi("tencent", songId, br);
+  } catch (e) {
+    if (CONFIG.QQ_API_KEY) {
+      const params = `?key=${encodeURIComponent(CONFIG.QQ_API_KEY)}&songid=${encodeURIComponent(songId)}&br=${br}`;
+      const url = `https://oiapi.net/api/QQ_Music${params}`;
+      const r = await httpFetch(url, { method: "GET" });
+      if (r && r.body) {
+        if (r.body.music) return r.body.music;
+        if (r.body.url) return r.body.url;
+      }
+    }
+    throw e;
+  }
+}
+async function handleWyMusicUrl(musicInfo, quality) {
+  const songId = musicInfo.songmid || musicInfo.id || pickId(musicInfo);
+  if (!songId) throw new Error("missing id");
+  const brMap = { "128k": "128", "320k": "320", "flac": "740", "flac24bit": "999" };
+  const br = brMap[mapQualityForApi(quality)] || "320";
+  try {
+    return await getUrlFromGdApi("netease", songId, br);
+  } catch (e) {
+    try {
+      const r = await httpFetch(`https://oiapi.net/api/Music_163?id=${encodeURIComponent(songId)}`, { method: "GET" });
+      if (r && r.body && r.body.data) {
+        const d = Array.isArray(r.body.data) ? r.body.data[0] : r.body.data;
+        if (d && d.url) return d.url;
+      }
+    } catch (e2) {}
+    throw e;
+  }
+}
+async function handleKwMusicUrl(musicInfo, quality) {
+  const songId = musicInfo.songmid || musicInfo.id || pickId(musicInfo);
+  const brMap = { "128k": "128", "320k": "320", "flac": "flac", "flac24bit": "flac" };
+  const br = brMap[mapQualityForApi(quality)] || "320";
+  try {
+    return await getUrlFromGdApi("kuwo", songId, br);
+  } catch (e) {
+    try {
+      const params = { msg: musicInfo.name || pickId(musicInfo), n: 1, br: br };
+      const q = Object.keys(params).map(k => `${k}=${encodeURIComponent(params[k])}`).join("&");
+      const r = await httpFetch(`https://oiapi.net/api/Kuwo?${q}`, { method: "GET" });
+      if (r && r.body) {
+        if (r.body.data && r.body.data.url) return r.body.data.url;
+        if (r.body.message) {
+          const m = String(r.body.message).match(/https?:\/\/[^\s'"]+/);
+          if (m) return m[0];
         }
       }
-      throw new Error(parsed.msg || 'aggregate: failed');
-    }
-  };
-
-  const Suyin = {
-    QQ_API_KEY: 'oiapi-ef6133b7-ac2f-dc7d-878c-d3e207a82575',
-    async musicUrl(source, musicInfo, quality) {
-      if (source === 'tx') {
-        const songId = musicInfo.meta?.qq?.mid || musicInfo.songmid || musicInfo.id;
-        if (!songId) throw new Error('suyin: missing qq id');
-        const br = (quality === '320k' || quality === 'flac') ? 5 : 7;
-        const url = `https://oiapi.net/api/QQ_Music?key=${encodeURIComponent(this.QQ_API_KEY)}&mid=${encodeURIComponent(songId)}&br=${encodeURIComponent(br)}`;
-        const resp = await httpFetch(url, { method: 'GET', timeout: GLOBAL_TIMEOUT });
-        const data = resp.body;
-        if (data?.music) return ensureString(data.music);
-        if (data?.url) return ensureString(data.url);
-        throw new Error('suyin: qq fetch failed');
-      }
-      return AggregateAPI.musicUrl(source, musicInfo, quality);
-    }
-  };
-
-  const Qishui = {
-    API_BASE: 'http://api.vsaa.cn/api/music.qishui.vip',
-    PROXY_SERVER: 'https://proxy.qishui.vsaa.cn/qishui/proxy',
-    mapQuality(type) {
-      switch ((type||'').toLowerCase()) {
-        case '128k': return 'low';
-        case '320k': return 'standard';
-        case 'flac': return 'lossless';
-        case 'flac24bit': return 'hi_res';
-        default: return 'standard';
-      }
-    },
-    pickId(musicInfo) {
-      return ensureString(musicInfo.id || musicInfo.songmid || musicInfo.hash || musicInfo.rid || musicInfo.mid || '');
-    },
-    async musicUrl(source, musicInfo, quality) {
-      const id = this.pickId(musicInfo);
-      if (!id) throw new Error('qsvip: missing id');
-      const q = this.mapQuality(quality);
-      const url = `${this.API_BASE}?act=song&id=${encodeURIComponent(id)}&quality=${encodeURIComponent(q)}`;
-      const resp = await httpFetch(url, { method: 'GET', timeout: 20000 });
-      const body = resp.body;
-      if (!body) throw new Error('qsvip: empty response');
-      const song = Array.isArray(body.data) ? body.data[0] : (body.data || null);
-      if (!song) throw new Error('qsvip: not found');
-      if (song.ekey) {
-        const proxyResp = await httpFetch(this.PROXY_SERVER, { method: 'POST', body: JSON.stringify({ url: song.url, key: song.ekey, filename: song.name || 'KMusic', ext: song.codec_type || 'aac' }), headers: { 'Content-Type': 'application/json' }, timeout: 60000 });
-        const pbody = proxyResp.body;
-        if (pbody && Number(pbody.code) === 200 && pbody.url) return ensureString(pbody.url);
-        throw new Error('qsvip: proxy failed');
-      }
-      return ensureString(song.url || '');
-    }
-  };
-
-  let SixYinLoaded = null;
-
-  async function tryLoadSixYin() {
-    if (SixYinLoaded !== null) return SixYinLoaded;
-    if (!ALLOW_REMOTE_EVAL) { SixYinLoaded = false; return SixYinLoaded; }
-    if (SIX_YIN_ENCRYPTED && SIX_YIN_ENCRYPTED.trim()) {
-      try {
-        const wrapper = `(function(globalThis){\n${SIX_YIN_ENCRYPTED}\n})(globalThis);`;
-        eval(wrapper);
-        SixYinLoaded = typeof globalThis.SixYinGetMusicUrl === 'function';
-        return SixYinLoaded;
-      } catch (e) { SixYinLoaded = false; }
-    }
-    if (SIX_YIN_EXTERNAL_URL && SIX_YIN_EXTERNAL_URL.trim()) {
-      try {
-        const resp = await httpFetch(SIX_YIN_EXTERNAL_URL, { method: 'GET', timeout: 15000 });
-        const code = typeof resp.body === 'string' ? resp.body : (resp.body && resp.body.data ? resp.body.data : '');
-        if (code && code.trim()) {
-          try {
-            eval(`(function(globalThis){\n${code}\n})(globalThis);`);
-            if (typeof globalThis.SixYinGetMusicUrl === 'function') { SixYinLoaded = true; return SixYinLoaded; }
-            const candidates = ['sixYinGetMusicUrl','SixYinGetMusicUrl','sixyin_get_music_url','getSixYinUrl'];
-            for (const name of candidates) {
-              if (typeof globalThis[name] === 'function') { globalThis.SixYinGetMusicUrl = globalThis[name]; SixYinLoaded = true; return SixYinLoaded; }
-            }
-            SixYinLoaded = true; return SixYinLoaded;
-          } catch (e) { SixYinLoaded = false; }
-        } else { SixYinLoaded = false; }
-      } catch (e) { SixYinLoaded = false; }
-    }
-    SixYinLoaded = false;
-    return SixYinLoaded;
+    } catch (e2) {}
+    throw e;
   }
-
-  const SourceRegistry = { fish_music: FishMusic, huibq: Huibq, aggregate: AggregateAPI, suyin: Suyin, qsvip: Qishui };
-
-  const DefaultChain = { kw: ['huibq','aggregate','qsvip','fish_music'], wy: ['huibq','aggregate','fish_music','qsvip'], tx: ['suyin','huibq','aggregate','qsvip'], mg: ['huibq','aggregate','qsvip'], kg: ['huibq','aggregate','fish_music'], local: ['fish_music'] };
-
-  async function handleGetMusicUrlUnified(source, musicInfo, quality) {
-    if (!musicInfo) throw new Error('missing musicInfo');
-    const chain = DefaultChain[source] || [source, 'aggregate', 'huibq', 'qsvip'];
-    let lastErr = null;
-    for (const key of chain) {
-      const adapter = SourceRegistry[key];
-      if (!adapter) continue;
-      try {
-        const url = await adapter.musicUrl(source, musicInfo, quality);
-        if (url && typeof url === 'string' && url.startsWith('http')) return url;
-      } catch (e) { lastErr = e; continue; }
-    }
-    try {
-      const ok = await tryLoadSixYin();
-      if (ok && typeof globalThis.SixYinGetMusicUrl === 'function') {
-        try {
-          const url = await globalThis.SixYinGetMusicUrl(source, musicInfo, quality);
-          if (url) return url;
-        } catch (e) { /* ignore */ }
-      }
-    } catch (e) { /* ignore */ }
-    throw new Error(lastErr ? lastErr.message : 'all adapters failed');
-  }
-
-  on(EVENT_NAMES.request, async ({ action, source, info }) => {
-    if (action !== 'musicUrl' && action !== 'pic' && action !== 'lyric' && action !== 'search') throw new Error('unsupported action');
-    if (!info || !info.musicInfo) throw new Error('missing info');
-    const quality = info.type || '320k';
-    if (action === 'pic' && source === 'local') {
-      const url = await FishMusic.getLocalFileUrl(info.musicInfo.songmid);
-      return url;
-    }
-    if (action === 'lyric' && source === 'local') {
-      const songmid = info.musicInfo.songmid;
-      if (!songmid || !songmid.startsWith('server_')) throw new Error('unsupported local file');
-      const songId = songmid.replace('server_', '');
-      const requestBody = { p: songId };
-      const b = BufferUtil.bufToString(BufferUtil.from(JSON.stringify(requestBody))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-      const t = 'l';
-      const targetUrl = `${FishMusic.API_URL}/local/${t}?q=${b}`;
-      const resp = await httpFetch(targetUrl, { method: 'GET', headers: { 'User-Agent': env ? `lx-music-${env}/${version}` : `lx-music-request/${version}` }, timeout: GLOBAL_TIMEOUT });
-      const body = resp.body;
-      if (body && body.code === 0 && body.data) return { lyric: ensureString(body.data), tlyric: '', rlyric: '', lxlyric: '' };
-      throw new Error('get music lyric failed');
-    }
-    const url = await handleGetMusicUrlUnified(source, info.musicInfo, quality);
-    return url;
-  });
-
-  const mergedSources = {
-    kw: { name: '酷我音乐', type: 'music', actions: ['musicUrl'], qualitys: ['128k','320k','flac'] },
-    wy: { name: '网易云音乐', type: 'music', actions: ['musicUrl'], qualitys: ['128k','320k','flac'] },
-    tx: { name: 'QQ音乐', type: 'music', actions: ['musicUrl'], qualitys: ['128k','320k','flac'] },
-    kg: { name: '酷狗音乐', type: 'music', actions: ['musicUrl'], qualitys: ['128k','320k','flac'] },
-    mg: { name: '咪咕音乐', type: 'music', actions: ['musicUrl'], qualitys: ['128k','320k'] },
-    local: { name: '本地', type: 'music', actions: ['musicUrl','pic','lyric'], qualitys: [] },
-    qsvip: { name: '汽水VIP', type: 'music', actions: ['musicUrl','lyric'], qualitys: ['128k','320k','flac','flac24bit'] },
-    fish_music: { name: 'fish_music', type: 'music', actions: ['musicUrl','pic','lyric'], qualitys: ['128k','320k','flac','flac24bit'] },
-    huibq: { name: 'Huibq', type: 'music', actions: ['musicUrl'], qualitys: ['128k','320k'] },
-    aggregate: { name: 'AggregateAPI', type: 'music', actions: ['musicUrl'], qualitys: ['128k','320k','flac'] },
-    suyin: { name: '溯音', type: 'music', actions: ['musicUrl'], qualitys: ['128k','320k','flac'] }
-  };
-
-  send(EVENT_NAMES.inited, { status: true, openDevTools: DEV_ENABLE, sources: mergedSources });
-
-  globalThis.MergedMusicSources = { tryLoadSixYin, handleGetMusicUrlUnified, SourceRegistry, DefaultChain, httpFetch, available: true };
 }
+async function handleKgMusicUrl(musicInfo, quality) {
+  const songId = musicInfo.hash || musicInfo.songmid || pickId(musicInfo);
+  if (!songId) throw new Error("missing id");
+  const brMap = { "128k": "128", "320k": "320", "flac": "740", "flac24bit": "999" };
+  const br = brMap[mapQualityForApi(quality)] || "320";
+  return await getUrlFromGdApi("kugou", songId, br);
+}
+async function handleMgMusicUrl(musicInfo, quality) {
+  const songId = musicInfo.copyrightId || musicInfo.songmid || pickId(musicInfo);
+  if (!songId) throw new Error("missing id");
+  const br = (mapQualityForApi(quality) === "320k") ? "HQ" : "PQ";
+  try {
+    return await getUrlFromGdApi("migu", songId, br);
+  } catch (e) {
+    try {
+      const r = await httpFetch(`https://api.xcvts.cn/api/music/migu?gm=${encodeURIComponent(musicInfo.name || songId)}&n=1&type=json`, { method: "GET" });
+      if (r && r.body && r.body.music_url) return r.body.music_url;
+    } catch (e2) {}
+    throw e;
+  }
+}
+async function handleLocalPic(musicInfo) {
+  if (!musicInfo.songmid || !musicInfo.songmid.startsWith("server_")) throw new Error("unsupported local file");
+  const songId = musicInfo.songmid.replace("server_", "");
+  const requestBody = { p: songId };
+  const b = handleBase64Encode(JSON.stringify(requestBody)).replace(/\+/g, "-").replace(/\//g, "_");
+  const checkUrl = `${CONFIG.API_URL}/local/c?q=${b}`;
+  const r = await httpFetch(checkUrl, { method: "GET" });
+  if (r && r.body && r.body.code === 0 && r.body.data && r.body.data.cover) {
+    return `${CONFIG.API_URL}/local/p?q=${b}`;
+  }
+  throw new Error("get music pic failed");
+}
+async function handleLocalLyric(musicInfo) {
+  if (!musicInfo.songmid || !musicInfo.songmid.startsWith("server_")) throw new Error("unsupported local file");
+  const songId = musicInfo.songmid.replace("server_", "");
+  const requestBody = { p: songId };
+  const b = handleBase64Encode(JSON.stringify(requestBody)).replace(/\+/g, "-").replace(/\//g, "_");
+  const checkUrl = `${CONFIG.API_URL}/local/c?q=${b}`;
+  const r = await httpFetch(checkUrl, { method: "GET" });
+  if (r && r.body && r.body.code === 0 && r.body.data && r.body.data.lyric) {
+    const r2 = await httpFetch(`${CONFIG.API_URL}/local/l?q=${b}`, { method: "GET" });
+    if (r2 && r2.body && r2.body.code === 0) {
+      return { lyric: r2.body.data || "", tlyric: "", rlyric: "", lxlyric: "" };
+    }
+  }
+  throw new Error("get music lyric failed");
+}
+async function tryLiuyinFallback(musicInfo, quality) {
+  try {
+    const cacheKey = `liuyin_raw`;
+    let raw = getCache(cacheKey);
+    if (!raw) {
+      const r = await httpFetch(CONFIG.LIUYIN_RAW_URL, { method: "GET", timeout: 20000 });
+      if (!r || !r.body) return "";
+      raw = typeof r.body === "string" ? r.body : JSON.stringify(r.body);
+      setCache(cacheKey, raw, 60 * 1000);
+    }
+    const id = pickId(musicInfo);
+    const audioRegex = /https?:\/\/[^\s'"]+\.(mp3|m4a|flac|aac|ogg|wav)(\?[^\s'"]*)?/ig;
+    let m;
+    while ((m = audioRegex.exec(raw)) !== null) {
+      if (m && m[0]) return m[0];
+    }
+    const urlRegex = /https?:\/\/[^\s'"]+api[^\s'"]+/ig;
+    const apis = [];
+    while ((m = urlRegex.exec(raw)) !== null) {
+      if (m && m[0]) apis.push(m[0]);
+    }
+    for (let apiBase of apis) {
+      try {
+        let tryUrl = apiBase;
+        if (!/\?/.test(tryUrl)) tryUrl = tryUrl + (tryUrl.endsWith("/") ? "" : "/") + "?id=" + encodeURIComponent(id);
+        const r2 = await httpFetch(tryUrl, { method: "GET", timeout: 10000 });
+        if (r2 && r2.body) {
+          const bodyStr = typeof r2.body === "string" ? r2.body : JSON.stringify(r2.body);
+          const am = bodyStr.match(/https?:\/\/[^\s'"]+\.(mp3|m4a|flac|aac|ogg|wav)(\?[^\s'"]*)?/i);
+          if (am) return am[0];
+          if (r2.body && typeof r2.body === "object") {
+            if (r2.body.url && typeof r2.body.url === "string") return r2.body.url;
+            if (r2.body.data && typeof r2.body.data === "string") {
+              const am2 = r2.body.data.match(/https?:\/\/[^\s'"]+\.(mp3|m4a|flac|aac|ogg|wav)/i);
+              if (am2) return am2[0];
+            }
+          }
+        }
+      } catch (e) {}
+    }
+    return "";
+  } catch (e) {
+    return "";
+  }
+}
+async function handleGetMusicUrl(source, musicInfo, quality) {
+  const q = mapQualityForApi(quality);
+  try {
+    switch (source) {
+      case "local":
+        return await handleLocalMusicUrl(musicInfo);
+      case "qsvip":
+        return await handleQsvipMusicUrl(musicInfo, q);
+      case "tx":
+        return await handleTxMusicUrl(musicInfo, q);
+      case "wy":
+        return await handleWyMusicUrl(musicInfo, q);
+      case "kw":
+        return await handleKwMusicUrl(musicInfo, q);
+      case "kg":
+        return await handleKgMusicUrl(musicInfo, q);
+      case "mg":
+        return await handleMgMusicUrl(musicInfo, q);
+      case "liuyin":
+        return await tryLiuyinFallback(musicInfo, q);
+      default:
+        throw new Error("action(musicUrl) does not support source(" + source + ")");
+    }
+  } catch (err) {
+    try {
+      const fallback = await tryLiuyinFallback(musicInfo, q);
+      if (fallback) return fallback;
+    } catch (e) {}
+    throw err;
+  }
+}
+on(EVENT_NAMES.request, ({ action, source, info }) => {
+  switch (action) {
+    case "musicUrl":
+      return handleGetMusicUrl(source, info.musicInfo, info.type)
+        .then(data => Promise.resolve(data))
+        .catch(err => Promise.reject(err));
+    case "pic":
+      if (source === "local") {
+        return handleLocalPic(info.musicInfo).then(d => Promise.resolve(d)).catch(e => Promise.reject(e));
+      }
+      return Promise.reject("action(pic) does not support source(" + source + ")");
+    case "lyric":
+      if (source === "local") {
+        return handleLocalLyric(info.musicInfo).then(d => Promise.resolve(d)).catch(e => Promise.reject(e));
+      }
+      return Promise.reject("action(lyric) does not support source(" + source + ")");
+    default:
+      return Promise.reject("action not support");
+  }
+});
+const musicSources = {};
+MUSIC_SOURCES.forEach(item => {
+  musicSources[item] = {
+    name: item,
+    type: "music",
+    actions: (item === "local") ? ["musicUrl", "pic", "lyric"] : ["musicUrl"],
+    qualitys: MUSIC_QUALITY[item] || [],
+  };
+});
+send(EVENT_NAMES.inited, { status: true, openDevTools: CONFIG.DEV_ENABLE, sources: musicSources });
+globalThis.__merged_music_source__ = {
+  config: CONFIG,
+  sources: musicSources,
+  handlers: { handleGetMusicUrl }
+};
