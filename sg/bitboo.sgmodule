@@ -1,0 +1,11 @@
+#!name=👹BitbooLinsar 
+#!desc=自动获取并更新 bitboo列表
+[MITM] hostname = %APPEND% 81.71.98.184
+[Script]
+👹BitbooLinsar = 
+type=http-response,
+pattern = https://81.71.98.184/api/node_list,
+requires-body=1,
+script-path=https://gist.githubusercontent.com/yourusername/auto_ssr_script.js,
+max-size=0,
+binary-body-mode=0
