@@ -1,9 +1,11 @@
 const CHECK_URL = 'https://aistudio.google.com/prompts/new_chat?hl=zh-cn'
 const BLOCKED_PART = 'ai.google.dev/gemini-api/docs/available-regions'
 
+const group = $argument || '未指定策略组'   // ← 这里会显示你填的策略组名称
+
 ;(async () => {
   let result = {
-    title: 'GPT解锁检测',
+    title: 'GPT / Gemini 支持检测',
     style: 'error',
     content: '检测失败，请重试',
   }
@@ -17,7 +19,7 @@ const BLOCKED_PART = 'ai.google.dev/gemini-api/docs/available-regions'
     }, (error, response) => {
       if (error) {
         result.style = 'error'
-        result.content = '网络错误，请检查节点'
+        result.content = `策略组: ${group}\n网络错误，请检查节点`
         resolve()
         return
       }
@@ -26,13 +28,13 @@ const BLOCKED_PART = 'ai.google.dev/gemini-api/docs/available-regions'
 
       if (finalUrl.includes(BLOCKED_PART)) {
         result.style = 'alert'
-        result.content = '❌ 不支持 GPT'
+        result.content = `策略组: ${group}\n❌ 不支持 GPT / Gemini（地区限制，已自动跳转）`
       } else if (response.status === 200) {
         result.style = 'good'
-        result.content = '✅ 支持使用 GPT'
+        result.content = `策略组: ${group}\n✅ 支持使用 GPT / Gemini（可正常访问 AI Studio）`
       } else {
         result.style = 'alert'
-        result.content = `检测异常（状态码: ${response.status}）`
+        result.content = `策略组: ${group}\n检测异常（状态码: ${response.status}）`
       }
 
       resolve()
