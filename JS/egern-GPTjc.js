@@ -1,10 +1,9 @@
 const CHECK_URL = 'https://aistudio.google.com/prompts/new_chat?hl=zh-cn'
 const BLOCKED_PART = 'ai.google.dev/gemini-api/docs/available-regions'
 
-// 优先使用环境变量 GROUP，其次使用 argument
-const group = (typeof ctx !== 'undefined' && ctx.env && ctx.env.GROUP) 
-              || $argument 
-              || '未指定策略组（当前全局节点）';
+const nodeName = (typeof ctx !== 'undefined' && ctx.env && ctx.env.NODE_NAME) 
+                || $argument 
+                || '未指定节点（当前全局）';
 
 ;(async () => {
   let result = {
@@ -22,7 +21,7 @@ const group = (typeof ctx !== 'undefined' && ctx.env && ctx.env.GROUP)
     }, (error, response) => {
       if (error) {
         result.style = 'error'
-        result.content = `策略组: ${group}\n网络错误，请检查节点`
+        result.content = `检测节点: ${nodeName}\n网络错误，请检查节点`
         resolve()
         return
       }
@@ -31,13 +30,13 @@ const group = (typeof ctx !== 'undefined' && ctx.env && ctx.env.GROUP)
 
       if (finalUrl.includes(BLOCKED_PART)) {
         result.style = 'alert'
-        result.content = `策略组: ${group}\n❌ 不支持 GPT / Gemini（地区限制，已自动跳转）`
+        result.content = `检测节点: ${nodeName}\n❌ 不支持 GPT / Gemini（地区限制，已自动跳转）`
       } else if (response.status === 200) {
         result.style = 'good'
-        result.content = `策略组: ${group}\n✅ 支持使用 GPT / Gemini（可正常访问 AI Studio）`
+        result.content = `检测节点: ${nodeName}\n✅ 支持使用 GPT / Gemini（可正常访问 AI Studio）`
       } else {
         result.style = 'alert'
-        result.content = `策略组: ${group}\n检测异常（状态码: ${response.status}）`
+        result.content = `检测节点: ${nodeName}\n检测异常（状态码: ${response.status}）`
       }
 
       resolve()
