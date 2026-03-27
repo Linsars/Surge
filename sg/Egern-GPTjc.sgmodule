@@ -1,5 +1,5 @@
 #!name = GPT / Gemini 支持检测面板
-#!desc = 在模块设置中指定要检测的策略组或节点名称
+#!desc = 在模块设置中输入具体节点名称进行检测
 #!author = Linsar
 #!icon = https://raw.githubusercontent.com/getsomecat/GetSomeCats/main/icon/gpt.png
 
@@ -9,10 +9,9 @@ GPT支持检测 = type=generic, timeout=120, script-path=https://raw.githubuserc
 [Panel]
 GPT / Gemini 支持 = script-name=GPT支持检测, icon=🔍, title=GPT/Gemini, style=info, update-interval=3600
 
-# Egern 环境变量声明（会在模块设置页面生成输入框）
 [ENV]
-GROUP = 
-  name = 要检测的策略组名称
-  desc = 填你的策略组名（如 AI-Proxy、GPT-Group）或单个节点名称
+NODE_NAME = 
+  name = 要检测的节点名称
+  desc = 请填你想检测的具体节点完整名称（不是策略组）
   type = text
   default = 
