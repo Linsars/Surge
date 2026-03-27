@@ -4,10 +4,10 @@
 #!icon = https://raw.githubusercontent.com/getsomecat/GetSomeCats/main/icon/gpt.png
 
 [Script]
-GPT支持检测 = type=http-request,pattern=^https?:\/\/net-lsp-x\.com,script-path=https://github.com/Linsars/Surge/main/JS/egern-GPTjc.js
+GPT支持检测 = type=http-request,script-path=https://raw.githubusercontent.com/Linsars/Surge/main/JS/egern-GPTjc.js
 ,timeout=120
-{{{EVENT_SCRIPT_NAME}}} = type=event,event-name=network-changed,timeout=120,script-path=https://github.com/Linsars/Surge/main/JS/egern-GPTjc.js,argument=
-GPT支持检测 = type=generic,timeout=120,script-path=https://github.com/Linsars/Surge/main/JS/egern-GPTjc.js,argument=
+{{{EVENT_SCRIPT_NAME}}} = type=event,event-name=network-changed,timeout=120,script-path=https://raw.githubusercontent.com/Linsars/Surge/main/JS/egern-GPTjc.js,argument=
+GPT支持检测 = type=generic,timeout=120,script-path=https://raw.githubusercontent.com/Linsars/Surge/main/JS/egern-GPTjc.js,argument=
 
 [Panel]
 {{{PANEL_NAME}}} = script-name=GPT支持检测,update-interval={{{UPDATE-INTERVAL}}}
