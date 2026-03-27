@@ -1,7 +1,10 @@
 const CHECK_URL = 'https://aistudio.google.com/prompts/new_chat?hl=zh-cn'
 const BLOCKED_PART = 'ai.google.dev/gemini-api/docs/available-regions'
 
-const group = $argument && $argument.trim() !== '' ? $argument : '未指定策略组（当前全局节点）'
+// 优先使用环境变量 GROUP，其次使用 argument
+const group = (typeof ctx !== 'undefined' && ctx.env && ctx.env.GROUP) 
+              || $argument 
+              || '未指定策略组（当前全局节点）';
 
 ;(async () => {
   let result = {
