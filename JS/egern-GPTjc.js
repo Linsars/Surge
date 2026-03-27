@@ -3,7 +3,7 @@ const BLOCKED_PART = 'ai.google.dev/gemini-api/docs/available-regions'
 
 ;(async () => {
   let result = {
-    title: 'GPT / Gemini 支持检测',
+    title: 'GPT解锁检测',
     style: 'error',
     content: '检测失败，请重试',
   }
@@ -25,13 +25,11 @@ const BLOCKED_PART = 'ai.google.dev/gemini-api/docs/available-regions'
       const finalUrl = response.url || ''
 
       if (finalUrl.includes(BLOCKED_PART)) {
-        // 被跳转到可用地区页面 → 不支持
         result.style = 'alert'
-        result.content = '❌ 不支持 GPT / Gemini（地区限制，已自动跳转）'
+        result.content = '❌ 不支持 GPT'
       } else if (response.status === 200) {
-        // 正常打开 new_chat 页面 → 支持
         result.style = 'good'
-        result.content = '✅ 支持使用 GPT / Gemini（可正常访问 AI Studio）'
+        result.content = '✅ 支持使用 GPT'
       } else {
         result.style = 'alert'
         result.content = `检测异常（状态码: ${response.status}）`
