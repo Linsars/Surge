@@ -1,10 +1,18 @@
-#!name = GPT 支持检测面板
-#!desc = 在 Egern 模块设置中指定要检测的策略组名称
+#!name = GPT / Gemini 支持检测面板
+#!desc = 在模块设置中指定要检测的策略组或节点名称
 #!author = Linsar
 #!icon = https://raw.githubusercontent.com/getsomecat/GetSomeCats/main/icon/gpt.png
 
 [Script]
-GPT支持检测 = type=generic, timeout=120, script-path=https://raw.githubusercontent.com/Linsars/Surge/main/JS/egern-GPTjc.js, argument=
+GPT支持检测 = type=generic, timeout=120, script-path=https://raw.githubusercontent.com/Linsars/Surge/main/JS/egern-GPTjc.js
 
 [Panel]
 GPT / Gemini 支持 = script-name=GPT支持检测, icon=🔍, title=GPT/Gemini, style=info, update-interval=3600
+
+# Egern 环境变量声明（会在模块设置页面生成输入框）
+[ENV]
+GROUP = 
+  name = 要检测的策略组名称
+  desc = 填你的策略组名（如 AI-Proxy、GPT-Group）或单个节点名称
+  type = text
+  default = 
