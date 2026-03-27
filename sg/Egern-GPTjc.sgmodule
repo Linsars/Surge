@@ -1,5 +1,5 @@
 #!name = GPT支持检测面板
-#!desc = 检测当前节点是否支持 GPT
+#!desc = 检测当前节点是否支持GPT
 #!author = Linsar
 #!icon = https://raw.githubusercontent.com/getsomecat/GetSomeCats/main/icon/gpt.png
 
