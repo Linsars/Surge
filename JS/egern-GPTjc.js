@@ -1,7 +1,7 @@
 const CHECK_URL = 'https://aistudio.google.com/prompts/new_chat?hl=zh-cn'
 const BLOCKED_PART = 'ai.google.dev/gemini-api/docs/available-regions'
 
-const group = $argument || '未指定策略组'   // ← 这里会显示你填的策略组名称
+const group = $argument && $argument.trim() !== '' ? $argument : '未指定策略组（当前全局节点）'
 
 ;(async () => {
   let result = {
