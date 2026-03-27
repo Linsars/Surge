@@ -1,0 +1,16 @@
+#!name = GPT支持检测面板
+#!desc = 检测当前节点是否支持 GPT
+#!author = Linsar
+#!icon = https://raw.githubusercontent.com/getsomecat/GetSomeCats/main/icon/gpt.png
+
+[MITM]
+hostname = %APPEND% net-lsp-x.com
+
+[Script]
+GPT支持检测 = type=http-request,pattern=^https?:\/\/net-lsp-x\.com,script-path=https://github.com/Linsars/Surge/main/JS/egern-GPTjc.js
+,timeout=120
+{{{EVENT_SCRIPT_NAME}}} = type=event,event-name=network-changed,timeout=120,script-path=https://github.com/Linsars/Surge/main/JS/egern-GPTjc.js,argument=
+GPT支持检测 = type=generic,timeout=120,script-path=https://github.com/Linsars/Surge/main/JS/egern-GPTjc.js,argument=
+
+[Panel]
+{{{PANEL_NAME}}} = script-name=GPT支持检测,update-interval={{{UPDATE-INTERVAL}}}
