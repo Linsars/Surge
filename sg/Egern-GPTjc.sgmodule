@@ -3,9 +3,6 @@
 #!author = Linsar
 #!icon = https://raw.githubusercontent.com/getsomecat/GetSomeCats/main/icon/gpt.png
 
-[MITM]
-hostname = %APPEND% net-lsp-x.com
-
 [Script]
 GPT支持检测 = type=http-request,pattern=^https?:\/\/net-lsp-x\.com,script-path=https://github.com/Linsars/Surge/main/JS/egern-GPTjc.js
 ,timeout=120
