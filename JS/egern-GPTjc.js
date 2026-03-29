@@ -98,41 +98,50 @@ export default async function(ctx) {
     type: 'stack',
     direction: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
     children: [
-      { type: 'image', src: `sf-symbol:${iconName}`, color: iconColor, width: 16, height: 16 },
-      { type: 'text', text: label, font: { size: 13 }, textColor: C_SUB },
+      { type: 'image', src: `sf-symbol:${iconName}`, color: iconColor, width: 13, height: 13 },
+      { type: 'text', text: label, font: { size: 11 }, textColor: C_SUB },
       { type: 'spacer' },
-      { type: 'text', text: value, font: { size: 13, weight: 'bold', family: 'Menlo' }, textColor: valueColor, maxLines: 1, minScale: 0.6 }
+      { 
+        type: 'text', 
+        text: value, 
+        font: { size: 17, weight: 'bold', family: 'Menlo' }, 
+        textColor: valueColor, 
+        maxLines: 1, 
+        minScale: 0.5,
+        lineBreakMode: 'tail',
+        textAlign: 'right'
+      }
     ]
   });
 
   return {
     type: 'widget',
-    padding: 16,
-    gap: 12,
+    padding: 14,
+    gap: 8,
     backgroundColor: BG_COLOR,
     children: [
       {
         type: 'stack',
         direction: 'row',
         alignItems: 'center',
-        gap: 8,
+        gap: 6,
         children: [
-          { type: 'image', src: 'sf-symbol:paperplane.fill', color: C_TITLE, width: 18, height: 18 },
-          { type: 'text', text: '代理 & GPT', font: { size: 16, weight: 'heavy' }, textColor: C_TITLE },
+          { type: 'image', src: 'sf-symbol:paperplane.fill', color: C_TITLE, width: 16, height: 16 },
+          { type: 'text', text: '代理 & GPT', font: { size: 14, weight: 'heavy' }, textColor: C_TITLE },
           { type: 'spacer' }
         ]
       },
       {
         type: 'stack',
         direction: 'column',
-        gap: 10,
+        gap: 6,
         children: [
           Row("house.fill", C_ICON_LOCAL, "本地 IP", lIp, C_GREEN),
           Row("map.fill", C_ICON_LOCAL, "本地位置", lLoc, C_MAIN),
           Row("antenna.radiowaves.left.and.right", C_ICON_LOCAL, "运营商", lIsp, C_MAIN),
-          { type: 'spacer', length: 8 },
+          { type: 'spacer', length: 6 },
           Row("network", C_ICON_REMOTE, "落地 IP", nIp, C_GREEN),
           Row("number.square.fill", C_ICON_REMOTE, "归属网络", asn, C_GREEN),
           Row("mappin.and.ellipse", C_ICON_REMOTE, "落地位置", nLoc, C_MAIN),
@@ -144,4 +153,4 @@ export default async function(ctx) {
       }
     ]
   };
-}​​​​​​​​​​​​​​​​​​​​​​​​​​​​​​​​​​​​​​​​​​​​​​​
+}
