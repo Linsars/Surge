@@ -1,4 +1,5 @@
 export default async function(ctx) {
+  const widgetFamily = ctx.widgetFamily || 'systemMedium';
   const BG_COLOR = { light: '#FFFFFF', dark: '#2C2C2E' };
   const C_TITLE = { light: '#1A1A1A', dark: '#FFD700' };
   const C_SUB = { light: '#666666', dark: '#B0B0B0' };
@@ -7,6 +8,10 @@ export default async function(ctx) {
   const C_RED = { light: '#FF3B30', dark: '#FF3B30' };
   const C_ICON_LOCAL = { light: '#007AFF', dark: '#0A84FF' };
   const C_ICON_REMOTE = { light: '#5856D6', dark: '#5E5CE6' };
+
+  if (['systemSmall', 'accessoryCircular', 'accessoryInline', 'accessoryRectangular'].includes(widgetFamily)) {
+    return { type: 'widget', padding: 16, backgroundColor: BG_COLOR, children: [{ type: 'text', text: '请使用中号或大号组件', font: { size: 15 }, textColor: C_MAIN, textAlign: 'center' }] };
+  }
 
   const fmtISP = (isp) => {
     if (!isp) return "未知";
@@ -72,10 +77,7 @@ export default async function(ctx) {
   let gptColor = C_SUB;
   try {
     const url = "https://api.openai.com/v1/models";
-    const options = {
-      headers: { "Authorization": "Bearer sk-1234567890abcdef1234567890abcdef" },
-      timeout: 10000
-    };
+    const options = { headers: { "Authorization": "Bearer sk-1234567890abcdef1234567890abcdef" }, timeout: 10000 };
     const res = await ctx.http.get(url, options);
     const status = res.status || res.statusCode || 0;
     const body = await res.text();
@@ -100,16 +102,16 @@ export default async function(ctx) {
     alignItems: 'center',
     gap: 6,
     children: [
-      { type: 'image', src: `sf-symbol:${iconName}`, color: iconColor, width: 13, height: 13 },
-      { type: 'text', text: label, font: { size: 11 }, textColor: C_SUB },
+      { type: 'image', src: `sf-symbol:${iconName}`, color: iconColor, width: 14, height: 14 },
+      { type: 'text', text: label, font: { size: 12 }, textColor: C_SUB },
       { type: 'spacer' },
       { 
         type: 'text', 
         text: value, 
-        font: { size: 17, weight: 'bold', family: 'Menlo' }, 
+        font: { size: 15, weight: 'bold', family: 'Menlo' }, 
         textColor: valueColor, 
         maxLines: 1, 
-        minScale: 0.5,
+        minScale: 0.85,
         lineBreakMode: 'tail',
         textAlign: 'right'
       }
@@ -118,8 +120,8 @@ export default async function(ctx) {
 
   return {
     type: 'widget',
-    padding: 14,
-    gap: 8,
+    padding: [10, 12, 10, 12],
+    gap: 4,
     backgroundColor: BG_COLOR,
     children: [
       {
@@ -127,21 +129,22 @@ export default async function(ctx) {
         direction: 'row',
         alignItems: 'center',
         gap: 6,
+        padding: [0, 0, 6, 0],
         children: [
           { type: 'image', src: 'sf-symbol:paperplane.fill', color: C_TITLE, width: 16, height: 16 },
-          { type: 'text', text: '代理 & GPT', font: { size: 14, weight: 'heavy' }, textColor: C_TITLE },
+          { type: 'text', text: '代理 & GPT', font: { size: 15, weight: 'heavy' }, textColor: C_TITLE },
           { type: 'spacer' }
         ]
       },
       {
         type: 'stack',
         direction: 'column',
-        gap: 6,
+        gap: 4,
         children: [
           Row("house.fill", C_ICON_LOCAL, "本地 IP", lIp, C_GREEN),
           Row("map.fill", C_ICON_LOCAL, "本地位置", lLoc, C_MAIN),
           Row("antenna.radiowaves.left.and.right", C_ICON_LOCAL, "运营商", lIsp, C_MAIN),
-          { type: 'spacer', length: 6 },
+          { type: 'stack', height: 0.5, backgroundColor: { light: 'rgba(0,0,0,0.08)', dark: 'rgba(255,255,255,0.12)' } },
           Row("network", C_ICON_REMOTE, "落地 IP", nIp, C_GREEN),
           Row("number.square.fill", C_ICON_REMOTE, "归属网络", asn, C_GREEN),
           Row("mappin.and.ellipse", C_ICON_REMOTE, "落地位置", nLoc, C_MAIN),
