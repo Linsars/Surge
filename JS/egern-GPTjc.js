@@ -12,18 +12,7 @@ export default async function(ctx) {
   const C_ICON_REMOTE = { light: '#5856D6', dark: '#5E5CE6' };
 
   if (['systemSmall', 'accessoryCircular', 'accessoryInline', 'accessoryRectangular'].includes(widgetFamily)) {
-    return {
-      type: 'widget',
-      padding: 16,
-      backgroundColor: BG_COLOR,
-      children: [{
-        type: 'text',
-        text: '请使用中号或大号组件',
-        font: { size: 'callout' },
-        textColor: C_MAIN,
-        textAlign: 'center'
-      }]
-    };
+    return { type: 'widget', padding: 16, backgroundColor: BG_COLOR, children: [{ type: 'text', text: '请使用中号或大号组件', font: { size: 'callout' }, textColor: C_MAIN, textAlign: 'center' }] };
   }
 
   const fmtISP = (isp) => {
@@ -62,10 +51,14 @@ export default async function(ctx) {
   let nIp = "获取失败";
   let nLoc = "未知位置";
   let nativeText = "未知";
-  let riskTxt = "获取失败";
-  let riskCol = C_SUB;
-  let riskIc = "questionmark.shield.fill";
-  let riskSev = 0;
+
+  let riskIPPureTxt = "获取失败";
+  let riskIPPureCol = C_SUB;
+  let riskIPPureIc = "questionmark.shield.fill";
+
+  let riskIpapiTxt = "";
+  let riskIpapiCol = C_SUB;
+  let riskIpapiIc = "questionmark.shield.fill";
 
   try {
     const res = await ctx.http.get('https://my.ippure.com/v1/info', { timeout: 5000 });
@@ -78,34 +71,32 @@ export default async function(ctx) {
     nativeText = d.isResidential === true ? "🏠 原生住宅" : (d.isResidential === false ? "🏢 商业机房" : "未知");
     const risk = d.fraudScore;
     if (risk !== undefined) {
-      if (risk >= 80) { riskTxt = `IPPure: 极高 (${risk})`; riskCol = C_RED; riskIc = "xmark.shield.fill"; riskSev = 4; }
-      else if (risk >= 70) { riskTxt = `IPPure: 高危 (${risk})`; riskCol = C_ORANGE; riskIc = "exclamationmark.shield.fill"; riskSev = 3; }
-      else if (risk >= 40) { riskTxt = `IPPure: 中等 (${risk})`; riskCol = C_YELLOW; riskIc = "exclamationmark.shield.fill"; riskSev = 1; }
-      else { riskTxt = `IPPure: 低危 (${risk})`; riskCol = C_GREEN; riskIc = "checkmark.shield.fill"; riskSev = 0; }
+      if (risk >= 80) { riskIPPureTxt = `IPPure: 极高 (${risk})`; riskIPPureCol = C_RED; riskIPPureIc = "xmark.shield.fill"; }
+      else if (risk >= 70) { riskIPPureTxt = `IPPure: 高危 (${risk})`; riskIPPureCol = C_ORANGE; riskIPPureIc = "exclamationmark.shield.fill"; }
+      else if (risk >= 40) { riskIPPureTxt = `IPPure: 中等 (${risk})`; riskIPPureCol = C_YELLOW; riskIPPureIc = "exclamationmark.shield.fill"; }
+      else { riskIPPureTxt = `IPPure: 低危 (${risk})`; riskIPPureCol = C_GREEN; riskIPPureIc = "checkmark.shield.fill"; }
     }
   } catch (e) {}
 
-  if (riskSev === 0 || riskTxt === "获取失败") {
-    try {
-      const ipRes = await ctx.http.get('http://ip-api.com/json/?lang=zh-CN', { timeout: 4000 });
-      const ipData = JSON.parse(await ipRes.text());
-      if (ipData.query) {
-        const ip = ipData.query;
-        const apiRes = await ctx.http.get(`https://api.ipapi.is/?q=${ip}`, { timeout: 5000 });
-        const j = JSON.parse(await apiRes.text());
-        if (j && j.company && j.company.abuser_score) {
-          const scoreMatch = String(j.company.abuser_score).match(/([0-9.]+)\s*\(([^)]+)\)/);
-          if (scoreMatch) {
-            const pct = Math.round(Number(scoreMatch[1]) * 10000) / 100 + '%';
-            const lv = scoreMatch[2].trim();
-            riskTxt = `ipapi: ${lv} (${pct})`;
-            riskCol = lv.includes('High') || lv.includes('Very High') ? C_ORANGE : (lv.includes('Elevated') ? C_YELLOW : C_GREEN);
-            riskIc = lv.includes('High') ? "exclamationmark.shield.fill" : "checkmark.shield.fill";
-          }
+  try {
+    const ipRes = await ctx.http.get('http://ip-api.com/json/?lang=zh-CN', { timeout: 4000 });
+    const ipData = JSON.parse(await ipRes.text());
+    if (ipData.query) {
+      const ip = ipData.query;
+      const apiRes = await ctx.http.get(`https://api.ipapi.is/?q=${ip}`, { timeout: 5000 });
+      const j = JSON.parse(await apiRes.text());
+      if (j && j.company && j.company.abuser_score) {
+        const scoreMatch = String(j.company.abuser_score).match(/([0-9.]+)\s*\(([^)]+)\)/);
+        if (scoreMatch) {
+          const pct = Math.round(Number(scoreMatch[1]) * 10000) / 100 + '%';
+          const lv = scoreMatch[2].trim();
+          riskIpapiTxt = `ipapi: ${lv} (${pct})`;
+          riskIpapiCol = lv.includes('High') || lv.includes('Very High') ? C_ORANGE : (lv.includes('Elevated') ? C_YELLOW : C_GREEN);
+          riskIpapiIc = lv.includes('High') ? "exclamationmark.shield.fill" : "checkmark.shield.fill";
         }
       }
-    } catch (e) {}
-  }
+    }
+  } catch (e) {}
 
   let gpt = "检测中...";
   let gptColor = C_SUB;
@@ -152,10 +143,39 @@ export default async function(ctx) {
     ]
   });
 
-  const titleSize = widgetFamily === 'systemLarge' ? 'subheadline' : 'callout';
-  const rowGap = widgetFamily === 'systemLarge' ? 6 : 4;
-  const widgetPadding = widgetFamily === 'systemLarge' ? 16 : 12;
+  const isLarge = widgetFamily === 'systemLarge';
+  const titleSize = isLarge ? 'subheadline' : 'callout';
+  const rowGap = isLarge ? 6 : 4;
+  const widgetPadding = isLarge ? 16 : 12;
   const titlePadding = [0, 0, 6, 0];
+
+  let mainRows = [
+    Row("house.fill", C_ICON_LOCAL, "本地 IP", lIp, C_GREEN),
+    Row("map.fill", C_ICON_LOCAL, "本地位置", lLoc, C_MAIN),
+    Row("antenna.radiowaves.left.and.right", C_ICON_LOCAL, "运营商", lIsp, C_MAIN),
+    { type: 'stack', height: 0.5, backgroundColor: { light: 'rgba(0,0,0,0.08)', dark: 'rgba(255,255,255,0.12)' } },
+    Row("network", C_ICON_REMOTE, "落地 IP", nIp, C_GREEN),
+    Row("mappin.and.ellipse", C_ICON_REMOTE, "落地位置", nLoc, C_MAIN),
+    Row("building.2.fill", C_ICON_REMOTE, "原生属性", nativeText, C_MAIN),
+    Row(riskIPPureIc, riskIPPureCol, "风险评级", riskIPPureTxt, riskIPPureCol),
+    Row("sparkles", gptColor, "GPT 状态", gpt, gptColor)
+  ];
+
+  if (isLarge) {
+    mainRows = [
+      Row("house.fill", C_ICON_LOCAL, "本地 IP", lIp, C_GREEN),
+      Row("map.fill", C_ICON_LOCAL, "本地位置", lLoc, C_MAIN),
+      Row("antenna.radiowaves.left.and.right", C_ICON_LOCAL, "运营商", lIsp, C_MAIN),
+      { type: 'stack', height: 0.5, backgroundColor: { light: 'rgba(0,0,0,0.08)', dark: 'rgba(255,255,255,0.12)' } },
+      Row("network", C_ICON_REMOTE, "落地 IP", nIp, C_GREEN),
+      Row("mappin.and.ellipse", C_ICON_REMOTE, "落地位置", nLoc, C_MAIN),
+      Row("building.2.fill", C_ICON_REMOTE, "原生属性", nativeText, C_MAIN),
+      Row(riskIPPureIc, riskIPPureCol, "IPPure 纯净", riskIPPureTxt, riskIPPureCol),
+      riskIpapiTxt ? Row(riskIpapiIc, riskIpapiCol, "ipapi 纯净", riskIpapiTxt, riskIpapiCol) : { type: 'text', text: '' },
+      { type: 'stack', height: 0.5, backgroundColor: { light: 'rgba(0,0,0,0.08)', dark: 'rgba(255,255,255,0.12)' } },
+      Row("sparkles", gptColor, "GPT 状态", gpt, gptColor)
+    ];
+  }
 
   return {
     type: 'widget',
@@ -192,17 +212,7 @@ export default async function(ctx) {
         type: 'stack',
         direction: 'column',
         gap: rowGap,
-        children: [
-          Row("house.fill", C_ICON_LOCAL, "本地 IP", lIp, C_GREEN),
-          Row("map.fill", C_ICON_LOCAL, "本地位置", lLoc, C_MAIN),
-          Row("antenna.radiowaves.left.and.right", C_ICON_LOCAL, "运营商", lIsp, C_MAIN),
-          { type: 'stack', height: 0.5, backgroundColor: { light: 'rgba(0,0,0,0.08)', dark: 'rgba(255,255,255,0.12)' } },
-          Row("network", C_ICON_REMOTE, "落地 IP", nIp, C_GREEN),
-          Row("mappin.and.ellipse", C_ICON_REMOTE, "落地位置", nLoc, C_MAIN),
-          Row("building.2.fill", C_ICON_REMOTE, "原生属性", nativeText, C_MAIN),
-          Row(riskIc, riskCol, "风险评级", riskTxt, riskCol),
-          Row("sparkles", gptColor, "GPT 状态", gpt, gptColor)
-        ]
+        children: mainRows
       }
     ]
   };
