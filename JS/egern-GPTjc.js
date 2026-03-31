@@ -1,6 +1,6 @@
 export default async function(ctx) {
   const widgetFamily = ctx.widgetFamily || 'systemMedium';
-  const BG_COLOR = { light: '#FFFFFF', dark: '#1C1C1E' };
+  const BG_COLOR = { light: '#FFFFFF', dark: '#2C2C2E' };
   const C_TITLE = { light: '#1A1A1A', dark: '#FFD700' };
   const C_SUB = { light: '#666666', dark: '#B0B0B0' };
   const C_MAIN = { light: '#1A1A1A', dark: '#FFFFFF' };
@@ -12,7 +12,18 @@ export default async function(ctx) {
   const C_ICON_REMOTE = { light: '#5856D6', dark: '#5E5CE6' };
 
   if (['systemSmall', 'accessoryCircular', 'accessoryInline', 'accessoryRectangular'].includes(widgetFamily)) {
-    return { type: 'widget', padding: 16, backgroundColor: BG_COLOR, children: [{ type: 'text', text: '请使用中号或大号组件', font: { size: 15 }, textColor: C_MAIN, textAlign: 'center' }] };
+    return {
+      type: 'widget',
+      padding: 16,
+      backgroundColor: BG_COLOR,
+      children: [{
+        type: 'text',
+        text: '请使用中号或大号组件',
+        font: { size: 'callout' },
+        textColor: C_MAIN,
+        textAlign: 'center'
+      }]
+    };
   }
 
   const fmtISP = (isp) => {
@@ -117,7 +128,7 @@ export default async function(ctx) {
   }
 
   const now = new Date();
-  const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+  const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 
   const Row = (iconName, iconColor, label, value, valueColor) => ({
     type: 'stack',
@@ -126,33 +137,61 @@ export default async function(ctx) {
     gap: 6,
     children: [
       { type: 'image', src: `sf-symbol:${iconName}`, color: iconColor, width: 13, height: 13 },
-      { type: 'text', text: label, font: { size: 11 }, textColor: C_SUB },
+      { type: 'text', text: label, font: { size: 'caption1' }, textColor: C_SUB },
       { type: 'spacer' },
-      { type: 'text', text: value, font: { size: 11, weight: 'bold', family: 'Menlo' }, textColor: valueColor, maxLines: 1, minScale: 0.5 }
+      { 
+        type: 'text', 
+        text: value, 
+        font: { size: 'subheadline', weight: 'bold' }, 
+        textColor: valueColor, 
+        maxLines: 1, 
+        minScale: 0.85,
+        lineBreakMode: 'tail',
+        textAlign: 'right'
+      }
     ]
   });
 
+  const titleSize = widgetFamily === 'systemLarge' ? 'subheadline' : 'callout';
+  const rowGap = widgetFamily === 'systemLarge' ? 6 : 4;
+  const widgetPadding = widgetFamily === 'systemLarge' ? 16 : 12;
+  const titlePadding = [0, 0, 6, 0];
+
   return {
     type: 'widget',
-    padding: widgetFamily === 'systemLarge' ? 14 : [10, 12],
-    gap: widgetFamily === 'systemLarge' ? 8 : 5,
+    padding: widgetPadding,
+    gap: 8,
     backgroundColor: BG_COLOR,
     children: [
       {
         type: 'stack',
         direction: 'row',
         alignItems: 'center',
-        gap: 6,
+        padding: titlePadding,
         children: [
-          { type: 'image', src: 'sf-symbol:paperplane.fill', color: C_TITLE, width: 16, height: 16 },
-          { type: 'text', text: '代理 & GPT', font: { size: widgetFamily === 'systemLarge' ? 15 : 13, weight: 'heavy' }, textColor: C_TITLE },
-          { type: 'spacer' }
+          {
+            type: 'text',
+            text: '代理 & GPT',
+            font: { size: titleSize, weight: 'heavy' },
+            textColor: C_TITLE,
+            flex: 1
+          },
+          {
+            type: 'stack',
+            direction: 'row',
+            alignItems: 'center',
+            gap: 4,
+            children: [
+              { type: 'image', src: 'sf-symbol:arrow.clockwise', color: C_SUB, width: 13, height: 13 },
+              { type: 'text', text: timeStr, font: { size: 'caption2' }, textColor: C_SUB }
+            ]
+          }
         ]
       },
       {
         type: 'stack',
         direction: 'column',
-        gap: 4,
+        gap: rowGap,
         children: [
           Row("house.fill", C_ICON_LOCAL, "本地 IP", lIp, C_GREEN),
           Row("map.fill", C_ICON_LOCAL, "本地位置", lLoc, C_MAIN),
@@ -162,8 +201,7 @@ export default async function(ctx) {
           Row("mappin.and.ellipse", C_ICON_REMOTE, "落地位置", nLoc, C_MAIN),
           Row("building.2.fill", C_ICON_REMOTE, "原生属性", nativeText, C_MAIN),
           Row(riskIc, riskCol, "风险评级", riskTxt, riskCol),
-          Row("sparkles", gptColor, "GPT 状态", gpt, gptColor),
-          Row("clock.fill", C_GREEN, "执行时间", timeStr, C_GREEN)
+          Row("sparkles", gptColor, "GPT 状态", gpt, gptColor)
         ]
       }
     ]
