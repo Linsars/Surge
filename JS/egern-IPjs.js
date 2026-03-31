@@ -1,9 +1,3 @@
-/**
- * IP multi-source purity check widget + Streaming/AI unlock detection
- * Sources: IPPure / ipapi.is / IP2Location / Scamalytics / DB-IP / ipregistry / ipinfo
- * Unlock: ChatGPT / Gemini / Netflix / TikTok / YouTube Premium
- * Env: POLICY, MARK_IP
- */
 export default async function (ctx) {
     var BG_COLOR = { light: '#FFFFFF', dark: '#1C1C1E' };
     var C_TITLE = { light: '#1A1A1A', dark: '#FFD700' };
@@ -119,204 +113,69 @@ export default async function (ctx) {
         return { sev: 0, t: 'DB-IP: \u4F4E\u5371' };
     }
 
-    function gradeIpreg(j, ipinfo) {
-        if (!j) return null;
-        var tags = [];
-        if (j.is_vpn) tags.push('VPN');
-        if (j.is_proxy) tags.push('Proxy');
-        if (j.is_tor) tags.push('Tor');
-        if (ipinfo && ipinfo.privacy && ipinfo.privacy.proxy) tags.push('Proxy');
-        var tagStr = tags.length ? ' ' + tags.join('/') : '';
-        return { sev: tags.length ? 2 : 0, t: 'ipregistry: ' + (tags.length ? tags.join('/') : 'Clean') + tagStr };
-    }
-
     function usageText(t) {
         if (!t) return '';
-        var m = { 'isp': 'ISP', 'hosting': 'Hosting', 'business': 'Business', 'education': 'Edu', 'gov': 'Gov', 'military': 'Mil' };
-        return m[t] || t;
+        var map = {
+            'ISP': '家宽', 'BUSINESS': '商宽', 'HOSTING': '服务器', 'CDN': 'CDN',
+            'EDU': '教育网', 'GOV': '政府', 'MIL': '军网', 'RESERVED': '保留',
+            'UNKNOWN': '未知'
+        };
+        return map[t] || t;
     }
 
-    function sevIcon(sev) {
-        if (sev >= 4) return 'exclamationmark.triangle.fill';
-        if (sev >= 3) return 'exclamationmark.circle.fill';
-        if (sev >= 2) return 'exclamationmark.circle';
-        return 'checkmark.circle.fill';
-    }
-
-    function sevColor(sev) {
-        if (sev >= 4) return C_RED;
-        if (sev >= 3) return C_ORANGE;
-        if (sev >= 2) return C_YELLOW;
-        return C_GREEN;
-    }
-
-    function sevText(sev) {
-        if (sev >= 4) return '\u6781\u9AD8\u98CE\u9669';
-        if (sev >= 3) return '\u9AD8\u5371';
-        if (sev >= 2) return '\u4E2D\u7B49\u98CE\u9669';
-        return '\u5B89\u5168';
-    }
-
-    function Row(icon, iconColor, label, value, valueColor) {
+    function UnlockRow(title, value, gap) {
+        var color = value === 'Unlock' ? C_GREEN : (value === 'Cross' ? C_RED : C_YELLOW);
         return {
-            type: 'stack', direction: 'row', alignItems: 'center', gap: 4,
+            type: 'stack', direction: 'row', alignItems: 'center', gap: gap || 6,
             children: [
-                { type: 'image', src: 'sf-symbol:' + icon, color: iconColor, width: 14, height: 14 },
-                { type: 'text', text: label, font: { size: 10 }, textColor: C_SUB },
-                { type: 'spacer' },
-                { type: 'text', text: value, font: { size: 10, weight: 'bold', family: 'Menlo' }, textColor: valueColor, maxLines: 1 }
+                { type: 'text', text: title, font: { size: 13 }, textColor: C_SUB, width: 60 },
+                { type: 'text', text: value, font: { size: 13, weight: 'semibold' }, textColor: color, maxLines: 1 }
             ]
         };
     }
 
-    function UnlockRow(title, status, size) {
-        var s = size || 13;
-        var color = status === "\u2705" ? C_GREEN : C_RED;
-        return {
-            type: 'stack', direction: 'row', alignItems: 'center', gap: 4,
-            children: [
-                { type: 'text', text: title, font: { size: s - 1 }, textColor: C_SUB, maxLines: 1 },
-                { type: 'spacer' },
-                { type: 'text', text: status, font: { size: s, weight: 'bold' }, textColor: color }
-            ]
-        };
-    }
-
-    function ScoreRow(g, size) {
-        var s = size || 13;
-        return {
-            type: 'stack', direction: 'row', alignItems: 'center', gap: 4,
-            children: [
-                { type: 'text', text: g.t, font: { size: s - 2 }, textColor: C_SUB, maxLines: 1 },
-                { type: 'spacer' }
-            ]
-        };
-    }
-
-    // 主逻辑开始
-    var ippureScore = null;
     var ip = ctx.ip || (await safe(async () => {
         var res = await get('https://api.ipify.org?format=json');
         var j = jp(res);
         return j ? j.ip : null;
     })) || '获取失败';
 
-    // 并行：数据库查询 + 解锁检测
-    var results = await Promise.all([
-        safe(function () { return fetchIpapi(ip); }),
-        safe(function () { return fetchIp2loc(ip); }),
-        safe(function () { return fetchIpinfo(ip); }),
-        safe(function () { return fetchDbip(ip); }),
-        safe(function () { return fetchScam(ip); }),
-        safe(function () { return fetchIpreg(ip); }),
-        safe(checkChatGPT),
-        safe(checkGemini),
-        safe(checkNetflix),
-        safe(checkTikTok),
-        safe(checkYouTube)
-    ]);
-    var rIpapi = results[0], rIp2loc = results[1], rIpinfo = results[2];
-    var rDbip = results[3], rScam = results[4], rIpreg = results[5];
-    var uGPT = results[6] || "\u274C", uGemini = results[7] || "\u274C";
-    var uNetflix = results[8] || "\u274C", uTikTok = results[9] || "\u274C";
-    var uYouTube = results[10] || "\u274C";
+    var rIpapi = await safe(async () => jp(await get('https://api.ipapi.is/?q=' + ip)));
 
-    var execTime = Math.round((Date.now() - startTime) / 1000 * 10) / 10 + 's';
+    var rIp2loc = await safe(async () => jp(await get('https://api.ip2location.io/?key=demo&ip=' + ip)));
 
     var ipapiD = rIpapi || {};
-    var asnText = (ipapiD.asn && ipapiD.asn.asn) ? ('AS' + ipapiD.asn.asn + ' ' + (ipapiD.asn.org || '')).trim() : '\u672A\u77E5';
     var cc = (ipapiD.location && ipapiD.location.country_code) || '';
     var country = (ipapiD.location && ipapiD.location.country) || '';
     var city = (ipapiD.location && ipapiD.location.city) || '';
-    var loc = (toFlag(cc) + ' ' + country + ' ' + city).trim() || '\u672A\u77E5\u4F4D\u7F6E';
+    var loc = (toFlag(cc) + ' ' + country + ' ' + city).trim() || '未知位置';
+    var showIP = markIP ? maskIP(ip) : ip;
+    var asnText = '本地IP: ' + showIP + ' 本地位置: ' + loc;
     var hosting = usageText(rIp2loc && rIp2loc.usageType);
     var hostingShort = rIp2loc && rIp2loc.usageType ? rIp2loc.usageType : '';
 
-    var grades = [
-        gradeIppure(ippureScore),
-        gradeIpapi(rIpapi),
-        gradeIp2loc(rIp2loc && rIp2loc.fraudScore),
-        gradeScam(rScam),
-        gradeDbip(rDbip),
-        gradeIpreg(rIpreg, rIpinfo),
-    ].filter(Boolean);
+    var results = await Promise.all([
+        safe(() => gradeIppure(rIpapi && rIpapi.threat && rIpapi.threat.ippure_score)),
+        safe(() => gradeIpapi(rIpapi)),
+        safe(() => gradeIp2loc(rIp2loc && rIp2loc.threatScore)),
+        safe(() => gradeScam(await get('https://scamalytics.com/ip/' + ip))),
+        safe(() => gradeDbip(await get('https://db-ip.com/' + ip))),
+        safe(() => get('https://chat.openai.com/cdn-cgi/trace').then(t => t.includes('cf-ipcountry=') ? 'Unlock' : 'Cross')),
+        safe(() => get('https://gemini.google.com/cdn-cgi/trace').then(t => t.includes('cf-ipcountry=') ? 'Unlock' : 'Cross')),
+        safe(() => get('https://www.netflix.com/title/80057281').then(t => /netflix/i.test(t) ? 'Unlock' : 'Cross')),
+        safe(() => get('https://www.tiktok.com').then(t => /tiktok/i.test(t) ? 'Unlock' : 'Cross')),
+        safe(() => get('https://www.youtube.com/premium').then(t => /premium/i.test(t) ? 'Unlock' : 'Cross'))
+    ]);
 
-    var maxSev = 0;
-    for (var i = 0; i < grades.length; i++) {
-        if (grades[i].sev > maxSev) maxSev = grades[i].sev;
-    }
-    var showIP = markIP ? maskIP(ip) : ip;
-    var ipLabel = ip.includes(':') ? 'IPv6' : 'IP';
+    var uGPT = results[5] || "Cross", uGemini = results[6] || "Cross";
+    var uNetflix = results[7] || "Cross", uTikTok = results[8] || "Cross";
+    var uYouTube = results[9] || "Cross";
 
-    var asnText = '本地IP: ' + showIP + ' 本地位置: ' + loc;
+    var execTime = Math.round((Date.now() - startTime) / 1000 * 10) / 10 + 's';
 
     var family = ctx.widgetFamily || 'systemMedium';
 
-    if (family === 'accessoryRectangular') {
-        return {
-            type: 'widget', padding: [4, 8], gap: 2,
-            children: [
-                {
-                    type: 'stack', direction: 'row', alignItems: 'center', gap: 4, children: [
-                        { type: 'image', src: 'sf-symbol:' + sevIcon(maxSev), width: 12, height: 12 },
-                        { type: 'text', text: 'IP\u98CE\u9669: ' + sevText(maxSev), font: { size: 'caption1', weight: 'bold' } },
-                    ]
-                },
-                { type: 'text', text: showIP, font: { size: 'caption2', family: 'Menlo' } },
-                { type: 'text', text: loc, font: { size: 'caption2' }, maxLines: 1 },
-            ]
-        };
-    }
-    if (family === 'accessoryCircular') {
-        return {
-            type: 'widget', padding: 4, gap: 2,
-            children: [
-                { type: 'image', src: 'sf-symbol:' + sevIcon(maxSev), width: 20, height: 20 },
-                { type: 'text', text: sevText(maxSev), font: { size: 'caption2', weight: 'bold' }, maxLines: 1, minScale: 0.5 },
-            ]
-        };
-    }
-    if (family === 'accessoryInline') {
-        return {
-            type: 'widget', children: [
-                { type: 'text', text: 'IP\u98CE\u9669: ' + sevText(maxSev) + ' | ' + showIP, font: { size: 'caption1' } },
-            ]
-        };
-    }
-
-    if (family === 'systemSmall') {
-        return {
-            type: 'widget', padding: 12, gap: 6, backgroundColor: BG_COLOR,
-            children: [
-                {
-                    type: 'stack', direction: 'row', alignItems: 'center', gap: 6, children: [
-                        { type: 'image', src: 'sf-symbol:shield.lefthalf.filled', color: C_TITLE, width: 14, height: 14 },
-                        { type: 'text', text: 'IP \u7EAF\u51C0\u5EA6', font: { size: 13, weight: 'heavy' }, textColor: C_TITLE },
-                    ]
-                },
-                Row(sevIcon(maxSev), sevColor(maxSev), '\u98CE\u9669', sevText(maxSev), sevColor(maxSev)),
-                Row('globe', C_ICON_IP, ipLabel, showIP, C_GREEN),
-                Row('mappin.and.ellipse', C_ICON_LO, '\u4F4D\u7F6E', loc, C_MAIN),
-            ]
-        };
-    }
-
     if (family === 'systemMedium') {
-        var headerRow = {
-            type: 'stack', direction: 'row', alignItems: 'center', gap: 4,
-            children: [
-                { type: 'image', src: 'sf-symbol:shield.lefthalf.filled', color: C_TITLE, width: 14, height: 14 },
-                { type: 'text', text: 'IP检测', font: { size: 10, weight: 'heavy' }, textColor: C_TITLE },
-                { type: 'text', text: showIP, font: { size: 10, weight: 'bold', family: 'Menlo' }, textColor: C_GREEN, maxLines: 1 },
-                { type: 'spacer' },
-            ]
-        };
-        if (hostingShort) {
-            headerRow.children.push({ type: 'text', text: hosting, font: { size: 10, weight: 'bold' }, textColor: C_SUB });
-        }
-        headerRow.children.push({ type: 'image', src: 'sf-symbol:' + sevIcon(maxSev), color: sevColor(maxSev), width: 12, height: 12 });
-        headerRow.children.push({ type: 'text', text: sevText(maxSev), font: { size: 10, weight: 'bold' }, textColor: sevColor(maxSev) });
-
         var unlockRows = [
             {
                 type: 'stack', direction: 'column', gap: 2,
@@ -344,71 +203,72 @@ export default async function (ctx) {
             }
         ];
 
-        var scoreRows = [];
-        for (var i = 0; i < grades.length; i++) {
-            scoreRows.push(ScoreRow(grades[i], 10));
-        }
-
         return {
             type: 'widget', padding: [10, 12], gap: 5, backgroundColor: BG_COLOR,
             children: [
-                headerRow,
-                Row('number.square.fill', C_ICON_IP, '归属', asnText, C_GREEN),
-                Row('mappin.and.ellipse', C_ICON_LO, '位置', loc, C_MAIN),
                 {
-                    type: 'stack', direction: 'row', gap: 8, flex: 1, children: [
-                        { type: 'stack', direction: 'column', gap: 3, flex: 1, children: unlockRows },
-                        { type: 'stack', direction: 'column', gap: 3, flex: 1, children: scoreRows },
+                    type: 'stack', direction: 'row', alignItems: 'center', gap: 4,
+                    children: [
+                        { type: 'image', src: 'sf-symbol:shield.lefthalf.filled', color: C_TITLE, width: 14, height: 14 },
+                        { type: 'text', text: 'IP检测', font: { size: 10, weight: 'heavy' }, textColor: C_TITLE },
+                        { type: 'text', text: showIP, font: { size: 10, weight: 'bold', family: 'Menlo' }, textColor: C_GREEN },
+                        { type: 'spacer' },
+                        { type: 'text', text: hosting || '', font: { size: 10, weight: 'bold' }, textColor: C_SUB }
                     ]
                 },
+                { type: 'text', text: asnText, font: { size: 10, weight: 'bold' }, textColor: C_GREEN, maxLines: 1 },
+                {
+                    type: 'stack', direction: 'row', gap: 8, flex: 1,
+                    children: unlockRows
+                }
             ]
         };
     }
 
-    var lgUnlockRows = [
-        UnlockRow('ChatGPT', uGPT),
-        UnlockRow('Gemini', uGemini),
-        UnlockRow('Netflix', uNetflix),
-        UnlockRow('TikTok', uTikTok),
-        {
-            type: 'stack', direction: 'row', alignItems: 'center', gap: 4,
-            children: [
-                { type: 'image', src: 'sf-symbol:clock.fill', color: C_SUB, width: 13, height: 13 },
-                { type: 'text', text: '执行时间', font: { size: 13 }, textColor: C_SUB },
-                { type: 'spacer' },
-                { type: 'text', text: execTime, font: { size: 13, weight: 'bold' }, textColor: C_MAIN, maxLines: 1 },
-            ]
-        },
-        UnlockRow('YouTube', uYouTube),
-    ];
-
-    var lgInfoRows = [
-        Row('globe', C_ICON_IP, ipLabel, showIP, C_GREEN),
-        Row('number.square.fill', C_ICON_IP, '\u5F52\u5C5E', asnText, C_GREEN),
-        Row('mappin.and.ellipse', C_ICON_LO, '\u4F4D\u7F6E', loc, C_MAIN),
-        Row('building.2', C_ICON_SC, '类型', hosting || '未知', C_MAIN),
-    ];
-
-    return {
-        type: 'widget', padding: 16, gap: 8, backgroundColor: BG_COLOR,
-        children: [
+    if (family === 'systemLarge' || family === 'systemExtraLarge') {
+        var lgUnlockRows = [
+            UnlockRow('ChatGPT', uGPT),
+            UnlockRow('Gemini', uGemini),
+            UnlockRow('Netflix', uNetflix),
+            UnlockRow('TikTok', uTikTok),
             {
-                type: 'stack', direction: 'row', alignItems: 'center', gap: 6,
+                type: 'stack', direction: 'row', alignItems: 'center', gap: 4,
                 children: [
-                    { type: 'image', src: 'sf-symbol:shield.lefthalf.filled', color: C_TITLE, width: 18, height: 18 },
-                    { type: 'text', text: 'IP检测', font: { size: 15, weight: 'heavy' }, textColor: C_TITLE },
+                    { type: 'image', src: 'sf-symbol:clock.fill', color: C_SUB, width: 13, height: 13 },
+                    { type: 'text', text: '执行时间', font: { size: 13 }, textColor: C_SUB },
                     { type: 'spacer' },
-                    { type: 'image', src: 'sf-symbol:' + sevIcon(maxSev), color: sevColor(maxSev), width: 16, height: 16 },
-                    { type: 'text', text: sevText(maxSev), font: { size: 13, weight: 'bold' }, textColor: sevColor(maxSev) },
+                    { type: 'text', text: execTime, font: { size: 13, weight: 'bold' }, textColor: C_MAIN, maxLines: 1 },
                 ]
             },
-            {
-                type: 'stack', direction: 'column', gap: 6, children: lgInfoRows
-            },
-            {
-                type: 'stack', direction: 'column', gap: 8, children: lgUnlockRows
-            }
+            UnlockRow('YouTube', uYouTube)
+        ];
+
+        return {
+            type: 'widget', padding: 16, gap: 8, backgroundColor: BG_COLOR,
+            children: [
+                {
+                    type: 'stack', direction: 'row', alignItems: 'center', gap: 6,
+                    children: [
+                        { type: 'image', src: 'sf-symbol:shield.lefthalf.filled', color: C_TITLE, width: 18, height: 18 },
+                        { type: 'text', text: 'IP检测', font: { size: 15, weight: 'heavy' }, textColor: C_TITLE },
+                        { type: 'spacer' }
+                    ]
+                },
+                { type: 'text', text: asnText, font: { size: 13, weight: 'bold' }, textColor: C_GREEN, maxLines: 1 },
+                { type: 'text', text: loc, font: { size: 13 }, textColor: C_MAIN, maxLines: 1 },
+                {
+                    type: 'stack', direction: 'column', gap: 6,
+                    children: lgUnlockRows
+                }
+            ]
+        };
+    }
+
+    return {
+        type: 'widget', padding: 12, gap: 6, backgroundColor: BG_COLOR,
+        children: [
+            { type: 'text', text: 'IP检测', font: { size: 13, weight: 'heavy' }, textColor: C_TITLE },
+            { type: 'text', text: asnText, font: { size: 12, weight: 'bold' }, textColor: C_GREEN }
         ]
     };
 }
-​​​​​​​​​​​​​​​​​​​​​​​​​​​​​​​​​​​​​​​​​​​​​​​
