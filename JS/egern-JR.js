@@ -205,6 +205,7 @@ export default async function (ctx) {
     {label:"柴油", price:prices.diesel, color:COLORS.diesel},
   ].filter(r => r.price !== null);
 
+  // ==================== 金价 + K线 ====================
   let goldPriceUSD = null;
   let goldChange = "";
   let goldYuanPerGram = null;
@@ -215,6 +216,7 @@ export default async function (ctx) {
     const SECID = '122.XAU';
     const LIMIT = 37;
 
+    // 当前金价 & 涨跌幅
     const snapshotRes = await ctx.http.get(`https://push2.eastmoney.com/api/qt/stock/get?secid=${SECID}&fields=f43,f170`, {
       headers: { 'User-Agent': UA },
       timeout: 8000
@@ -226,6 +228,7 @@ export default async function (ctx) {
       goldChange = `${changePct}%`;
     }
 
+    // K线数据
     const klineRes = await ctx.http.get(`https://push2his.eastmoney.com/api/qt/stock/kline/get?secid=${SECID}&klt=${KLT}&fqt=1&fields1=f1,f2,f3,f4,f5&fields2=f51,f52,f53,f54,f55,f56,f57,f58&beg=0&end=20500101&lmt=${LIMIT}`, {
       headers: { 'User-Agent': UA },
       timeout: 10000
@@ -245,7 +248,8 @@ export default async function (ctx) {
       });
     }
 
-    if (ohlc.length >= 2 && ctx.canvas) {
+    // Canvas 绘制 K线
+    if (ohlc.length >= 2 && typeof ctx.canvas !== 'undefined') {
       const canvas = ctx.canvas.create(300, 120);
       const ctx2d = canvas.getContext('2d');
 
@@ -303,13 +307,12 @@ export default async function (ctx) {
       goldKlineURI = await canvas.toDataURL('image/png');
     }
 
+    // 元/克换算（约 1 oz ≈ 31.1035 克）
     if (goldPriceUSD) {
-      try {
-        const usdToCnyRes = await ctx.http.get('https://api.exchangerate-api.com/v4/latest/USD', { timeout: 5000 });
-        const rateData = JSON.parse(await usdToCnyRes.text());
-        const usdToCny = rateData?.rates?.CNY || 7.1;
-        goldYuanPerGram = ((goldPriceUSD * usdToCny) / 31.1035).toFixed(2);
-      } catch(e) {}
+      const usdToCnyRes = await ctx.http.get('https://api.exchangerate-api.com/v4/latest/USD', { timeout: 5000 });
+      const rateData = JSON.parse(await usdToCnyRes.text());
+      const usdToCny = rateData?.rates?.CNY || 7.1;
+      goldYuanPerGram = ((goldPriceUSD * usdToCny) / 31.1035).toFixed(2);
     }
   } catch (e) {}
 
@@ -415,11 +418,12 @@ export default async function (ctx) {
     });
   }
 
+  // 金价部分（带 K线 + 双单位）
   if (goldPriceUSD || goldKlineURI) {
     children.push({
       type:"stack",
       direction:"column",
-      gap:6,
+      gap:4,
       children: [
         goldKlineURI ? {
           type:"image",
