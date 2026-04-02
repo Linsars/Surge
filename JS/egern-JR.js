@@ -4,21 +4,23 @@
  * 1. 可选配置变量（在 widget 配置中设置 env）：
  *    - region：指定油价地区 slug（如 "guangdong/guangzhou" 或 "beijing"），留空则自动根据 IP 获取当地城市
  *    - SHOW_TREND：true / false，是否显示油价调价趋势，默认 true
- *    - SIZE：medium / large（推荐在 Egern 中设置 widget 大小，自动适配）
+ *    - KLT：金价K线周期（15/30/60/101/102/103），默认15分钟
  * 2. 自动定位基于 https://myip.ipip.net
  * 3. 油价来源于 http://m.qiyoujiage.com
  * 4. 金价来源于东方财富（现货黄金 XAU）
- * 5. 中型组件：显示当地油价 + 当前金价（简洁）
- *    大型组件：显示完整油价（四种）+ 金价 K线 + 价格信息
+ * 5. 完整组件：显示油价（四种）+ 金价 K线 + 价格信息
  *
   * 1️⃣ 环境变量配置
- * 在 Egern 小组件配置中添加：
+ * 在 Egern 小组件配置中添加：不是在脚本改！
  *
  * 名称：region
  * 值：省份/城市（拼音，用 / 分隔）
  *
  * 名称：SHOW_TREND
  * 值：true（显示调价趋势）或 false（不显示）
+ *
+ * 名称：KLT
+ * 值：15（刷新间隔，分钟）或 101
  *
  *
  * 2️⃣ 地区代码对照表
@@ -58,10 +60,11 @@
  * • 也可以去 http://m.qiyoujiage.com/shanxi-3.shtml 查看自己省份拼音
  * 
  */
+
 export default async function (ctx) {
   let regionParam = ctx.env.region || "";
   const SHOW_TREND = (ctx.env.SHOW_TREND || "true").trim() !== "false";
-  const isLarge = (ctx.env.SIZE || "").toLowerCase() === "large";
+  const KLT = Number(ctx.env.KLT) || 15;
 
   if (!regionParam || regionParam.trim() === "") {
     try {
@@ -203,20 +206,114 @@ export default async function (ctx) {
     {label:"柴油", price:prices.diesel, color:COLORS.diesel},
   ].filter(r => r.price !== null);
 
-  let goldPrice = null;
+  // 金价 + K线
+  let goldPriceUSD = null;
   let goldChange = "";
+  let goldYuanPerGram = null;
   let goldKlineURI = null;
 
   try {
-    const snapshotRes = await ctx.http.get(`https://push2.eastmoney.com/api/qt/stock/get?secid=122.XAU&fields=f43,f170`, {
-      headers: { 'User-Agent': 'Mozilla/5.0' },
+    const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
+    const SECID = '122.XAU';
+    const LIMIT = 37;
+
+    // 当前金价 & 涨跌幅
+    const snapshotRes = await ctx.http.get(`https://push2.eastmoney.com/api/qt/stock/get?secid=${SECID}&fields=f43,f170`, {
+      headers: { 'User-Agent': UA },
       timeout: 8000
     });
     const snapData = JSON.parse(await snapshotRes.text());
     if (snapData?.data) {
-      goldPrice = snapData.data.f43 ? (snapData.data.f43 / 100).toFixed(2) : null;
+      goldPriceUSD = snapData.data.f43 ? (snapData.data.f43 / 100).toFixed(2) : null;
       const changePct = snapData.data.f170 ? (snapData.data.f170 / 100).toFixed(2) : "0.00";
       goldChange = `${changePct}%`;
+    }
+
+    // K线数据
+    const klineRes = await ctx.http.get(`https://push2his.eastmoney.com/api/qt/stock/kline/get?secid=${SECID}&klt=${KLT}&fqt=1&fields1=f1,f2,f3,f4,f5&fields2=f51,f52,f53,f54,f55,f56,f57,f58&beg=0&end=20500101&lmt=${LIMIT}`, {
+      headers: { 'User-Agent': UA },
+      timeout: 10000
+    });
+    const klineData = JSON.parse(await klineRes.text());
+    let ohlc = [];
+    if (klineData?.data?.klines) {
+      ohlc = klineData.data.klines.map(line => {
+        const arr = line.split(',');
+        return {
+          time: arr[0],
+          open: parseFloat(arr[1]),
+          close: parseFloat(arr[2]),
+          high: parseFloat(arr[3]),
+          low: parseFloat(arr[4])
+        };
+      });
+    }
+
+    // Canvas 绘制 K线
+    if (ohlc.length >= 2 && typeof ctx.canvas !== 'undefined') {
+      const canvas = ctx.canvas.create(300, 120);
+      const ctx2d = canvas.getContext('2d');
+
+      const padX = 2;
+      const padY = 6;
+      const innerW = 300 - padX * 2;
+      const innerH = 120 - padY * 2;
+
+      let minP = Infinity, maxP = -Infinity;
+      for (const b of ohlc) {
+        if (b.low < minP) minP = b.low;
+        if (b.high > maxP) maxP = b.high;
+      }
+      const span = maxP - minP;
+      minP -= span * 0.03;
+      maxP += span * 0.03;
+
+      const n = ohlc.length;
+      const candleW = Math.max(2, Math.floor((innerW / Math.max(n, 1)) * 0.7));
+      const xStep = n > 1 ? (innerW - candleW) / (n - 1) : 0;
+
+      const yOf = (p) => {
+        const t = (p - minP) / (maxP - minP);
+        return padY + (1 - t) * innerH;
+      };
+
+      ctx2d.clearRect(0, 0, 300, 120);
+
+      for (let i = 0; i < ohlc.length; i++) {
+        const b = ohlc[i];
+        const xCenter = padX + (candleW / 2) + xStep * i;
+        const xLeft = Math.round(xCenter - candleW / 2);
+
+        const yOpen = yOf(b.open);
+        const yClose = yOf(b.close);
+        const yHigh = yOf(b.high);
+        const yLow = yOf(b.low);
+
+        const up = b.close >= b.open;
+        const color = up ? '#FF3B30' : '#34C759';
+
+        ctx2d.strokeStyle = color;
+        ctx2d.lineWidth = 1.3;
+        ctx2d.beginPath();
+        ctx2d.moveTo(xCenter, yHigh);
+        ctx2d.lineTo(xCenter, yLow);
+        ctx2d.stroke();
+
+        const top = Math.min(yOpen, yClose);
+        const bottom = Math.max(yOpen, yClose);
+        ctx2d.fillStyle = color;
+        ctx2d.fillRect(xLeft, top, candleW, Math.max(2, bottom - top));
+      }
+
+      goldKlineURI = await canvas.toDataURL('image/png');
+    }
+
+    // 元/克换算（约 1 oz ≈ 31.1035 克）
+    if (goldPriceUSD) {
+      const usdToCnyRes = await ctx.http.get('https://api.exchangerate-api.com/v4/latest/USD', { timeout: 5000 });
+      const rateData = JSON.parse(await usdToCnyRes.text());
+      const usdToCny = rateData?.rates?.CNY || 7.1;
+      goldYuanPerGram = ((goldPriceUSD * usdToCny) / 31.1035).toFixed(2);
     }
   } catch (e) {}
 
@@ -298,72 +395,61 @@ export default async function (ctx) {
     ].filter(Boolean)
   });
 
-  if (!isLarge) {
-    if (oilRows.length > 0) {
-      children.push({
-        type:"stack",
-        direction:"row",
-        alignItems:"center",
-        justifyContent:"space-between",
-        gap:6,
-        padding:[6,0,6,0],
-        children: oilRows.slice(0,2).map(priceCard)
-      });
-    }
-    if (goldPrice) {
-      children.push({
-        type:"stack",
-        direction:"row",
-        alignItems:"center",
-        gap:6,
-        padding:[4,4,4,4],
-        children:[
-          {type:"text",text:"黄金",font:{size:"caption2"},textColor:COLORS.secondary},
-          {type:"text",text:`$${goldPrice}`,font:{size:"title2",weight:"semibold"},textColor:COLORS.gold},
-          {type:"text",text:goldChange,font:{size:"caption2"},textColor: goldChange.startsWith('-') ? COLORS.p98 : "#34C759"}
-        ]
-      });
-    }
-  } else {
-    if (oilRows.length > 0) {
-      children.push({
-        type:"stack",
-        direction:"row",
-        alignItems:"center",
-        justifyContent:"space-between",
-        gap:6,
-        padding:[6,0,6,0],
-        children: oilRows.map(priceCard)
-      });
-    } else if (oilError) {
-      children.push({
-        type:"stack",
-        direction:"column",
-        alignItems:"center",
-        justifyContent:"center",
-        padding:[20,10,20,10],
-        children:[
-          {type:"image",src:"sf-symbol:exclamationmark.triangle.fill",width:24,height:24,color:COLORS.p98},
-          {type:"text",text:"油价获取失败",font:{size:"body"},textColor:COLORS.secondary}
-        ]
-      });
-    }
+  if (oilRows.length > 0) {
+    children.push({
+      type:"stack",
+      direction:"row",
+      alignItems:"center",
+      justifyContent:"space-between",
+      gap:6,
+      padding:[6,0,6,0],
+      children: oilRows.map(priceCard)
+    });
+  } else if (oilError) {
+    children.push({
+      type:"stack",
+      direction:"column",
+      alignItems:"center",
+      justifyContent:"center",
+      padding:[20,10,20,10],
+      children:[
+        {type:"image",src:"sf-symbol:exclamationmark.triangle.fill",width:24,height:24,color:COLORS.p98},
+        {type:"text",text:"油价获取失败",font:{size:"body"},textColor:COLORS.secondary}
+      ]
+    });
+  }
 
-    if (goldPrice) {
-      children.push({
-        type:"stack",
-        direction:"row",
-        alignItems:"center",
-        gap:6,
-        padding:[8,4,8,4],
-        children:[
-          {type:"image",src:"sf-symbol:chart.line.uptrend.xyaxis",width:14,height:14,color:COLORS.gold},
-          {type:"text",text:"现货黄金",font:{size:"caption2",weight:"semibold"},textColor:COLORS.secondary},
-          {type:"text",text:`$${goldPrice}`,font:{size:"title2",weight:"semibold"},textColor:COLORS.gold},
-          {type:"text",text:goldChange,font:{size:"caption1"},textColor: goldChange.startsWith('-') ? COLORS.p98 : "#34C759"}
-        ]
-      });
-    }
+  // 金价部分（带 K线 + 双单位）
+  if (goldPriceUSD || goldKlineURI) {
+    children.push({
+      type:"stack",
+      direction:"column",
+      gap:4,
+      children: [
+        goldKlineURI ? {
+          type:"image",
+          src: goldKlineURI,
+          width: 300,
+          height: 120,
+          cornerRadius: 8
+        } : null,
+        {
+          type:"stack",
+          direction:"row",
+          alignItems:"center",
+          gap:8,
+          padding:[4,4,4,4],
+          children:[
+            {type:"image",src:"sf-symbol:chart.line.uptrend.xyaxis",width:14,height:14,color:COLORS.gold},
+            {type:"text",text:"现货黄金",font:{size:"caption2",weight:"semibold"},textColor:COLORS.secondary},
+            {type:"text",text:goldPriceUSD ? `$${goldPriceUSD}` : "--",font:{size:"title2",weight:"semibold"},textColor:COLORS.gold},
+            {type:"text",text:goldChange,font:{size:"caption1"},textColor: goldChange.startsWith('-') ? COLORS.p98 : "#34C759"},
+            {type:"spacer"},
+            {type:"text",text:goldYuanPerGram ? `${goldYuanPerGram}元/克` : "",font:{size:"caption2"},textColor:COLORS.gold}
+          ].filter(Boolean)
+        }
+      ].filter(Boolean)
+    });
   }
 
   children.push({
@@ -374,14 +460,14 @@ export default async function (ctx) {
     children:[
       {type:"text",text:`${timeStr} 更新`,font:{size:"caption2"},textColor:COLORS.tertiary},
       {type:"spacer"},
-      {type:"text",text:"元/升   USD/oz",font:{size:"caption2"},textColor:COLORS.tertiary}
+      {type:"text",text:"油价 元/升    金价 USD/oz | 元/克",font:{size:"caption2"},textColor:COLORS.tertiary}
     ]
   });
 
   return {
     type:"widget",
     padding:[10,8,10,8],
-    gap:5,
+    gap:6,
     backgroundColor: backgroundColor,
     refreshAfter:refreshTime,
     children: children
