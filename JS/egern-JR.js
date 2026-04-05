@@ -227,7 +227,7 @@ export default async function (ctx) {
         if (trendMatch && trendMatch.length >= 3) {
           const datePart = trendMatch[1].split("价")[1]?.slice(0, -2) || "";
           const valuePart = trendMatch[2];
-          const trend = (valuePart.includes("下调") || valuePart.includes("下跌")) ? "↓" : "↑";
+          const trend = (valuePart.includes("下调") || valuePart.includes("下跌")) ? "Downward" : "Upward";
           let amount = "";
           const allPrices = valuePart.match(/([\d\.]+)\s*元\/升/g);
           if (allPrices && allPrices.length >= 2) {
@@ -453,7 +453,6 @@ export default async function (ctx) {
       ctx2d.fillStyle = color;
       ctx2d.fillRect(xLeft, bodyTop, candleW, bodyH);
     }
-    // 走势图最高点金额和最低点金额（数据真实极值）
     ctx2d.save();
     ctx2d.font = "bold 10px -apple-system";
     ctx2d.textAlign = "right";
@@ -469,23 +468,27 @@ export default async function (ctx) {
   const SCALE = 2;
   let dataURI = "";
   if (isLarge) {
-    let canvas;
-    if (typeof OffscreenCanvas !== "undefined") {
-      canvas = new OffscreenCanvas(W * SCALE, H * SCALE);
-    } else if (typeof document !== "undefined" && document.createElement) {
-      canvas = document.createElement("canvas");
-      canvas.width = W * SCALE;
-      canvas.height = H * SCALE;
-    }
-    if (canvas) {
-      const g = canvas.getContext("2d");
-      if (g) {
-        g.scale(SCALE, SCALE);
-        if (hasKlines && kl.length >= 2) {
-          drawCandles(g, kl, W, H);
-          dataURI = await canvasToDataURI(canvas);
+    try {
+      let canvas;
+      if (typeof OffscreenCanvas !== "undefined") {
+        canvas = new OffscreenCanvas(W * SCALE, H * SCALE);
+      } else if (typeof document !== "undefined" && document.createElement) {
+        canvas = document.createElement("canvas");
+        canvas.width = W * SCALE;
+        canvas.height = H * SCALE;
+      }
+      if (canvas) {
+        const g = canvas.getContext("2d");
+        if (g) {
+          g.scale(SCALE, SCALE);
+          if (hasKlines && kl.length >= 2) {
+            drawCandles(g, kl, W, H);
+            dataURI = await canvasToDataURI(canvas);
+          }
         }
       }
+    } catch (e) {
+      dataURI = "";
     }
   }
 
@@ -624,7 +627,4 @@ export default async function (ctx) {
     refreshAfter: refreshTime,
     children: children,
   };
-}    refreshAfter:refreshTime,
-    children: children
-  }
 }
