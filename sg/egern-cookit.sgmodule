@@ -1,0 +1,46 @@
+name: 获取Cookie通用模块
+desc: 支持PingMe、奇瑞、什么值得买、拼多多、美团、微博、顺丰、滴滴、晓晓优选等多App自动抓参（打开对应App页面即可弹通知）
+author: Linsar
+version: 2026.04.17
+updateUrl: https://raw.githubusercontent.com/Linsars/Surge/main/sg/egern-cookit.sgmodule
+
+http-request:
+  - match: ^https:\/\/api\.pingmeapp\.net\/app\/queryBalanceAndBonus
+    name: PingMe抓参
+    script-path: https://raw.githubusercontent.com/Linsars/Surge/main/JS/egern-CooKit.js
+
+  - match: ^https?://[^/]+/web/user/current/details\?
+    name: 奇瑞汽车
+    script-path: https://raw.githubusercontent.com/Linsars/Surge/main/JS/egern-CooKit.js
+
+  - match: ^https?://user-api\.smzdm\.com/users/info
+    name: 什么值得买
+    script-path: https://raw.githubusercontent.com/Linsars/Surge/main/JS/egern-CooKit.js
+
+  - match: ^https?://[^/]+/proxy/api/api/server/_stm
+    name: 拼多多果园
+    script-path: https://raw.githubusercontent.com/Linsars/Surge/main/JS/egern-CooKit.js
+
+  - match: ^https?://[^/]+/(user/v1/info/auditting|mapi/usercenter)
+    name: 美团
+    script-path: https://raw.githubusercontent.com/Linsars/Surge/main/JS/egern-CooKit.js
+
+  - match: ^https?://api\.weibo\.cn/2/users/show
+    name: 微博
+    script-path: https://raw.githubusercontent.com/Linsars/Surge/main/JS/egern-CooKit.js
+
+  - match: ^https?://[^/]+/mcs-mimp/share/(weChat/shareGiftReceiveRedirect|app/shareRedirect)
+    name: 顺丰速运
+    script-path: https://raw.githubusercontent.com/Linsars/Surge/main/JS/egern-CooKit.js
+
+  - match: ^https?://[^/]+/api/game/plant/newWatering
+    name: 滴滴果园
+    script-path: https://raw.githubusercontent.com/Linsars/Surge/main/JS/egern-CooKit.js
+
+  - match: ^https?://[^/]+/login/v5/signInByOpenid
+    name: 滴滴打车
+    script-path: https://raw.githubusercontent.com/Linsars/Surge/main/JS/egern-CooKit.js
+
+  - match: ^https?://xxyx-client-api\.xiaoxiaoyouxuan\.com/my
+    name: 晓晓优选
+    script-path: https://raw.githubusercontent.com/Linsars/Surge/main/JS/egern-CooKit.js
