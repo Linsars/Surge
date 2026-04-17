@@ -96,7 +96,6 @@ async function startTasks() {
         return next();
     }
 
-    // === Egern 专用修复：使用 await 确保所有请求真正执行完毕 ===
     await fetchApi('queryBalanceAndBonus')
         .then(res => {
             try {
