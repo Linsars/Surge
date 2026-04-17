@@ -5,7 +5,7 @@
  * @date 2026-04-17
  */
 
-const $ = new API("获取Cookie或Token通用脚本");
+const $ = new API("获取Cookie通用脚本");
 
 const req_url = $request.url;
 const req_headers = $request.headers;
