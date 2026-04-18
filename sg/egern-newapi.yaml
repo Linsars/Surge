@@ -16,4 +16,13 @@ scriptings:
 mitm:
   hostnames:
     includes:
-    - "*"
+    - '*'
+    excludes:
+    - '*.apple.com'
+    - '*.icloud.com'
+    - 'testflight.apple.com'
+    - 'apps.apple.com'
+    - 'itunes.apple.com'
+    - 'appstore.com'
+    - 'mzstatic.com'
+    - 'apple.com'
