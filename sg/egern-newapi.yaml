@@ -1,0 +1,19 @@
+name: NewAPI通用签到
+description: 通用NewAPI签到（适配所有NewAPI源码搭建的中转站）。先打开App/网页触发一次 /api/user/self 抓包保存Cookie，再由定时任务自动签到（支持多站点共用同一脚本）。每天早上9:10运行。
+author: Linsar
+dns: {}
+scriptings:
+- http_request:
+    name: NewAPI-Header
+    match: ^https:\/\/.*\/api\/user\/self$
+    script_url: https://raw.githubusercontent.com/Linsars/Surge/main/JS/egern-newapiSG.js
+    timeout: 60
+- schedule:
+    name: NewAPI通用签到
+    cron: 10 9 * * *
+    script_url: https://raw.githubusercontent.com/Linsars/Surge/main/JS/egern-newapiSG.js
+    timeout: 120
+mitm:
+  hostnames:
+    includes:
+    - "*"
