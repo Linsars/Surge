@@ -1,17 +1,19 @@
-#!name=NewAPI通用签到
-#!desc=适配所有NewAPI源码搭建的中转站（支持多站点共用同一脚本）。先打开任意中转站App/网页进入个人中心触发 /api/user/self 即可自动抓包保存Cookie。抓取成功后会自动保存，后续定时自动签到。每天早上9:10执行。
-#!author=Linsar（基于原脚本Egern适配）
-#!date=2026-04-19
-#!arguments=签到执行时间:10 9 * * *,仅运行单个站点:（留空则运行所有已保存站点）,单个站点域名:example.com
-#!arguments-desc=签到执行时间: 默认每天9:10执行（格式如 10 9 * * *）\n\n仅运行单个站点\n- 留空：运行所有已抓包保存的站点（推荐）\n- 填 true：仅运行下方指定的单个站点\n\n单个站点域名: 仅在“仅运行单个站点”开启时填写实际域名
-
-[Script]
-NewAPI签到获取Headers = type=http-request, pattern=^https:\/\/.*\/api\/user\/self$, script-path=https://raw.githubusercontent.com/Linsars/Surge/main/JS/egern-newapiSG.js
-
-NewAPI签到定时执行 = type=cron, cronexp="{{{签到执行时间}}}", script-path=https://raw.githubusercontent.com/Linsars/Surge/main/JS/egern-newapiSG.js, argument="{"host":"{{{单个站点域名}}}"}
-
-[MITM]
-hostname = %APPEND% *
+name: NewAPI通用签到
+description: 适配所有NewAPI源码搭建的中转站（支持多站点共用同一脚本）。先打开任意中转站App/网页进入个人中心触发 /api/user/self 即可自动抓包保存Cookie。抓取成功后会自动保存，后续定时自动签到。每天早上9:10执行。
+author: Linsar（基于原脚本Egern适配）
+dns: {}
+scriptings:
+- http_request:
+    name: NewAPI签到获取Headers
+    match: ^https:\/\/.*\/api\/user\/self$
+    script_url: https://raw.githubusercontent.com/Linsars/Surge/main/JS/egern-newapiSG.js
+    timeout: 60
+- schedule:
+    name: NewAPI签到定时执行
+    cron: 10 9 * * *
+    script_url: https://raw.githubusercontent.com/Linsars/Surge/main/JS/egern-newapiSG.js
+    argument: '{"host":""}'
+    timeout: 120
 mitm:
   hostnames:
     includes:
