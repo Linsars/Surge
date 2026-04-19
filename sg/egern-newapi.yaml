@@ -1,4 +1,4 @@
-#!name=NewAPI通用签到（Loon版）
+#!name=NewAPI通用签到
 #!desc=适配所有NewAPI中转站，支持多站点。打开App进入个人中心自动抓包保存Cookie，每天9:10自动签到。已排除苹果所有域名，不会影响 App Store / TestFlight / iCloud。
 #!author=Linsar
 #!date=2026-04-19
