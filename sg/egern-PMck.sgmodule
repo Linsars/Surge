@@ -1,13 +1,13 @@
-#!name=PingMe 签到+视频奖励
-#!desc=自动签到 + 刷5个视频奖励（支持 Egern）。开启抓取开关后，打开 PingMe App 任意页面即可自动获取参数。获取成功后建议关闭抓取开关。
+#!name=PingMe 签到增强版
+#!desc=PingMe 每日自动签到，支持视频奖励。开启抓取开关后打开 APP 即可自动获取 Cookie。
 #!author=Linsar
 #!date=2026-04-20
-#!arguments=签到执行时间:30 8,20 * * *,开启Cookie抓取:true,PingMe参数:xxx,仅失败时通知:false
-#!arguments-desc=签到执行时间: 默认每天早晚8:10执行一次 (cron格式，如 30 8,20 * * *)\n\n开启Cookie抓取\n- true: 打开后进入 PingMe App 任意页面自动抓取参数\n- false: 关闭抓取\n\nPingMe参数: 抓取后会自动保存，通常无需手动填写\n\n仅失败时通知\n- false: 每次都推送结果\n- true: 仅失败或异常时推送
+#!arguments=签到执行时间:30 8,20 * * *,开启Cookie抓取:true,PingMe Cookie:xxx,TG Bot Token:xxx,TG User ID:xxx
+#!arguments-desc=签到执行时间: 默认每天 8:30 和 20:30 执行\n\n开启Cookie抓取\n- true: 打开后访问 PingMe 个人主页可自动抓取 Cookie。抓到后请关闭\n- false: 关闭抓取\n\nPingMe Cookie: 抓取后会自动保存，若手动配置则在此填入完整 Cookie\n\nTG Bot Token: 选填，Telegram 机器人的 Token\n\nTG User ID: 选填，接收消息的 Telegram User ID
 
 [Script]
-PingMe获取参数 = type=http-request, pattern=^https:\/\/api\.pingmeapp\.net\/app\/queryBalanceAndBonus$, requires-body=false, script-path=https://raw.githubusercontent.com/Linsars/Surge/main/JS/egern-pingmeCK.js, timeout=120, argument="{"ENABLE_CAPTURE":{{{开启Cookie抓取}}}}"
+PM获取Cookie = type=http-request, pattern=^https:\/\/api\.pingmeapp\.net\/app\/queryBalanceAndBonus, requires-body=false, script-path=https://raw.githubusercontent.com/Linsars/Surge/main/JS/egern-pingmeCK.js, timeout=120, argument="{"ENABLE_CAPTURE":{{{开启Cookie抓取}}}}"
+PM签到定时执行 = type=cron, cronexp="{{{签到执行时间}}}", script-path=https://raw.githubusercontent.com/Linsars/Surge/main/JS/egern-pingme.js, timeout=120, argument="{"PM_COOKIE":"{{{PingMe Cookie}}}","TG_BOT_TOKEN":"{{{TG Bot Token}}}","TG_USER_ID":"{{{TG User ID}}}}"
 
-PingMe签到执行 = type=cron, cronexp="{{{签到执行时间}}}", script-path=https://raw.githubusercontent.com/Linsars/Surge/main/JS/egern-pingme.js, timeout=120, argument="{"PINGME_CAPTURE":"{{{PingMe参数}}}","NOTIFY_ONLY_FAIL":{{{仅失败时通知}}}}"
 [MITM]
 hostname = %APPEND% api.pingmeapp.net
