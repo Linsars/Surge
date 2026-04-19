@@ -6,9 +6,8 @@
 #!arguments-desc=签到执行时间: 默认每天早晚8:10执行一次 (cron格式，如 30 8,20 * * *)\n\n开启Cookie抓取\n- true: 打开后进入 PingMe App 任意页面自动抓取参数\n- false: 关闭抓取\n\nPingMe参数: 抓取后会自动保存，通常无需手动填写\n\n仅失败时通知\n- false: 每次都推送结果\n- true: 仅失败或异常时推送
 
 [Script]
-PingMe获取参数 = type=http-request, pattern=^https:\/\/api\.pingmeapp\.net\/app\/queryBalanceAndBonus$, requires-body=false, script-path=https://raw.githubusercontent.com/Linsars/Surge/main/JS/egern-pingmeCK.js, argument="{"ENABLE_CAPTURE":true}"
+PingMe获取参数 = type=http-request, pattern=^https:\/\/api\.pingmeapp\.net\/app\/queryBalanceAndBonus$, requires-body=false, script-path=https://raw.githubusercontent.com/Linsars/Surge/main/JS/egern-pingmeCK.js, argument="{"ENABLE_CAPTURE":{{{开启Cookie抓取}}}}"
 
-PingMe签到执行 = type=cron, cronexp="{{{签到执行时间}}}", script-path=https://raw.githubusercontent.com/Linsars/Surge/main/JS/egern-pingme.js, argument="{"PINGME_CAPTURE":"{{{PingMe参数}}}","NOTIFY_ONLY_FAIL":false}"
-
+PingMe签到执行 = type=cron, cronexp="{{{签到执行时间}}}", script-path=https://raw.githubusercontent.com/Linsars/Surge/main/JS/egern-pingme.js, argument="{"PINGME_CAPTURE":"{{{PingMe参数}}}","NOTIFY_ONLY_FAIL":{{{仅失败时通知}}}}"
 [MITM]
 hostname = %APPEND% api.pingmeapp.net
