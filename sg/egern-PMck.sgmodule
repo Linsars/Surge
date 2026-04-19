@@ -8,7 +8,7 @@
 [Script]
 PingMe获取参数 = type=http-request, pattern=^https:\/\/api\.pingmeapp\.net\/app\/queryBalanceAndBonus$, requires-body=false, script-path=https://raw.githubusercontent.com/Linsars/Surge/main/JS/egern-pingmeCK.js, argument="{"ENABLE_CAPTURE":true}"
 
-PingMe签到执行 = type=cron, cronexp="{{{0 */4 * * *}}}", script-path=https://raw.githubusercontent.com/Linsars/Surge/main/JS/egern-pingme.js, argument="{"PINGME_CAPTURE":"{{{PingMe参数}}}","NOTIFY_ONLY_FAIL":false}"
+PingMe签到执行 = type=cron, cronexp="0 */4 * * *", script-path=https://raw.githubusercontent.com/Linsars/Surge/main/JS/egern-pingme.js, argument="{"PINGME_CAPTURE":"{{{PingMe参数}}}","NOTIFY_ONLY_FAIL":false}"
 
 [MITM]
 hostname = %APPEND% api.pingmeapp.net
