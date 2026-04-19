@@ -1,29 +1,12 @@
-name: NewAPI通用签到
-description: 适配所有NewAPI源码搭建的中转站（支持多站点共用同一脚本）。先打开任意中转站App/网页进入个人中心触发 /api/user/self 即可自动抓包保存Cookie。抓取成功后会自动保存，后续定时自动签到。每天早上9:10执行。
-author: Linsar（基于原脚本Egern适配）
-dns: {}
-scriptings:
-- http_request:
-    name: NewAPI签到获取Headers
-    match: ^https:\/\/.*\/api\/user\/self$
-    script_url: https://raw.githubusercontent.com/Linsars/Surge/main/JS/egern-newapiSG.js
-    timeout: 60
-- schedule:
-    name: NewAPI签到定时执行
-    cron: 10 9 * * *
-    script_url: https://raw.githubusercontent.com/Linsars/Surge/main/JS/egern-newapiSG.js
-    argument: '{"host":""}'
-    timeout: 120
-mitm:
-  hostnames:
-    includes:
-    - '*'
-    excludes:
-    - '*.apple.com'
-    - '*.icloud.com'
-    - 'testflight.apple.com'
-    - 'apps.apple.com'
-    - 'itunes.apple.com'
-    - 'appstore.com'
-    - 'mzstatic.com'
-    - 'apple.com'
+#!name=NewAPI通用签到（Loon版）
+#!desc=适配所有NewAPI中转站，支持多站点。打开App进入个人中心自动抓包保存Cookie，每天9:10自动签到。已排除苹果所有域名，不会影响 App Store / TestFlight / iCloud。
+#!author=Linsar
+#!date=2026-04-19
+
+[Script]
+NewAPI签到获取Headers = type=http-request, pattern=^https:\/\/.*\/api\/user\/self$, script-path=https://raw.githubusercontent.com/Linsars/Surge/main/JS/egern-newapiSG.js, requires-body=false, timeout=60
+
+NewAPI签到定时执行 = type=cron, cronexp=10 9 * * *, script-path=https://raw.githubusercontent.com/Linsars/Surge/main/JS/egern-newapiSG.js, argument={"host":""}, timeout=120
+
+[MITM]
+hostname = %APPEND% *,-*.apple.com,-*.icloud.com,-testflight.apple.com,-apps.apple.com,-itunes.apple.com,-appstore.com,-mzstatic.com,-apple.com
