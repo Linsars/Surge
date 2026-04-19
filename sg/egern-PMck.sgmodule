@@ -1,7 +1,7 @@
 #!name=PingMe 签到+视频奖励
 #!desc=自动签到 + 刷5个视频奖励（支持 Egern）。开启抓取开关后，打开 PingMe App 任意页面即可自动获取参数。获取成功后建议关闭抓取开关。
 #!author=Linsar
-#!date=2026-04-19
+#!date=2026-04-20
 #!arguments=签到执行时间:30 8,20 * * *,开启Cookie抓取:true,PingMe参数:xxx,仅失败时通知:false
 #!arguments-desc=签到执行时间: 默认每天早晚8:10执行一次 (cron格式，如 30 8,20 * * *)\n\n开启Cookie抓取\n- true: 打开后进入 PingMe App 任意页面自动抓取参数\n- false: 关闭抓取\n\nPingMe参数: 抓取后会自动保存，通常无需手动填写\n\n仅失败时通知\n- false: 每次都推送结果\n- true: 仅失败或异常时推送
 
