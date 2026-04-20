@@ -1,7 +1,7 @@
 /**
  * @name PingMe获取Cookie
  * @desc 访问PingMe个人主页自动获取签到参数
- * @author fmz200
+ * @author Linsar改自fmz200
  * @date 2026-04-20
  */
 
