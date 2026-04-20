@@ -3,7 +3,7 @@
 #!date=2026-04-20
 #!desc=PingMe 每日自动签到，支持Cookie抓取
 #!arguments=签到执行时间:1 0 * * *,开启Cookie抓取:true
-#!arguments-desc=签到执行时间: 默认每天凌晨1点执行
+#!arguments-desc=签到执行时间: 默认每天凌晨1点执行，可以自定义cron时间；关闭Cookie抓取: false
 
 开启Cookie抓取
 - true: 打开后访问 PingMe 个人主页可自动抓取 Cookie。抓到后请关闭
