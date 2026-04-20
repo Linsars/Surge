@@ -2,7 +2,7 @@
 @Name：PingMe 自动化签到+视频奖励
 @Author：怎么肥事 https://raw.githubusercontent.com/ZenmoFeiShi/Qx/refs/heads/main/PingMe.js
 @modify 奶思做了修改，理论支持 Qx,Loon,Surge,Egern,ShadowRocket,青龙
-@date 2026-04-20 11:00:00
+@date 2026-04-17 14:00:00
 
 ============QuanX============
 [rewrite_local]
