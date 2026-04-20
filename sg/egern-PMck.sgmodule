@@ -1,13 +1,17 @@
 #!name=PingMe 签到
 #!author=Linsar
 #!date=2026-04-20
-#!desc=PingMe 每日自动签到。开启抓取开关后访问个人主页即可获取 Cookie。
-#!arguments=签到执行时间:30 8,20 * * *,开启Cookie抓取:true,PingMe Cookie:xxx
-#!arguments-desc=签到执行时间: 默认早晚八点半执行\n\n开启Cookie抓取\n- true: 打开后访问 PingMe 个人主页可自动抓取 Cookie。抓到后请关闭\n- false: 关闭抓取\n\nPingMe Cookie: 抓取后会自动保存，若手动配置则在此填入完整 Cookie
+#!desc=PingMe 每日自动签到，支持Cookie抓取
+#!arguments=签到执行时间:1 0 * * *,开启Cookie抓取:true
+#!arguments-desc=签到执行时间: 默认每天凌晨1点执行
+
+开启Cookie抓取
+- true: 打开后访问 PingMe 个人主页可自动抓取 Cookie。抓到后请关闭
+- false: 关闭抓取
 
 [Script]
-PM签到获取Cookie = type=http-request, pattern=^https:\/\/api\.pingmeapp\.net\/app\/queryBalanceAndBonus, requires-body=false, script-path=https://raw.githubusercontent.com/Linsars/Surge/main/JS/egern-pingmeCK.js, timeout=120, argument="{"ENABLE_CAPTURE":{{{开启Cookie抓取}}}}"
-PM签到定时执行 = type=cron, cronexp="{{{签到执行时间}}}", script-path=https://raw.githubusercontent.com/Linsars/Surge/main/JS/egern-pingme.js, timeout=120, argument="{"PM_COOKIE":"{{{PingMe Cookie}}}}"
+PM签到获取Cookie = type=http-request, pattern=^https:\/\/api\.pingmeapp\.net\/app\/queryBalanceAndBonus, requires-body=false, script-path=https://raw.githubusercontent.com/Linsars/Surge/main/JS/egern-pingmeCK.js, timeout=120, argument="{"ENABLE_CAPTURE":"{{{开启Cookie抓取}}}"}"
+PM签到定时执行 = type=cron, cronexp="{{{签到执行时间}}}", script-path=https://raw.githubusercontent.com/Linsars/Surge/main/JS/egern-pingme.js, timeout=120
 
 [MITM]
 hostname = %APPEND% api.pingmeapp.net
