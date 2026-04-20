@@ -1,0 +1,344 @@
+const $ = new Env('PingMe签到调试');
+console.log('[DEBUG] 脚本开始加载');
+
+const isNode = $.isNode();
+console.log('[DEBUG] isNode=' + isNode);
+
+const notify = isNode ? require('./sendNotify') : '';
+$.nodeNotifyMsg = [];
+
+const ckKey = 'pingme_capture_v3';
+const SECRET = '0fOiukQq7jXZV2GRi9LGlO';
+const MAX_VIDEO = 5;
+const VIDEO_DELAY = 8000;
+
+console.log('[DEBUG] 常量定义完成');
+
+let TG_BOT_TOKEN = '';
+let TG_USER_ID = '';
+
+try {
+    console.log('[DEBUG] 开始解析 $argument, typeof=' + typeof $argument);
+    if (typeof $argument === 'string' && $argument) {
+        const arg = JSON.parse($argument);
+        TG_BOT_TOKEN = arg.TG_BOT_TOKEN || '';
+        TG_USER_ID = arg.TG_USER_ID || '';
+        console.log('[DEBUG] 参数解析成功, TG_BOT_TOKEN=' + (TG_BOT_TOKEN ? '有值' : '空') + ', TG_USER_ID=' + (TG_USER_ID ? '有值' : '空'));
+    } else {
+        console.log('[DEBUG] $argument 为空或不存在');
+    }
+} catch (e) {
+    console.log('[DEBUG] 参数解析失败: ' + e);
+}
+
+console.log('[DEBUG] 开始执行 startTasks');
+startTasks().then(r => {
+    console.log('[DEBUG] startTasks 完成');
+    $.done();
+}).catch(e => {
+    console.log('[DEBUG] startTasks 异常: ' + e);
+    $.done();
+});
+
+async function startTasks() {
+    console.log('[DEBUG] === 进入 startTasks ===');
+    const raw = $.getdata(ckKey);
+    console.log('[DEBUG] 读取 ckKey, raw=' + (raw ? '有值' : '空'));
+    
+    if (!raw) {
+        console.log('[DEBUG] raw 为空，发送错误通知');
+        await sendMsg('❌ 请先获取PingMe签到参数', '先打开PingMe触发一次');
+        console.log('[DEBUG] 调用 $.done()');
+        $.done();
+        return;
+    }
+    
+    let capture;
+    try {
+        capture = JSON.parse(raw);
+        console.log('[DEBUG] capture 解析成功');
+    } catch (e) {
+        console.log('[DEBUG] capture 解析失败: ' + e);
+        await sendMsg('❌ PingMe签到参数损坏', '可打开PingMe再触发一次');
+        $.done();
+        return;
+    }
+
+    console.log('[DEBUG] 组装请求头');
+    const headers = buildHeaders(capture);
+    console.log('[DEBUG] 请求头组装完成');
+    
+    const msgs = [];
+
+    function fetchApi(path) {
+        console.log('[DEBUG] fetchApi 调用: ' + path);
+        return $.http.get({url: buildUrl(path, capture), headers: headers});
+    }
+
+    function doVideoLoop(count) {
+        console.log('[DEBUG] 开始视频奖励循环, count=' + count);
+        let i = 0;
+        function next() {
+            if (i >= count) {
+                console.log('[DEBUG] 视频循环结束');
+                return Promise.resolve();
+            }
+            return new Promise(resolve => {
+                setTimeout(() => {
+                    i++;
+                    console.log('[DEBUG] 请求视频奖励 ' + i);
+                    fetchApi('videoBonus').then(res => {
+                        try {
+                            const d = JSON.parse(res.body);
+                            console.log('[DEBUG] 视频奖励响应: retcode=' + d.retcode);
+                            if (d.retcode === 0) {
+                                msgs.push(`🎬 视频${i}：+${d.result?.bonus || '?'} Coins`);
+                                resolve(next());
+                            } else {
+                                msgs.push(`⏸ 视频${i}：${d.retmsg}`);
+                                resolve();
+                            }
+                        } catch (e) {
+                            msgs.push(`❌ 视频${i}：解析失败`);
+                            resolve();
+                        }
+                    }).catch(err => {
+                        msgs.push(`❌ 视频${i}：${err.error || '请求失败'}`);
+                        resolve();
+                    });
+                }, i === 0 ? 1500 : VIDEO_DELAY);
+            });
+        }
+        return next();
+    }
+
+    console.log('[DEBUG] 开始查询余额');
+    await fetchApi('queryBalanceAndBonus')
+        .then(res => {
+            console.log('[DEBUG] 余额查询响应状态');
+            try {
+                const d = JSON.parse(res.body);
+                console.log('[DEBUG] 余额解析: retcode=' + d.retcode);
+                if (d.retcode === 0) msgs.push(`💰 余额：${d.result.balance} Coins`);
+                else msgs.push(`⚠️ 查询：${d.retmsg}`);
+            } catch (e) {
+                msgs.push('❌ 查询：解析失败');
+            }
+            console.log('[DEBUG] 开始签到');
+            return fetchApi('checkIn');
+        })
+        .then(res => {
+            console.log('[DEBUG] 签到响应状态');
+            try {
+                const d = JSON.parse(res.body);
+                console.log('[DEBUG] 签到解析: retcode=' + d.retcode);
+                if (d.retcode === 0) msgs.push(`✅ 签到：${(d.result?.bonusHint || d.retmsg || '').replace(/\n/g, ' ')}`);
+                else msgs.push(`⚠️ 签到：${d.retmsg}`);
+            } catch (e) {
+                msgs.push('❌ 签到：解析失败');
+            }
+            console.log('[DEBUG] 开始视频奖励');
+            return doVideoLoop(MAX_VIDEO);
+        })
+        .then(() => {
+            console.log('[DEBUG] 视频奖励完成，查询最新余额');
+            return fetchApi('queryBalanceAndBonus');
+        })
+        .then(async res => {
+            try {
+                const d = JSON.parse(res.body);
+                console.log('[DEBUG] 最新余额解析: retcode=' + d.retcode);
+                if (d.retcode === 0) msgs.push(`💰 最新余额：${d.result.balance} Coins`);
+            } catch (e) {
+                console.log('[DEBUG] 查询最新余额失败');
+            }
+            
+            const finalMsg = msgs.join('\n');
+            console.log('[DEBUG] 最终消息:\n' + finalMsg);
+            
+            if (!isNode) {
+                $.msg($.name + '🎉 任务完成', finalMsg, '', {
+                    'open-url': '',
+                    'media-url': 'https://raw.githubusercontent.com/fmz200/wool_scripts/main/icons/apps/PingMe.png'
+                });
+            } else {
+                await sendMsg(finalMsg, '');
+            }
+            
+            if (TG_BOT_TOKEN && TG_USER_ID) {
+                console.log('[DEBUG] 开始 TG 推送');
+                await sendTG('PingMe 签到完成', finalMsg);
+            } else {
+                console.log('[DEBUG] TG 参数未配置，跳过推送');
+            }
+        })
+        .catch(async err => {
+            const errMsg = msgs.join('\n') + '\n' + (err.error || String(err));
+            console.log('[DEBUG] 任务失败: ' + errMsg);
+            if (!isNode) {
+                $.msg($.name + '❌ 任务失败', errMsg, '', {
+                    'open-url': '',
+                    'media-url': 'https://raw.githubusercontent.com/fmz200/wool_scripts/main/icons/apps/PingMe.png'
+                });
+            } else {
+                await sendMsg(errMsg, '');
+            }
+            if (TG_BOT_TOKEN && TG_USER_ID) {
+                await sendTG('PingMe 签到失败', errMsg);
+            }
+        });
+    
+    console.log('[DEBUG] === startTasks 执行完毕 ===');
+}
+
+async function sendTG(title, content) {
+    console.log('[DEBUG] sendTG 调用');
+    try {
+        const url = `https://api.telegram.org/bot${TG_BOT_TOKEN}/sendMessage`;
+        const payload = {
+            chat_id: TG_USER_ID,
+            text: `${title}\n${content}`,
+            parse_mode: 'HTML'
+        };
+        console.log('[DEBUG] TG 请求 URL: ' + url.substring(0, 30) + '...');
+        const result = await $.http.post({url, body: JSON.stringify(payload)});
+        console.log('[DEBUG] TG 推送成功');
+    } catch (e) {
+        console.log('[DEBUG] TG 推送失败: ' + e.message);
+    }
+}
+
+function MD5(string) {
+    function RotateLeft(lValue, iShiftBits) { return (lValue << iShiftBits) | (lValue >>> (32 - iShiftBits)); }
+    function AddUnsigned(lX, lY) {
+        const lX4 = lX & 0x40000000, lY4 = lY & 0x40000000, lX8 = lX & 0x80000000, lY8 = lY & 0x80000000;
+        const lResult = (lX & 0x3FFFFFFF) + (lY & 0x3FFFFFFF);
+        if (lX4 & lY4) return lResult ^ 0x80000000 ^ lX8 ^ lY8;
+        if (lX4 | lY4) return (lResult & 0x40000000) ? (lResult ^ 0xC0000000 ^ lX8 ^ lY8) : (lResult ^ 0x40000000 ^ lX8 ^ lY8);
+        return lResult ^ lX8 ^ lY8;
+    }
+    function F(x, y, z) { return (x & y) | ((~x) & z); }
+    function G(x, y, z) { return (x & z) | (y & (~z)); }
+    function H(x, y, z) { return x ^ y ^ z; }
+    function I(x, y, z) { return y ^ (x | (~z)); }
+    function FF(a, b, c, d, x, s, ac) { a = AddUnsigned(a, AddUnsigned(AddUnsigned(F(b, c, d), x), ac)); return AddUnsigned(RotateLeft(a, s), b); }
+    function GG(a, b, c, d, x, s, ac) { a = AddUnsigned(a, AddUnsigned(AddUnsigned(G(b, c, d), x), ac)); return AddUnsigned(RotateLeft(a, s), b); }
+    function HH(a, b, c, d, x, s, ac) { a = AddUnsigned(a, AddUnsigned(AddUnsigned(H(b, c, d), x), ac)); return AddUnsigned(RotateLeft(a, s), b); }
+    function II(a, b, c, d, x, s, ac) { a = AddUnsigned(a, AddUnsigned(AddUnsigned(I(b, c, d), x), ac)); return AddUnsigned(RotateLeft(a, s), b); }
+    function ConvertToWordArray(str) {
+        const lMessageLength = str.length;
+        const lNumberOfWords_temp1 = lMessageLength + 8;
+        const lNumberOfWords_temp2 = (lNumberOfWords_temp1 - (lNumberOfWords_temp1 % 64)) / 64;
+        const lNumberOfWords = (lNumberOfWords_temp2 + 1) * 16;
+        const lWordArray = Array(lNumberOfWords - 1).fill(0);
+        let lBytePosition = 0, lByteCount = 0;
+        while (lByteCount < lMessageLength) {
+            const lWordCount = (lByteCount - (lByteCount % 4)) / 4;
+            lBytePosition = (lByteCount % 4) * 8;
+            lWordArray[lWordCount] |= str.charCodeAt(lByteCount) << lBytePosition;
+            lByteCount++;
+        }
+        const lWordCount = (lByteCount - (lByteCount % 4)) / 4;
+        lBytePosition = (lByteCount % 4) * 8;
+        lWordArray[lWordCount] |= 0x80 << lBytePosition;
+        lWordArray[lNumberOfWords - 2] = lMessageLength << 3;
+        lWordArray[lNumberOfWords - 1] = lMessageLength >>> 29;
+        return lWordArray;
+    }
+    function WordToHex(lValue) {
+        let WordToHexValue = '';
+        for (let lCount = 0; lCount <= 3; lCount++) {
+            const lByte = (lValue >>> (lCount * 8)) & 255;
+            const WordToHexValue_temp = '0' + lByte.toString(16);
+            WordToHexValue += WordToHexValue_temp.substr(WordToHexValue_temp.length - 2, 2);
+        }
+        return WordToHexValue;
+    }
+    const x = ConvertToWordArray(string);
+    let a = 0x67452301, b = 0xEFCDAB89, c = 0x98BADCFE, d = 0x10325476;
+    const S11 = 7, S12 = 12, S13 = 17, S14 = 22, S21 = 5, S22 = 9, S23 = 14, S24 = 20;
+    const S31 = 4, S32 = 11, S33 = 16, S34 = 23, S41 = 6, S42 = 10, S43 = 15, S44 = 21;
+    for (let k = 0; k < x.length; k += 16) {
+        const AA = a, BB = b, CC = c, DD = d;
+        a = FF(a,b,c,d,x[k+0],S11,0xD76AA478); d = FF(d,a,b,c,x[k+1],S12,0xE8C7B756); c = FF(c,d,a,b,x[k+2],S13,0x242070DB); b = FF(b,c,d,a,x[k+3],S14,0xC1BDCEEE);
+        a = FF(a,b,c,d,x[k+4],S11,0xF57C0FAF); d = FF(d,a,b,c,x[k+5],S12,0x4787C62A); c = FF(c,d,a,b,x[k+6],S13,0xA8304613); b = FF(b,c,d,a,x[k+7],S14,0xFD469501);
+        a = FF(a,b,c,d,x[k+8],S11,0x698098D8); d = FF(d,a,b,c,x[k+9],S12,0x8B44F7AF); c = FF(c,d,a,b,x[k+10],S13,0xFFFF5BB1); b = FF(b,c,d,a,x[k+11],S14,0x895CD7BE);
+        a = FF(a,b,c,d,x[k+12],S11,0x6B901122); d = FF(d,a,b,c,x[k+13],S12,0xFD987193); c = FF(c,d,a,b,x[k+14],S13,0xA679438E); b = FF(b,c,d,a,x[k+15],S14,0x49B40821);
+        a = GG(a,b,c,d,x[k+1],S21,0xF61E2562); d = GG(d,a,b,c,x[k+6],S22,0xC040B340); c = GG(c,d,a,b,x[k+11],S23,0x265E5A51); b = GG(b,c,d,a,x[k+0],S24,0xE9B6C7AA);
+        a = GG(a,b,c,d,x[k+5],S21,0xD62F105D); d = GG(d,a,b,c,x[k+10],S22,0x02441453); c = GG(c,d,a,b,x[k+15],S23,0xD8A1E681); b = GG(b,c,d,a,x[k+4],S24,0xE7D3FBC8);
+        a = GG(a,b,c,d,x[k+9],S21,0x21E1CDE6); d = GG(d,a,b,c,x[k+14],S22,0xC33707D6); c = GG(c,d,a,b,x[k+3],S23,0xF4D50D87); b = GG(b,c,d,a,x[k+8],S24,0x455A14ED);
+        a = GG(a,b,c,d,x[k+13],S21,0xA9E3E905); d = GG(d,a,b,c,x[k+2],S22,0xFCEFA3F8); c = GG(c,d,a,b,x[k+7],S23,0x676F02D9); b = GG(b,c,d,a,x[k+12],S24,0x8D2A4C8A);
+        a = HH(a,b,c,d,x[k+5],S31,0xFFFA3942); d = HH(d,a,b,c,x[k+8],S32,0x8771F681); c = HH(c,d,a,b,x[k+11],S33,0x6D9D6122); b = HH(b,c,d,a,x[k+14],S34,0xFDE5380C);
+        a = HH(a,b,c,d,x[k+1],S31,0xA4BEEA44); d = HH(d,a,b,c,x[k+4],S32,0x4BDECFA9); c = HH(c,d,a,b,x[k+7],S33,0xF6BB4B60); b = HH(b,c,d,a,x[k+10],S34,0xBEBFBC70);
+        a = HH(a,b,c,d,x[k+13],S31,0x289B7EC6); d = HH(d,a,b,c,x[k+0],S32,0xEAA127FA); c = HH(c,d,a,b,x[k+3],S33,0xD4EF3085); b = HH(b,c,d,a,x[k+6],S34,0x04881D05);
+        a = HH(a,b,c,d,x[k+9],S31,0xD9D4D039); d = HH(d,a,b,c,x[k+12],S32,0xE6DB99E5); c = HH(c,d,a,b,x[k+15],S33,0x1FA27CF8); b = HH(b,c,d,a,x[k+2],S34,0xC4AC5665);
+        a = II(a,b,c,d,x[k+0],S41,0xF4292244); d = II(d,a,b,c,x[k+7],S42,0x432AFF97); c = II(c,d,a,b,x[k+14],S43,0xAB9423A7); b = II(b,c,d,a,x[k+5],S44,0xFC93A039);
+        a = II(a,b,c,d,x[k+12],S41,0x655B59C3); d = II(d,a,b,c,x[k+3],S42,0x8F0CCC92); c = II(c,d,a,b,x[k+10],S43,0xFFEFF47D); b = II(b,c,d,a,x[k+1],S44,0x85845DD1);
+        a = II(a,b,c,d,x[k+8],S41,0x6FA87E4F); d = II(d,a,b,c,x[k+15],S42,0xFE2CE6E0); c = II(c,d,a,b,x[k+6],S43,0xA3014314); b = II(b,c,d,a,x[k+13],S44,0x4E0811A1);
+        a = II(a,b,c,d,x[k+4],S41,0xF7537E82); d = II(d,a,b,c,x[k+11],S42,0xBD3AF235); c = II(c,d,a,b,x[k+2],S43,0x2AD7D2BB); b = II(b,c,d,a,x[k+9],S44,0xEB86D391);
+        a = AddUnsigned(a,AA); b = AddUnsigned(b,BB); c = AddUnsigned(c,CC); d = AddUnsigned(d,DD);
+    }
+    return (WordToHex(a) + WordToHex(b) + WordToHex(c) + WordToHex(d)).toLowerCase();
+}
+
+function getUTCSignDate() {
+    const now = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    return `${now.getUTCFullYear()}-${pad(now.getUTCMonth()+1)}-${pad(now.getUTCDate())} ${pad(now.getUTCHours())}:${pad(now.getUTCMinutes())}:${pad(now.getUTCSeconds())}`;
+}
+
+function normalizeHeaderNameMap(headers) {
+    const out = {};
+    Object.keys(headers || {}).forEach(k => out[k] = headers[k]);
+    return out;
+}
+
+function parseRawQuery(url) {
+    const query = (url.split('?')[1] || '').split('#')[0];
+    const rawMap = {};
+    query.split('&').forEach(pair => {
+        if (!pair) return;
+        const idx = pair.indexOf('=');
+        if (idx < 0) return;
+        const k = pair.slice(0, idx);
+        const v = pair.slice(idx + 1);
+        rawMap[k] = v;
+    });
+    return rawMap;
+}
+
+function buildSignedParamsRaw(capture) {
+    const params = {};
+    Object.keys(capture.paramsRaw || {}).forEach(k => {
+        if (k !== 'sign' && k !== 'signDate') params[k] = capture.paramsRaw[k];
+    });
+    params.signDate = getUTCSignDate();
+    const signBase = Object.keys(params).sort().map(k => `${k}=${params[k]}`).join('&');
+    params.sign = MD5(signBase + SECRET);
+    return params;
+}
+
+function buildUrl(path, capture) {
+    const params = buildSignedParamsRaw(capture);
+    const qs = Object.keys(params).map(k => `${k}=${encodeURIComponent(params[k])}`).join('&');
+    return `https://api.pingmeapp.net/app/${path}?${qs}`;
+}
+
+function cloneHeaders(headers) {
+    const out = {};
+    Object.keys(headers || {}).forEach(k => out[k] = headers[k]);
+    return out;
+}
+
+function buildHeaders(capture) {
+    const headers = cloneHeaders(capture.headers || {});
+    delete headers['Content-Length']; delete headers['content-length'];
+    delete headers[':authority']; delete headers[':method']; delete headers[':path']; delete headers[':scheme'];
+    headers['Host'] = 'api.pingmeapp.net';
+    headers['Accept'] = headers['Accept'] || 'application/json';
+    return headers;
+}
+
+async function sendMsg(desc, opts) { $.isNode() ? await notify.sendNotify($.name, desc) : $.msg($.name, $.subTitle || '', desc, opts) }
+
+function Env(t,e){class s{constructor(t){this.env=t}send(t,e="GET"){t="string"==typeof t?{url:t}:t;let s=this.get;"POST"===e&&(s=this.post);const i=new Promise(((e,i)=>{s.call(this,t,((t,s,o)=>{t?i(t):e(s)}))}));return t.timeout?((t,e=1e3)=>Promise.race([t,new Promise(((t,s)=>{setTimeout((()=>{s(new Error("请求超时"))}),e)}))]))(i,t.timeout):i}get(t){return this.send.call(this.env,t)}post(t){return this.send.call(this.env,t,"POST")}}return new class{constructor(t,e){this.logLevels={debug:0,info:1,warn:2,error:3},this.logLevelPrefixs={debug:"[DEBUG] ",info:"[INFO] ",warn:"[WARN] ",error:"[ERROR] "},this.logLevel="info",this.name=t,this.http=new s(this),this.data=null,this.dataFile="box.dat",this.logs=[],this.isMute=!1,this.isNeedRewrite=!1,this.logSeparator="\n",this.encoding="utf-8",this.startTime=(new Date).getTime(),Object.assign(this,e),this.log("",`🔔${this.name}, 开始!`)}getEnv(){return"undefined"!=typeof $environment&&$environment["surge-version"]?"Surge":"undefined"!=typeof $environment&&$environment["stash-version"]?"Stash":"undefined"!=typeof module&&module.exports?"Node.js":"undefined"!=typeof $task?"Quantumult X":"undefined"!=typeof $loon?"Loon":"undefined"!=typeof $rocket?"Shadowrocket":void 0}isNode(){return"Node.js"===this.getEnv()}isQuanX(){return"Quantumult X"===this.getEnv()}isSurge(){return"Surge"===this.getEnv()}isLoon(){return"Loon"===this.getEnv()}isShadowrocket(){return"Shadowrocket"===this.getEnv()}isStash(){return"Stash"===this.getEnv()}toObj(t,e=null){try{return JSON.parse(t)}catch{return e}}toStr(t,e=null,...s){try{return JSON.stringify(t,...s)}catch{return e}}getjson(t,e){let s=e;if(this.getdata(t))try{s=JSON.parse(this.getdata(t))}catch{}return s}setjson(t,e){try{return this.setdata(JSON.stringify(t),e)}catch{return!1}}getScript(t){return new Promise((e=>{this.get({url:t},((t,s,i)=>e(i)))}))}runScript(t,e){return new Promise((s=>{let i=this.getdata("@chavy_boxjs_userCfgs.httpapi");i=i?i.replace(/\n/g,"").trim():i;let o=this.getdata("@chavy_boxjs_userCfgs.httpapi_timeout");o=o?1*o:20,o=t.timeout?t.timeout:o;const[r,a]=i.split("@"),n={url:`http://${r}/v1/scripting/evaluate`,body:{script_text:t,mock_type:"cron",timeout:o},headers:{"Content-Type":"application/json"}};this.post(n,((t,e,i)=>s(i)))}))}}loaddata(){if(!this.isNode())return{};{this.fs=this.fs?this.fs:require("fs"),this.path=this.path?this.path:require("path");const t=this.path.resolve(this.dataFile),e=this.path.resolve(process.cwd(),this.dataFile),s=this.fs.existsSync(t),i=!s&&this.fs.existsSync(e);if(!s&&!i)return{};{const i=s?t:e;try{return JSON.parse(this.fs.readFileSync(i))}catch(t){return{}}}}}writedata(){if(this.isNode()){this.fs=this.fs?this.fs:require("fs"),this.path=this.path?this.path:require("path");const t=this.path.resolve(this.dataFile),e=this.path.resolve(process.cwd(),this.dataFile),s=this.fs.existsSync(t);this.fs.writeFileSync(s?t:e,JSON.stringify(this.data),{flag:"w"})}}lodash_get(t,e,s){const i=e.replace(/\[(\d+)\]/g,".$1").split(".");let o=t;for(const t of i)if(o=Object(o)[t],void 0===o)return s;return o}lodash_set(t,e,s){return Object(t)!==t?t:(Array.isArray(e)||(e=e.toString().match(/[^.[\]]+/g)||[]),e.slice(0,-1).reduce((t,s,i)=>Object(t[s])===t[s]?t[s]:t[s]=Math.abs(e[i+1])>>0==+e[i+1]?[]:{}),t[e[e.length-1]]=s),t)}getdata(t){let e=this.data[t];if(void 0===e){let s=null;try{s=JSON.parse(localStorage.getItem(t))}catch(t){}void 0!==s&&(e=s)}return e}setdata(t,e){try{this.data[e]=t}catch(t){}}has(t){return void 0!==this.data[t]}unset(t){delete this.data[t]}getkeys(){return Object.keys(this.data)}count(){return Object.keys(this.data).length}run(t,e){return Promise.resolve().then(t).catch(e)}sleep(t){return new Promise((e=>setTimeout(e,t)))}log(t,...e){t=String(t),this.logs.push(t),console.log(`${this.name}:\n${t}`,e)}logErr(t){if(!this.isMute){if(t=String(t),"string"==typeof t)this.log(`${this.logLevelPrefixs.error}${this.name}:\n${t}`);else{this.log(`${this.logLevelPrefixs.error}${this.name}:\n${JSON.stringify(t)}`)}}}info(t){console.log(t)}error(t){console.log(t)}wait(t){return new Promise((e=>setTimeout(e,t)))}done(t={}){const e=(new Date).getTime(),s=(e-this.startTime)/1e3;this.log("",`🔔${this.name}, 结束! 🕐 ${s} 秒`),this.log(),(this.isSurge()||this.isQuanX()||this.isLoon())&&$done(t)}}}(t,e)}
