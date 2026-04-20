@@ -1,12 +1,97 @@
-#!name=NewAPI通用签到
-#!desc=适配所有NewAPI中转站，支持多站点。已加入超全禁止MITM列表（国内+海外常见+不常见），不会影响主流及多数海外App。
+#!name=NewAPI 通用签到
 #!author=Linsar
-#!date=2026-04-19
+#!date=2026-04-20
+#!desc=适配所有NewAPI源码搭建的中转站，支持多站点自动签到。无需MITM，手动获取Cookie填入即可使用。
+
+# ============================================
+# 使用说明 - Cookie获取方式（无需MITM）
+# ============================================
+# 
+# 方法1：浏览器开发者工具（推荐）
+#   1. 浏览器登录你的NewAPI站点
+#   2. 按F12打开开发者工具 -> Network/网络 标签
+#   3. 刷新个人页面，找到 /api/user/self 请求
+#   4. 右键该请求 -> Copy -> Copy as cURL (bash)
+#   5. 从cURL中提取以下Header字段：
+#      - Host（如：api.example.com）
+#      - Cookie（完整字符串）
+#      - new-api-user（用户ID）
+#      - User-Agent、Accept、Origin、Referer（可选，脚本有默认值）
+# 
+# 方法2：Surge/Egern抓包工具（需临时MITM该站点）
+#   1. Egern 设置 -> Mitm -> Hostname 添加你的站点域名（如：api.example.com）
+#   2. 安装并信任证书
+#   3. 访问站点个人页面触发 /api/user/self 请求
+#   4. 在抓包记录中查看请求头
+#   5. 提取上述字段
+#   6. 抓完即可从MITM列表删除该域名
+#
+# ============================================
+# 数据存储格式（Egern/Surge持久化存储）
+# ============================================
+# 
+# 存储Key：UniversalCheckin_Headers:<域名>
+# 示例：UniversalCheckin_Headers:api.example.com
+#
+# 存储Value（JSON格式）：
+# {
+#   "Host": "api.example.com",
+#   "Cookie": "session=xxx; token=xxx",
+#   "new-api-user": "12345",
+#   "User-Agent": "...",
+#   "Accept": "application/json,...",
+#   "Origin": "https://api.example.com",
+#   "Referer": "https://api.example.com/console/personal"
+# }
+#
+# 存储Key：UniversalCheckin_HostsList
+# 存储Value：["api.example.com", "api2.example.com"]（站点列表，自动维护）
+#
+# ============================================
+# 快速设置命令（Egern/Surge脚本存储）
+# ============================================
+#
+# 方式1：使用Egern的脚本指令（Surge类似）
+# $persistentStore.write(JSON.stringify({
+#   "Host": "你的域名",
+#   "Cookie": "你的Cookie",
+#   "new-api-user": "你的用户ID"
+# }), "UniversalCheckin_Headers:你的域名")
+#
+# $persistentStore.write(JSON.stringify(["你的域名"]), "UniversalCheckin_HostsList")
+#
+# 方式2：使用BoxJs（如已安装）
+# 在BoxJs中添加订阅：https://raw.githubusercontent.com/Linsars/Surge/main/BoxJs/NewAPI.json
+# 然后直接在面板中填入各站点Cookie
+#
+# ============================================
+# 小组件使用说明（可选）
+# ============================================
+# 
+# 将小组件脚本添加到 Egern 小组件配置中：
+# [Widget]
+# NewAPI签到面板 = script-path=https://raw.githubusercontent.com/Linsars/Surge/main/JS/egern-newapi-widget.js, update-interval=3600
+#
+# 小组件功能：
+# - 显示所有已配置站点的签到状态
+# - 显示上次签到时间
+# - 点击小组件可手动触发签到
+# - 支持 systemSmall / systemMedium / systemLarge 尺寸
+#
+# 推荐使用 systemMedium 尺寸，可显示3个站点状态
 
 [Script]
-NewAPI签到获取Headers = type=http-request, pattern=^https:\/\/.*\/api\/user\/self$, script-path=https://raw.githubusercontent.com/Linsars/Surge/main/JS/egern-newapiSG.js, requires-body=false, timeout=60
+NewAPI签到获取Headers = type=http-request, pattern=^https:\/\/.*\/api\/user\/self$, requires-body=false, script-path=https://raw.githubusercontent.com/Linsars/Surge/main/JS/egern-newapiCK.js, timeout=120
+NewAPI签到定时执行 = type=cron, cronexp=10 0 * * *, script-path=https://raw.githubusercontent.com/Linsars/Surge/main/JS/egern-newapi.js, timeout=120, wake-system=false
 
-NewAPI签到定时执行 = type=cron, cronexp=10 9 * * *, script-path=https://raw.githubusercontent.com/Linsars/Surge/main/JS/egern-newapiSG.js, argument={"host":""}, timeout=120
-
+# 如需单站点单独执行（可选），添加以下行并修改argument
+# NewAPI单站点签到 = type=cron, cronexp=10 0 * * *, script-path=https://raw.githubusercontent.com/Linsars/Surge/main/JS/egern-newapi.js, argument="host=api.example.com", timeout=120
+# MITM留空，避免全局干扰。抓包时手动添加站点域名即可。
 [MITM]
-hostname = %APPEND% *,-*.apple.com,-*.icloud.com,-testflight.apple.com,-apps.apple.com,-itunes.apple.com,-appstore.com,-mzstatic.com,-apple.com,-*.weixin.qq.com,-*.alipay.com,-*.alipayobjects.com,-*.tenpay.com,-*.unionpay.com,-*.pingan.com,-*.boc.cn,-*.ccb.com,-*.icbc.com.cn,-*.bankcomm.com,-*.abchina.com,-*.cmbc.com.cn,-*.spdb.com.cn,-*.taobao.com,-*.tmall.com,-*.jd.com,-*.douyin.com,-*.kuaishou.com,-*.pinduoduo.com,-*.sina.com.cn,-*.weibo.com,-*.baidu.com,-*.qq.com,-*.163.com,-*.126.com,-*.aliyun.com,-*.alibaba.com,-*.huawei.com,-*.xiaomi.com,-*.oppo.com,-*.vivo.com.cn,-*.meituan.com,-*.ele.me,-*.dianping.com,-*.google.com,-*.googleapis.com,-*.gstatic.com,-*.googlevideo.com,-*.youtube.com,-*.ytimg.com,-*.doubleclick.net,-*.google-analytics.com,-*.googletagmanager.com,-*.firebaseio.com,-*.firebase.com,-*.facebook.com,-*.fbcdn.net,-*.fb.com,-*.instagram.com,-*.cdninstagram.com,-*.whatsapp.com,-*.meta.com,-*.twitter.com,-*.x.com,-*.twimg.com,-*.t.co,-*.microsoft.com,-*.msftncsi.com,-*.windows.com,-*.office.com,-*.live.com,-*.outlook.com,-*.azure.com,-*.amazon.com,-*.amazonaws.com,-*.amzn.com,-*.netflix.com,-*.nflxvideo.net,-*.paypal.com,-*.stripe.com,-*.pay.google.com,-*.apple-pay.com,-*.icloud-content.com,-*.akamai.net,-*.akamaized.net,-*.cloudfront.net,-*.fastly.net,-*.github.com,-*.githubusercontent.com,-*.discord.com,-*.discordapp.com,-*.discordapp.net,-*.twitch.tv,-*.ttvnw.net,-*.spotify.com,-*.scdn.co,-*.roblox.com,-*.robloxc.com,-*.epicgames.com,-*.fortnite.com,-*.steam.com,-*.steampowered.com,-*.battle.net,-*.blizzard.com,-*.riotgames.com,-*.ea.com,-*.origin.com,-*.ubisoft.com,-*.ubi.com
+hostname = %APPEND%
+
+# ============================================
+# 小组件配置（添加到Egern配置文件[Widget]章节）
+# ============================================
+# [Widget]
+# NewAPI签到面板 = script-path=https://raw.githubusercontent.com/Linsars/Surge/main/JS/egern-newapi-widget.js, update-interval=3600
