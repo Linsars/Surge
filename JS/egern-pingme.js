@@ -2,20 +2,7 @@
 @Name：PingMe 自动化签到+视频奖励
 @Author：怎么肥事 https://raw.githubusercontent.com/ZenmoFeiShi/Qx/refs/heads/main/PingMe.js
 @modify Linsar适配egern
-@date 2026-04-20 12:3 0:00
-
-============QuanX============
-[rewrite_local]
-^https:\/\/api\.pingmeapp\.net\/app\/queryBalanceAndBonus url script-request-header https://raw.githubusercontent.com/fmz200/wool_scripts/main/Scripts/cookie/get_cookie.js
-
-[task_local]
-30 8,20 * * * https://raw.githubusercontent.com/fmz200/wool_scripts/main/Scripts/PingMe/PingMeSignin.js, img-url=https://raw.githubusercontent.com/fmz200/wool_scripts/main/icons/apps/PingMe.png, tag=PingMe签到, enabled=true
-
-[MITM]
-hostname = api.pingmeapp.net
-
-============其他工具自行转换============
-*/
+@date 2026-04-20 12:30:00
 
 const $ = new Env('PingMe签到');
 const isNode = $.isNode();
