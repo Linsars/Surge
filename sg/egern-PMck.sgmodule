@@ -1,17 +1,23 @@
-#!name=PingMe 签到
+#!name=PingMe + WeTalk 双应用签到
 #!author=Linsar
-#!date=2026-04-20
-#!desc=PingMe 每日自动签到，支持Cookie抓取
-#!arguments=签到执行时间:1 0 * * *,开启Cookie抓取:true
-#!arguments-desc=签到执行时间: 默认每天凌晨1点执行，可以自定义cron时间；关闭Cookie抓取: false
+#!date=2026-04-21
+#!desc=同时支持 PingMe 和 WeTalk 的多账号自动签到、视频奖励、Cookie 抓取
+#!arguments=PingMe签到时间:1 0 * * *,WeTalk签到时间:20 8,20 * * *,开启Cookie抓取:true
+#!arguments-desc=PingMe签到时间: 默认每天凌晨1点执行，可自定义cron表达式；WeTalk签到时间: 默认每天8点20分和20点20分执行；开启Cookie抓取: true为打开，false为关闭
 
-开启Cookie抓取
-- true: 打开后访问 PingMe 个人主页可自动抓取 Cookie。抓到后请关闭
+开启Cookie抓取说明
+- true: 打开后访问 PingMe/WeTalk 个人主页可自动抓取 Cookie。抓到后请关闭
 - false: 关闭抓取
 
 [Script]
-PM签到获取Cookie = type=http-request, pattern=^https:\/\/api\.pingmeapp\.net\/app\/queryBalanceAndBonus, requires-body=false, script-path=https://raw.githubusercontent.com/Linsars/Surge/main/JS/egern-pingmeCK.js, timeout=120, argument="{"ENABLE_CAPTURE":"{{{开启Cookie抓取}}}"}"
-PM签到定时执行 = type=cron, cronexp="{{{签到执行时间}}}", script-path=https://raw.githubusercontent.com/Linsars/Surge/main/JS/egern-pingme.js, timeout=120
+# PingMe + WeTalk Cookie 抓取
+DualCapture = type=http-request, pattern=^https:\/\/api\.(pingmeapp|wetalkapp)\.com\/app\/queryBalanceAndBonus, requires-body=false, script-path=https://raw.githubusercontent.com/Linsars/Surge/main/JS/egern-pingmeCK.js, timeout=120
+
+# PingMe 定时签到
+PMCheckIn = type=cron, cronexp="{{{PingMe签到时间}}}", script-path=https://raw.githubusercontent.com/Linsars/Surge/main/JS/egern-pingme.js, timeout=120
+
+# WeTalk 定时签到
+WTCheckIn = type=cron, cronexp="{{{WeTalk签到时间}}}", script-path=https://raw.githubusercontent.com/Linsars/Surge/main/JS/egern-pingme.js, timeout=120
 
 [MITM]
-hostname = %APPEND% api.pingmeapp.net
+hostname = %APPEND% api.pingmeapp.net, api.wetalkapp.com
