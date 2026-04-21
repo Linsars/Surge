@@ -1,23 +1,26 @@
-#!name=PingMe + WeTalk 双应用签到
+#!name=PingMe + WeTalk 双应用签到（Egern）
 #!author=Linsar
 #!date=2026-04-21
 #!desc=同时支持 PingMe 和 WeTalk 的多账号自动签到、视频奖励、Cookie 抓取
-#!arguments=PingMe签到时间:1 0 * * *,WeTalk签到时间:20 8,20 * * *,开启Cookie抓取:true
-#!arguments-desc=PingMe签到时间: 默认每天凌晨1点执行，可自定义cron表达式；WeTalk签到时间: 默认每天8点20分和20点20分执行；开启Cookie抓取: true为打开，false为关闭
+#!arguments=PingMe签到时间:1 0 * * *,WeTalk签到时间:20 8,20 * * *
 
-开启Cookie抓取说明
-- true: 打开后访问 PingMe/WeTalk 个人主页可自动抓取 Cookie。抓到后请关闭
-- false: 关闭抓取
+使用说明：
+1. 首次使用：在 Egern 中导入此模块并启用
+2. 抓取 Cookie：打开 PingMe/WeTalk 应用，进入个人主页触发请求
+3. 自动签到：脚本会在设定的时间自动执行
 
 [Script]
-# PingMe + WeTalk Cookie 抓取
-DualCapture = type=http-request, pattern=^https:\/\/api\.(pingmeapp|wetalkapp)\.com\/app\/queryBalanceAndBonus, requires-body=false, script-path=https://raw.githubusercontent.com/Linsars/Surge/main/JS/egern-pingmeCK.js, timeout=120
+# PingMe Cookie 抓取
+Capture = type=http-request, pattern=^https:\/\/api\.pingmeapp\.net\/app\/queryBalanceAndBonus, requires-body=false, script-path=https://raw.githubusercontent.com/Linsars/Surge/main/JS/egern-pingmeCK.js, timeout=120
+
+# WeTalk Cookie 抓取
+WT_Capture = type=http-request, pattern=^https:\/\/api\.wetalkapp\.com\/app\/queryBalanceAndBonus, requires-body=false, script-path=https://raw.githubusercontent.com/Linsars/Surge/main/JS/egern-wetalkCK.js, timeout=120
 
 # PingMe 定时签到
-PMCheckIn = type=cron, cronexp="{{{PingMe签到时间}}}", script-path=https://raw.githubusercontent.com/Linsars/Surge/main/JS/egern-pingme.js, timeout=120
+PM_Task = type=cron, cronexp="{{{PingMe签到时间}}}", script-path=https://raw.githubusercontent.com/Linsars/Surge/main/JS/egern-pingme.js, timeout=120
 
 # WeTalk 定时签到
-WTCheckIn = type=cron, cronexp="{{{WeTalk签到时间}}}", script-path=https://raw.githubusercontent.com/Linsars/Surge/main/JS/egern-pingme.js, timeout=120
+WT_Task = type=cron, cronexp="{{{WeTalk签到时间}}}", script-path=https://raw.githubusercontent.com/Linsars/Surge/main/JS/egern-wetalk.js, timeout=120
 
 [MITM]
 hostname = %APPEND% api.pingmeapp.net, api.wetalkapp.com
