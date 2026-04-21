@@ -1,27 +1,16 @@
+//2026/04/21
 /*
-@Name：PingMe + WeTalk 多账号签到
-@Author：Linsar
-@Date：2026-04-21
-@Desc：同时执行 PingMe 和 WeTalk 的多账号签到、视频奖励
+@Name：PingMe 多账号签到（Egern 适配）
+@Author：Linsar 改自 怎么肥事
+@Desc：支持多账号签到、视频奖励
 */
 
+const scriptName = 'PingMe';
+const storeKey = 'pingme_accounts_v1';
 const SECRET = '0fOiukQq7jXZV2GRi9LGlO';
 const MAX_VIDEO = 5;
 const VIDEO_DELAY = 8000;
 const ACCOUNT_GAP = 3500;
-
-const APPS = {
-  pingme: {
-    name: 'PingMe',
-    storeKey: 'pingme_accounts_v1',
-    apiHost: 'api.pingmeapp.net'
-  },
-  wetalk: {
-    name: 'WeTalk',
-    storeKey: 'wetalk_accounts_v1',
-    apiHost: 'api.wetalkapp.com'
-  }
-};
 
 const IOS_VERSIONS = ['17.5.1','17.6.1','17.4.1','17.2.1','16.7.8','17.6','17.3.1','18.0.1','17.1.2','16.6.1'];
 const IOS_SCALES = ['2.00','3.00','3.00','2.00','3.00'];
@@ -108,14 +97,8 @@ function getUTCSignDate() {
   return `${now.getUTCFullYear()}-${pad(now.getUTCMonth()+1)}-${pad(now.getUTCDate())} ${pad(now.getUTCHours())}:${pad(now.getUTCMinutes())}:${pad(now.getUTCSeconds())}`;
 }
 
-function normalizeHeaderNameMap(headers) {
-  const out = {};
-  Object.keys(headers || {}).forEach(k => out[k] = headers[k]);
-  return out;
-}
-
-function loadStore(storeKey) {
-  const raw = $prefs.valueForKey(storeKey);
+function loadStore() {
+  const raw = $persistentStore.read(storeKey);
   if (!raw) return { version: 1, accounts: {}, order: [] };
   try {
     const obj = JSON.parse(raw);
@@ -131,7 +114,7 @@ function pickItem(arr, seed) {
   return arr[seed % arr.length];
 }
 
-function buildUA(baseUA, seed, appType) {
+function buildUA(baseUA, seed) {
   const iosVer = pickItem(IOS_VERSIONS, seed);
   const scale = pickItem(IOS_SCALES, seed + 1);
   const model = pickItem(IPHONE_MODELS, seed + 2);
@@ -147,12 +130,7 @@ function buildUA(baseUA, seed, appType) {
     if (/Darwin\/[\d.]+/.test(ua)) { ua = ua.replace(/Darwin\/[\d.]+/, `Darwin/${darwin}`); changed = true; }
     if (changed) return ua;
   }
-  // 根据应用类型返回不同的默认 UA
-  if (appType === 'wetalk') {
-    return `WeTalk/30.6.0 (com.innovationworks.wetalk; build:28; iOS ${iosVer}) Alamofire/5.4.3`;
-  } else {
-    return `PingMe/1.0.0 (${model}; iOS ${iosVer}; Scale/${scale}) CFNetwork/${cfn} Darwin/${darwin}`;
-  }
+  return `PingMe/1.0.0 (${model}; iOS ${iosVer}; Scale/${scale}) CFNetwork/${cfn} Darwin/${darwin}`;
 }
 
 function buildSignedParamsRaw(capture) {
@@ -166,10 +144,10 @@ function buildSignedParamsRaw(capture) {
   return params;
 }
 
-function buildUrl(path, capture, apiHost) {
+function buildUrl(path, capture) {
   const params = buildSignedParamsRaw(capture);
   const qs = Object.keys(params).map(k => `${k}=${encodeURIComponent(params[k])}`).join('&');
-  return `https://${apiHost}/app/${path}?${qs}`;
+  return `https://api.pingmeapp.net/app/${path}?${qs}`;
 }
 
 function cloneHeaders(headers) {
@@ -178,11 +156,11 @@ function cloneHeaders(headers) {
   return out;
 }
 
-function buildHeaders(capture, ua, apiHost) {
+function buildHeaders(capture, ua) {
   const headers = cloneHeaders(capture.headers || {});
   delete headers['Content-Length']; delete headers['content-length'];
   delete headers[':authority']; delete headers[':method']; delete headers[':path']; delete headers[':scheme'];
-  headers['Host'] = apiHost;
+  headers['Host'] = 'api.pingmeapp.net';
   headers['Accept'] = headers['Accept'] || 'application/json';
   Object.keys(headers).forEach(k => { if (k.toLowerCase() === 'user-agent') delete headers[k]; });
   headers['User-Agent'] = ua;
@@ -190,21 +168,21 @@ function buildHeaders(capture, ua, apiHost) {
 }
 
 function notify(title, body) {
-  $notify('DualCheckIn', title, body);
+  $notification.post(scriptName, title, body);
 }
 
 function sleep(ms) {
   return new Promise(r => setTimeout(r, ms));
 }
 
-function runAccount(acc, index, total, app, appType) {
-  const tag = `[${app.name} ${index+1}/${total} ${acc.alias || acc.id}]`;
-  const ua = buildUA(acc.baseUA, acc.uaSeed, appType);
-  const headers = buildHeaders(acc.capture, ua, app.apiHost);
+function runAccount(acc, index, total) {
+  const tag = `[账号${index+1}/${total} ${acc.alias || acc.id}]`;
+  const ua = buildUA(acc.baseUA, acc.uaSeed);
+  const headers = buildHeaders(acc.capture, ua);
   const msgs = [tag];
 
   function fetchApi(path) {
-    return $task.fetch({ url: buildUrl(path, acc.capture, app.apiHost), method: 'GET', headers });
+    return $task.fetch({ url: buildUrl(path, acc.capture), method: 'GET', headers });
   }
 
   function doVideoLoop(count) {
@@ -264,34 +242,25 @@ function runAccount(acc, index, total, app, appType) {
   });
 }
 
-async function startTasks() {
-  const results = [];
-  
-  for (const [appType, app] of Object.entries(APPS)) {
-    const store = loadStore(app.storeKey);
-    const ids = store.order.filter(id => store.accounts[id]);
-    
-    if (!ids.length) {
-      results.push(`⚠️ ${app.name}：未抓到任何账号`);
-      continue;
-    }
-    
-    const total = ids.length;
-    let chain = Promise.resolve();
-    const appResults = [];
-    
-    ids.forEach((id, idx) => {
-      chain = chain.then(() => runAccount(store.accounts[id], idx, total, app, appType))
-        .then(text => { appResults.push(text); })
-        .then(() => idx < ids.length - 1 ? sleep(ACCOUNT_GAP) : null);
-    });
-    
-    await chain;
-    results.push(appResults.join('\n'));
-  }
-  
-  notify(`🎉 双应用签到完成`, results.join('\n\n———\n\n'));
+const store = loadStore();
+const ids = store.order.filter(id => store.accounts[id]);
+if (!ids.length) {
+  notify('⚠️ 未抓到任何账号', '请先打开 PingMe 触发抓包');
   $done();
+} else {
+  const total = ids.length;
+  const results = [];
+  let chain = Promise.resolve();
+  ids.forEach((id, idx) => {
+    chain = chain.then(() => runAccount(store.accounts[id], idx, total))
+      .then(text => { results.push(text); })
+      .then(() => idx < ids.length - 1 ? sleep(ACCOUNT_GAP) : null);
+  });
+  chain.then(() => {
+    notify(`🎉 全部完成 (${total}个账号)`, results.join('\n———\n'));
+    $done();
+  }).catch(err => {
+    notify('❌ 任务异常', results.join('\n———\n') + '\n' + (err.error || String(err)));
+    $done();
+  });
 }
-
-startTasks();
