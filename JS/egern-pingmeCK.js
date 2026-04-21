@@ -1,26 +1,13 @@
+//2026/04/21
 /*
-@Name：PingMe + WeTalk Cookie 抓取
-@Author：Linsar
-@Date：2026-04-21
-@Desc：同时支持 PingMe 和 WeTalk 的 Cookie 自动抓取
+@Name：PingMe Cookie 抓取（Egern 适配）
+@Author：Linsar 改自 怎么肥事
+@Desc：多账号支持，自动识别并保存
 */
 
+const scriptName = 'PingMe';
+const storeKey = 'pingme_accounts_v1';
 const SECRET = '0fOiukQq7jXZV2GRi9LGlO';
-
-const APPS = {
-  pingme: {
-    name: 'PingMe',
-    storeKey: 'pingme_accounts_v1',
-    apiHost: 'api.pingmeapp.net',
-    captureUrl: '/app/queryBalanceAndBonus'
-  },
-  wetalk: {
-    name: 'WeTalk',
-    storeKey: 'wetalk_accounts_v1',
-    apiHost: 'api.wetalkapp.com',
-    captureUrl: '/app/queryBalanceAndBonus'
-  }
-};
 
 function MD5(string) {
   function RotateLeft(lValue, iShiftBits) { return (lValue << iShiftBits) | (lValue >>> (32 - iShiftBits)); }
@@ -95,6 +82,12 @@ function MD5(string) {
   return (WordToHex(a) + WordToHex(b) + WordToHex(c) + WordToHex(d)).toLowerCase();
 }
 
+function normalizeHeaderNameMap(headers) {
+  const out = {};
+  Object.keys(headers || {}).forEach(k => out[k] = headers[k]);
+  return out;
+}
+
 function parseRawQuery(url) {
   const query = (url.split('?')[1] || '').split('#')[0];
   const rawMap = {};
@@ -115,14 +108,8 @@ function fingerprintOf(paramsRaw) {
   return MD5(base).slice(0, 12);
 }
 
-function normalizeHeaderNameMap(headers) {
-  const out = {};
-  Object.keys(headers || {}).forEach(k => out[k] = headers[k]);
-  return out;
-}
-
-function loadStore(storeKey) {
-  const raw = $prefs.valueForKey(storeKey);
+function loadStore() {
+  const raw = $persistentStore.read(storeKey);
   if (!raw) return { version: 1, accounts: {}, order: [] };
   try {
     const obj = JSON.parse(raw);
@@ -134,54 +121,39 @@ function loadStore(storeKey) {
   }
 }
 
-function saveStore(store, storeKey) {
-  $prefs.setValueForKey(JSON.stringify(store), storeKey);
+function saveStore(store) {
+  $persistentStore.write(JSON.stringify(store), storeKey);
 }
 
 function notify(title, body) {
-  $notify('DualCheckIn', title, body);
+  $notification.post(scriptName, title, body);
 }
 
-// 识别应用类型
-function detectApp() {
-  const url = $request.url;
-  if (url.includes('api.pingmeapp.net')) return 'pingme';
-  if (url.includes('api.wetalkapp.com')) return 'wetalk';
-  return null;
-}
+const paramsRaw = parseRawQuery($request.url);
+const headersMap = normalizeHeaderNameMap($request.headers || {});
+let baseUA = '';
+Object.keys(headersMap).forEach(k => { if (k.toLowerCase() === 'user-agent') baseUA = headersMap[k]; });
 
-// 主逻辑
-const appType = detectApp();
-if (!appType) {
-  $done({});
-} else {
-  const app = APPS[appType];
-  const paramsRaw = parseRawQuery($request.url);
-  const headersMap = normalizeHeaderNameMap($request.headers || {});
-  let baseUA = '';
-  Object.keys(headersMap).forEach(k => { if (k.toLowerCase() === 'user-agent') baseUA = headersMap[k]; });
+const store = loadStore();
+const fp = fingerprintOf(paramsRaw);
+const now = Date.now();
+const existed = !!store.accounts[fp];
+const uaSeed = existed ? store.accounts[fp].uaSeed : store.order.length;
+const alias = existed ? store.accounts[fp].alias : `账号${store.order.length + 1}`;
 
-  const store = loadStore(app.storeKey);
-  const fp = fingerprintOf(paramsRaw);
-  const now = Date.now();
-  const existed = !!store.accounts[fp];
-  const uaSeed = existed ? store.accounts[fp].uaSeed : store.order.length;
-  const alias = existed ? store.accounts[fp].alias : `账号${store.order.length + 1}`;
+store.accounts[fp] = {
+  id: fp,
+  alias,
+  uaSeed,
+  baseUA,
+  capture: { url: $request.url, paramsRaw, headers: headersMap },
+  createdAt: existed ? store.accounts[fp].createdAt : now,
+  updatedAt: now
+};
+if (!existed) store.order.push(fp);
+saveStore(store);
 
-  store.accounts[fp] = {
-    id: fp,
-    alias,
-    uaSeed,
-    baseUA,
-    capture: { url: $request.url, paramsRaw, headers: headersMap },
-    createdAt: existed ? store.accounts[fp].createdAt : now,
-    updatedAt: now
-  };
-  if (!existed) store.order.push(fp);
-  saveStore(store, app.storeKey);
-
-  const total = store.order.length;
-  notify(existed ? '🔄 ' + app.name + ' 账号已更新' : '✅ ' + app.name + ' 新账号已入库', `${alias}（id:${fp}）\n当前账号总数：${total}`);
-  console.log(`【${app.name}】${existed ? 'update' : 'add'} account ${fp}`);
-  $done({});
-}
+const total = store.order.length;
+notify(existed ? '🔄 账号参数已更新' : '✅ 新账号已入库', `${alias}（id:${fp}）\n当前账号总数：${total}`);
+console.log(`【${scriptName}】${existed ? 'update' : 'add'} account ${fp}`);
+$done({});
