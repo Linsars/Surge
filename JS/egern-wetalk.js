@@ -97,11 +97,15 @@ function getUTCSignDate() {
   return `${now.getUTCFullYear()}-${pad(now.getUTCMonth()+1)}-${pad(now.getUTCDate())} ${pad(now.getUTCHours())}:${pad(now.getUTCMinutes())}:${pad(now.getUTCSeconds())}`;
 }
 
+console.log("【WeTalk签到】loadStore 开始执行");
 function loadStore() {
   const raw = $persistentStore.read(storeKey);
+  console.log("【WeTalk签到】读取原始数据长度:", raw ? raw.length : "null");
   if (!raw) return { version: 1, accounts: {}, order: [] };
   try {
     const obj = JSON.parse(raw);
+    console.log("【WeTalk签到】解析后 obj 类型:", Array.isArray(obj) ? "数组" : typeof obj);
+    console.log("【WeTalk签到】obj 内容:", JSON.stringify(obj).substring(0, 200));
     
     // 兼容旧格式（数组）：自动转换为新格式（对象）
     if (Array.isArray(obj)) {
