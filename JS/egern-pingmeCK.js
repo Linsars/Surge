@@ -1,8 +1,8 @@
-// 2026/04/22-1030
+// 2026/04/22 Egern 最终完整版 - PingMe CK 抓取（解决 Cookie 长度0 + UNHANDLED ERROR）
 /*
-@Name：PingMe Token 抓取
+@Name：PingMe Cookie/Token 抓取（Egern 适配）
 @Author：Linsar
-@Desc：从 URL 参数 + Headers 中提取 token，多账号支持，强日志防截断
+@Desc：从 Headers + URL 参数提取，多账号，强日志，防截断
 */
 
 const scriptName = 'PingMe';
@@ -10,28 +10,30 @@ const storeKey = 'pingme_accounts_v1';
 
 const $ = new Env(scriptName);
 
-$.log(`\n=== ${scriptName} Token 抓取开始 ===`);
+$.log(`\n=== ${scriptName} Cookie/Token 抓取开始 ===`);
 
 const req = $request || {};
-$.log(`请求 URL: ${req.url || '无URL'}`);
+$.log(`请求 URL: ${req.url || '无'}`);
 
 const headers = req.headers || {};
 $.log(`请求头键名: ${Object.keys(headers).join(', ')}`);
 
+let cookie = headers['Cookie'] || headers['cookie'] || headers['COOKIE'] || '';
+let ua = headers['User-Agent'] || headers['user-agent'] || '';
+
+$.log(`Cookie 原始长度: ${cookie.length}`);
+$.log(`User-Agent 长度: ${ua.length}`);
+
 let token = '';
 let userId = '';
 
-// 1. 从 Headers Cookie 尝试提取
-let cookie = headers['Cookie'] || headers['cookie'] || headers['COOKIE'] || '';
+// 从 Cookie 提取
 if (cookie) {
   const tokenMatch = cookie.match(/token=([^;]+)/i);
-  if (tokenMatch) {
-    token = tokenMatch[1];
-    $.log(`从 Cookie 中提取到 token`);
-  }
+  if (tokenMatch) token = tokenMatch[1];
 }
 
-// 2. 从 URL 查询参数中提取（你当前请求的主要方式）
+// 从 URL 参数提取（你的 queryBalanceAndBonus 请求主要在这里）
 if (!token && req.url) {
   const url = req.url;
   const tokenMatch = url.match(/token=([^&]+)/i);
@@ -41,29 +43,30 @@ if (!token && req.url) {
   }
 }
 
-// 3. 尝试其他可能参数（callpin、sign 等）
-if (!token && req.url) {
-  const callpinMatch = req.url.match(/callpin=([^&]+)/i);
-  if (callpinMatch) $.log(`发现 callpin: ${callpinMatch[1]}`);
+// 其他参数
+if (req.url) {
+  const emailMatch = req.url.match(/email=([^&]+)/i);
+  if (emailMatch) userId = decodeURIComponent(emailMatch[1]);
+  const uidMatch = req.url.match(/userId=([^&]+)/i) || req.url.match(/uid=([^&]+)/i);
+  if (uidMatch && !userId) userId = uidMatch[1];
 }
-
-const emailMatch = req.url ? req.url.match(/email=([^&]+)/i) : null;
-if (emailMatch) userId = decodeURIComponent(emailMatch[1]);
 
 if (!token) {
   $.log(`❌ 未找到 token`);
-  $.log(`URL 参数预览: ${req.url && req.url.includes('?') ? req.url.split('?')[1].substring(0, 400) : '无参数'}`);
+  $.log(`建议：1. 确认 MITM 已添加 api.pingmeapp.net`);
+  $.log(`2. rewrite 规则加上 requires-body=1`);
+  $.log(`3. 重新登录 App 并进入余额/首页触发请求`);
+  $.log(`URL 参数预览: ${req.url && req.url.includes('?') ? req.url.split('?')[1].substring(0, 300) : '无'}`);
   $.done();
 }
 
-$.log(`✅ 提取成功！`);
+$.log(`✅ 提取成功！Token 长度: ${token.length}`);
 $.log(`用户标识: ${userId || 'unknown'}`);
-$.log(`Token 长度: ${token.length}`);
 
 const account = {
   userId: userId || 'unknown_' + Date.now(),
   token: token,
-  ua: (headers['User-Agent'] || '').substring(0, 300),
+  ua: ua.substring(0, 300),
   time: new Date().toISOString()
 };
 
