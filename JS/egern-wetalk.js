@@ -1,16 +1,11 @@
-//2026/04/21
-/*
-@Name：WeTalk 多账号签到（Egern 适配）
-@Author：Linsar 改自 ZenMoFiShi
-@Desc：支持多账号签到、视频奖励
-*/
-
+//2026/04/22
 const scriptName = 'WeTalk';
 const storeKey = 'wetalk_accounts_v1';
 const SECRET = '0fOiukQq7jXZV2GRi9LGlO';
 const MAX_VIDEO = 5;
 const VIDEO_DELAY = 8000;
 const ACCOUNT_GAP = 3500;
+const REQUEST_TIMEOUT = 15000;
 
 const IOS_VERSIONS = ['17.5.1','17.6.1','17.4.1','17.2.1','16.7.8','17.6','17.3.1','18.0.1','17.1.2','16.6.1'];
 const IOS_SCALES = ['2.00','3.00','3.00','2.00','3.00'];
@@ -97,19 +92,12 @@ function getUTCSignDate() {
   return `${now.getUTCFullYear()}-${pad(now.getUTCMonth()+1)}-${pad(now.getUTCDate())} ${pad(now.getUTCHours())}:${pad(now.getUTCMinutes())}:${pad(now.getUTCSeconds())}`;
 }
 
-console.log("【WeTalk签到】loadStore 开始执行");
 function loadStore() {
   const raw = $persistentStore.read(storeKey);
-  console.log("【WeTalk签到】读取原始数据长度:", raw ? raw.length : "null");
   if (!raw) return { version: 1, accounts: {}, order: [] };
   try {
     const obj = JSON.parse(raw);
-    console.log("【WeTalk签到】解析后 obj 类型:", Array.isArray(obj) ? "数组" : typeof obj);
-    console.log("【WeTalk签到】obj 内容:", JSON.stringify(obj).substring(0, 200));
-    
-    // 兼容旧格式（数组）：自动转换为新格式（对象）
     if (Array.isArray(obj)) {
-      console.log("【WeTalk签到】检测到旧格式数据（数组），自动转换...");
       const newStore = { version: 1, accounts: {}, order: [] };
       obj.forEach((acc, idx) => {
         const fp = `legacy_${idx}`;
@@ -126,13 +114,10 @@ function loadStore() {
       });
       return newStore;
     }
-    
-    // 新格式（对象）
     if (!obj.accounts) obj.accounts = {};
     if (!Array.isArray(obj.order)) obj.order = Object.keys(obj.accounts);
     return obj;
   } catch (e) {
-    console.log("【WeTalk签到】loadStore 异常:", e.message);
     return { version: 1, accounts: {}, order: [] };
   }
 }
@@ -194,8 +179,14 @@ function sleep(ms) {
   return new Promise(r => setTimeout(r, ms));
 }
 
+function withTimeout(promise, ms) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms))
+  ]);
+}
+
 function runAccount(acc, index, total) {
-  console.log("【WeTalk签到】runAccount 开始，账号:", acc.id || "unknown");
   const tag = `[账号${index+1}/${total} ${acc.alias || acc.id}]`;
   const ua = buildUA(acc.baseUA, acc.uaSeed);
   const headers = buildHeaders(acc.capture, ua);
@@ -203,20 +194,18 @@ function runAccount(acc, index, total) {
 
   function fetchApi(path) {
     const url = buildUrl(path, acc.capture);
-    console.log("【WeTalk签到】fetchApi 调用:", path);
-    console.log("【WeTalk签到】请求 URL:", url);
-    console.log("【WeTalk签到】请求 headers:", JSON.stringify(headers).substring(0, 200));
-    
-    return $task.fetch({ url, method: 'GET', headers })
-      .then(res => {
-        console.log("【WeTalk签到】API 响应 [" + path + "] 状态:", res.statusCode);
-        console.log("【WeTalk签到】API 响应 [" + path + "] body:", res.body ? res.body.substring(0, 300) : "empty");
-        return res;
-      })
-      .catch(err => {
-        console.log("【WeTalk签到】API 请求 [" + path + "] 失败:", err.error || String(err));
-        throw err;
-      });
+    return withTimeout(
+      new Promise((resolve, reject) => {
+        $httpClient.get({ url, headers }, (err, resp, data) => {
+          if (err) {
+            reject(new Error(err));
+            return;
+          }
+          resolve({ statusCode: resp.status, body: data });
+        });
+      }),
+      REQUEST_TIMEOUT
+    );
   }
 
   function doVideoLoop(count) {
@@ -227,8 +216,6 @@ function runAccount(acc, index, total) {
         setTimeout(() => {
           i++;
           fetchApi('videoBonus').then(res => {
-    console.log("【WeTalk签到】API 响应状态:", res.statusCode, "长度:", res.body ? res.body.length : 0);
-    console.log("【WeTalk签到】API 响应体:", res.body ? res.body.substring(0, 300) : "empty");
             try {
               const d = JSON.parse(res.body);
               if (d.retcode === 0) {
@@ -243,7 +230,7 @@ function runAccount(acc, index, total) {
               resolve();
             }
           }).catch(err => {
-            msgs.push(`❌ 视频${i}：${err.error || '请求失败'}`);
+            msgs.push(`❌ 视频${i}：${err.message}`);
             resolve();
           });
         }, i === 0 ? 1500 : VIDEO_DELAY);
@@ -253,8 +240,6 @@ function runAccount(acc, index, total) {
   }
 
   return fetchApi('queryBalanceAndBonus').then(res => {
-    console.log("【WeTalk签到】API 响应状态:", res.statusCode, "长度:", res.body ? res.body.length : 0);
-    console.log("【WeTalk签到】API 响应体:", res.body ? res.body.substring(0, 300) : "empty");
     try {
       const d = JSON.parse(res.body);
       if (d.retcode === 0) msgs.push(`💰 余额：${d.result.balance} Coins`);
@@ -262,8 +247,6 @@ function runAccount(acc, index, total) {
     } catch (e) { msgs.push('❌ 查询：解析失败'); }
     return fetchApi('checkIn');
   }).then(res => {
-    console.log("【WeTalk签到】API 响应状态:", res.statusCode, "长度:", res.body ? res.body.length : 0);
-    console.log("【WeTalk签到】API 响应体:", res.body ? res.body.substring(0, 300) : "empty");
     try {
       const d = JSON.parse(res.body);
       if (d.retcode === 0) msgs.push(`✅ 签到：${(d.result?.bonusHint || d.retmsg || '').replace(/\n/g, ' ')}`);
@@ -271,15 +254,13 @@ function runAccount(acc, index, total) {
     } catch (e) { msgs.push('❌ 签到：解析失败'); }
     return doVideoLoop(MAX_VIDEO);
   }).then(() => fetchApi('queryBalanceAndBonus')).then(res => {
-    console.log("【WeTalk签到】API 响应状态:", res.statusCode, "长度:", res.body ? res.body.length : 0);
-    console.log("【WeTalk签到】API 响应体:", res.body ? res.body.substring(0, 300) : "empty");
     try {
       const d = JSON.parse(res.body);
       if (d.retcode === 0) msgs.push(`💰 最新余额：${d.result.balance} Coins`);
     } catch (e) {}
     return msgs.join('\n');
   }).catch(err => {
-    msgs.push(`❌ 异常：${err.error || String(err)}`);
+    msgs.push(`❌ 异常：${err.message}`);
     return msgs.join('\n');
   });
 }
@@ -302,7 +283,7 @@ if (!ids.length) {
     notify(`🎉 全部完成 (${total}个账号)`, results.join('\n———\n'));
     $done();
   }).catch(err => {
-    notify('❌ 任务异常', results.join('\n———\n') + '\n' + (err.error || String(err)));
+    notify('❌ 任务异常', results.join('\n———\n') + '\n' + err.message);
     $done();
   });
 }
