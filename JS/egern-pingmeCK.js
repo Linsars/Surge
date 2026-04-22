@@ -1,4 +1,4 @@
-//2026/04/21
+// 2026/04/22
 /*
 @Name：PingMe Cookie 抓取（Egern 适配）
 @Author：Linsar 改自 怎么肥事
@@ -77,83 +77,86 @@ function MD5(string) {
     a = II(a,b,c,d,x[k+12],S41,0x655B59C3); d = II(d,a,b,c,x[k+3],S42,0x8F0CCC92); c = II(c,d,a,b,x[k+10],S43,0xFFEFF47D); b = II(b,c,d,a,x[k+1],S44,0x85845DD1);
     a = II(a,b,c,d,x[k+8],S41,0x6FA87E4F); d = II(d,a,b,c,x[k+15],S42,0xFE2CE6E0); c = II(c,d,a,b,x[k+6],S43,0xA3014314); b = II(b,c,d,a,x[k+13],S44,0x4E0811A1);
     a = II(a,b,c,d,x[k+4],S41,0xF7537E82); d = II(d,a,b,c,x[k+11],S42,0xBD3AF235); c = II(c,d,a,b,x[k+2],S43,0x2AD7D2BB); b = II(b,c,d,a,x[k+9],S44,0xEB86D391);
-    a = AddUnsigned(a,AA); b = AddUnsigned(b,BB); c = AddUnsigned(c,CC); d = AddUnsigned(d,DD);
+    a = AddUnsigned(a, AA); b = AddUnsigned(b, BB); c = AddUnsigned(c, CC); d = AddUnsigned(d, DD);
   }
-  return (WordToHex(a) + WordToHex(b) + WordToHex(c) + WordToHex(d)).toLowerCase();
+  return WordToHex(a) + WordToHex(b) + WordToHex(c) + WordToHex(d);
 }
 
-function normalizeHeaderNameMap(headers) {
-  const out = {};
-  Object.keys(headers || {}).forEach(k => out[k] = headers[k]);
-  return out;
+const $ = new Env(scriptName);
+
+$.log(`\n=== ${scriptName} Cookie 抓取开始 ===`);
+
+const req = $request || {};
+const headers = req.headers || {};
+
+let cookie = headers['Cookie'] || headers['cookie'] || '';
+let ua = headers['User-Agent'] || headers['user-agent'] || '';
+
+if (!cookie) {
+  $.log('❌ 未检测到 Cookie');
+  $.done();
 }
 
-function parseRawQuery(url) {
-  const query = (url.split('?')[1] || '').split('#')[0];
-  const rawMap = {};
-  query.split('&').forEach(pair => {
-    if (!pair) return;
-    const idx = pair.indexOf('=');
-    if (idx < 0) return;
-    const k = pair.slice(0, idx);
-    const v = pair.slice(idx + 1);
-    rawMap[k] = v;
-  });
-  return rawMap;
+const tokenMatch = cookie.match(/token=([^;]+)/);
+const userIdMatch = cookie.match(/userId=([^;]+)/) || cookie.match(/uid=([^;]+)/);
+
+if (!tokenMatch) {
+  $.log('❌ 未找到 token');
+  $.done();
 }
 
-function fingerprintOf(paramsRaw) {
-  const drop = { sign:1, signDate:1, timestamp:1, ts:1, nonce:1, random:1, reqTime:1, reqId:1, requestId:1 };
-  const base = Object.keys(paramsRaw || {}).filter(k => !drop[k]).sort().map(k => `${k}=${paramsRaw[k]}`).join('&');
-  return MD5(base).slice(0, 12);
-}
+const token = tokenMatch[1];
+const userId = userIdMatch ? userIdMatch[1] : 'unknown_' + Date.now();
 
-function loadStore() {
-  const raw = $persistentStore.read(storeKey);
-  if (!raw) return { version: 1, accounts: {}, order: [] };
-  try {
-    const obj = JSON.parse(raw);
-    if (!obj.accounts) obj.accounts = {};
-    if (!Array.isArray(obj.order)) obj.order = Object.keys(obj.accounts);
-    return obj;
-  } catch (e) {
-    return { version: 1, accounts: {}, order: [] };
-  }
-}
-
-function saveStore(store) {
-  $persistentStore.write(JSON.stringify(store), storeKey);
-}
-
-function notify(title, body) {
-  $notification.post(scriptName, title, body);
-}
-
-const paramsRaw = parseRawQuery($request.url);
-const headersMap = normalizeHeaderNameMap($request.headers || {});
-let baseUA = '';
-Object.keys(headersMap).forEach(k => { if (k.toLowerCase() === 'user-agent') baseUA = headersMap[k]; });
-
-const store = loadStore();
-const fp = fingerprintOf(paramsRaw);
-const now = Date.now();
-const existed = !!store.accounts[fp];
-const uaSeed = existed ? store.accounts[fp].uaSeed : store.order.length;
-const alias = existed ? store.accounts[fp].alias : `账号${store.order.length + 1}`;
-
-store.accounts[fp] = {
-  id: fp,
-  alias,
-  uaSeed,
-  baseUA,
-  capture: { url: $request.url, paramsRaw, headers: headersMap },
-  createdAt: existed ? store.accounts[fp].createdAt : now,
-  updatedAt: now
+const account = {
+  userId: userId,
+  token: token,
+  ua: ua.substring(0, 200),
+  time: new Date().toISOString()
 };
-if (!existed) store.order.push(fp);
-saveStore(store);
 
-const total = store.order.length;
-notify(existed ? '🔄 账号参数已更新' : '✅ 新账号已入库', `${alias}（id:${fp}）\n当前账号总数：${total}`);
-console.log(`【${scriptName}】${existed ? 'update' : 'add'} account ${fp}`);
-$done({});
+let accounts = $.getVal(storeKey) ? JSON.parse($.getVal(storeKey)) : [];
+accounts = accounts.filter(acc => acc.userId !== userId);
+accounts.push(account);
+
+$.setVal(storeKey, JSON.stringify(accounts));
+
+$.log(`✅ 已成功保存账号，当前共 ${accounts.length} 个账号`);
+$.log(`用户ID: ${userId}`);
+
+$.done({ response: { status: 200, body: JSON.stringify({ code: 0, message: 'Cookie 保存成功' }) } });
+
+function Env(name) {
+  const isQX = typeof $task !== "undefined";
+  const isSurge = typeof $httpClient !== "undefined" && typeof $persistentStore !== "undefined";
+  const isNode = typeof module !== "undefined" && !!module.exports;
+
+  const $ = {};
+  $.name = name;
+  $.log = (msg) => console.log(`[${name}] ${msg}`);
+
+  $.getVal = (key) => {
+    if (isQX) return $prefs.valueForKey(key);
+    if (isSurge) return $persistentStore.read(key);
+    if (isNode) return process.env[key];
+    return null;
+  };
+
+  $.setVal = (key, val) => {
+    if (isQX) return $prefs.setValueForKey(val, key);
+    if (isSurge) return $persistentStore.write(val, key);
+    if (isNode) {
+      process.env[key] = val;
+      return true;
+    }
+    return false;
+  };
+
+  $.done = (obj = {}) => {
+    if (isQX) $done(obj);
+    else if (isSurge) $done(obj);
+    else if (isNode) console.log(JSON.stringify(obj));
+  };
+
+  return $;
+}
