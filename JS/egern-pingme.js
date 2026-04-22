@@ -203,11 +203,13 @@ function sleep(ms) {
 }
 
 function runAccount(acc, index, total) {
+  console.log("【PingMe签到】runAccount 开始，账号:", acc.id || "unknown");
   const tag = `[账号${index+1}/${total} ${acc.alias || acc.id}]`;
   const ua = buildUA(acc.baseUA, acc.uaSeed);
   const headers = buildHeaders(acc.capture, ua);
   const msgs = [tag];
 
+console.log("【PingMe签到】fetchApi 函数已定义");
   function fetchApi(path) {
     return $task.fetch({ url: buildUrl(path, acc.capture), method: 'GET', headers });
   }
@@ -243,6 +245,7 @@ function runAccount(acc, index, total) {
     return next();
   }
 
+  console.log("【PingMe签到】即将请求 queryBalanceAndBonus");
   return fetchApi('queryBalanceAndBonus').then(res => {
     try {
       const d = JSON.parse(res.body);
