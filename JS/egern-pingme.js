@@ -1,8 +1,8 @@
-//2026/04/22 修复版 - 适配简化的 Cookie 格式
+// 2026/04/22 正确版 - 用 callpin 重新生成签名
 /*
 @Name：PingMe 多账号签到（Egern 适配）
 @Author：Linsar
-@Desc：支持多账号签到、视频奖励，适配简化的 token 存储格式
+@Desc：支持多账号签到、视频奖励，用 callpin 重新生成签名
 */
 
 const scriptName = 'PingMe';
@@ -16,7 +16,6 @@ const IOS_VERSIONS = ['17.5.1','17.6.1','17.4.1','17.2.1','16.7.8','17.6','17.3.
 
 console.log('【PingMe签到】脚本开始执行');
 
-// 读取账号列表（简化格式：数组）
 function loadAccounts() {
   const raw = $persistentStore.read(storeKey);
   if (!raw) {
@@ -129,26 +128,33 @@ function sleep(ms) {
   return new Promise(r => setTimeout(r, ms));
 }
 
-// 执行单个账号签到
+// 用 callpin 重新生成签名
+function buildSignedParams(callpin) {
+  const signDate = getUTCSignDate();
+  const params = {
+    callpin: callpin,
+    signDate: signDate
+  };
+  const signBase = Object.keys(params).sort().map(k => `${k}=${params[k]}`).join('&');
+  params.sign = MD5(signBase + SECRET);
+  return params;
+}
+
+// 构建请求 URL
+function buildUrl(path, callpin) {
+  const params = buildSignedParams(callpin);
+  const qs = Object.keys(params).map(k => `${k}=${encodeURIComponent(params[k])}`).join('&');
+  return `https://api.pingmeapp.net/app/${path}?${qs}`;
+}
+
 function runAccount(acc, index, total) {
   const tag = `[账号${index+1}/${total} ${acc.userId}]`;
   const msgs = [tag];
   
   console.log('【PingMe签到】开始处理:', acc.userId);
 
-  function fetchApi(path, extraParams) {
-    const signDate = getUTCSignDate();
-    const params = {
-      token: acc.token,
-      signDate: signDate,
-      ...extraParams
-    };
-    const signBase = Object.keys(params).sort().map(k => `${k}=${params[k]}`).join('&');
-    params.sign = MD5(signBase + SECRET);
-    
-    const qs = Object.keys(params).map(k => `${k}=${encodeURIComponent(params[k])}`).join('&');
-    const url = `https://api.pingmeapp.net/app/${path}?${qs}`;
-    
+  function fetchApi(path) {
+    const url = buildUrl(path, acc.callpin);
     const headers = {
       'Host': 'api.pingmeapp.net',
       'Accept': 'application/json',
@@ -166,7 +172,7 @@ function runAccount(acc, index, total) {
       return new Promise(resolve => {
         setTimeout(() => {
           i++;
-          fetchApi('videoBonus', {}).then(res => {
+          fetchApi('videoBonus').then(res => {
             try {
               const d = JSON.parse(res.body);
               if (d.retcode === 0) {
@@ -190,13 +196,13 @@ function runAccount(acc, index, total) {
     return next();
   }
 
-  return fetchApi('queryBalanceAndBonus', {}).then(res => {
+  return fetchApi('queryBalanceAndBonus').then(res => {
     try {
       const d = JSON.parse(res.body);
       if (d.retcode === 0) msgs.push(`💰 余额：${d.result.balance} Coins`);
       else msgs.push(`⚠️ 查询：${d.retmsg}`);
     } catch (e) { msgs.push('❌ 查询：解析失败'); }
-    return fetchApi('checkIn', {});
+    return fetchApi('checkIn');
   }).then(res => {
     try {
       const d = JSON.parse(res.body);
@@ -204,7 +210,7 @@ function runAccount(acc, index, total) {
       else msgs.push(`⚠️ 签到：${d.retmsg}`);
     } catch (e) { msgs.push('❌ 签到：解析失败'); }
     return doVideoLoop(MAX_VIDEO);
-  }).then(() => fetchApi('queryBalanceAndBonus', {})).then(res => {
+  }).then(() => fetchApi('queryBalanceAndBonus')).then(res => {
     try {
       const d = JSON.parse(res.body);
       if (d.retcode === 0) msgs.push(`💰 最新余额：${d.result.balance} Coins`);
