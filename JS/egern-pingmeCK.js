@@ -45,6 +45,7 @@ if (req.url) {
 if (!token) {
   console.log('未找到 token');
   $.done();
+  return; // 关键：必须 return 才能真正终止执行
 }
 
 console.log('提取成功！Token 长度: ' + token.length);
@@ -61,7 +62,9 @@ let accounts = [];
 const saved = $.getVal(storeKey);
 if (saved) {
   try {
-    accounts = JSON.parse(saved);
+    const parsed = JSON.parse(saved);
+    // 确保是数组
+    accounts = Array.isArray(parsed) ? parsed : [];
     console.log('已存在账号数量: ' + accounts.length);
   } catch (e) {
     console.log('旧数据解析失败，新建列表');
