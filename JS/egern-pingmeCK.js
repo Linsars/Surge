@@ -1,8 +1,8 @@
-// 2026/04/22 修复版 - 检查写入返回值
+// 2026/04/22 正确版 - 提取 callpin 而不是 token
 /*
-@Name：PingMe Token 抓取（Egern 适配）
+@Name：PingMe 参数抓取（Egern 适配）
 @Author：Linsar
-@Desc：从 URL 参数提取 token，多账号，检查写入结果
+@Desc：从 URL 参数提取 callpin、sign、signDate，多账号
 */
 
 const scriptName = 'PingMe';
@@ -10,51 +10,46 @@ const storeKey = 'pingme_accounts_v1';
 
 const $ = new Env(scriptName);
 
-console.log('\n=== ' + scriptName + ' Token 抓取开始 ===');
+console.log('\n=== ' + scriptName + ' 参数抓取开始 ===');
 
 const req = $request || {};
-console.log('请求 URL: ' + (req.url || '无'));
+const url = req.url || '';
+console.log('请求 URL: ' + url.substring(0, 100) + '...');
 
 const headers = req.headers || {};
-console.log('请求头键名: ' + Object.keys(headers).join(', '));
-
-let cookie = headers['Cookie'] || headers['cookie'] || headers['COOKIE'] || '';
 let ua = headers['User-Agent'] || headers['user-agent'] || '';
 
-console.log('Cookie 原始长度: ' + cookie.length);
 console.log('User-Agent 长度: ' + ua.length);
 
-let token = '';
-let userId = '';
-
-// 从 URL 提取 token
-if (req.url) {
-  const tokenMatch = req.url.match(/token=([^&]+)/i);
-  if (tokenMatch) {
-    token = tokenMatch[1];
-    console.log('从 URL 参数中提取到 token');
-  }
+// 从 URL 提取参数
+function getParam(url, key) {
+  const match = url.match(new RegExp('[?&]' + key + '=([^&]+)'));
+  return match ? decodeURIComponent(match[1]) : '';
 }
 
-// 提取用户标识
-if (req.url) {
-  const emailMatch = req.url.match(/email=([^&]+)/i);
-  if (emailMatch) userId = decodeURIComponent(emailMatch[1]);
-}
+const callpin = getParam(url, 'callpin');
+const sign = getParam(url, 'sign');
+const signDate = getParam(url, 'signDate');
+const email = getParam(url, 'email');
 
-if (!token) {
-  console.log('未找到 token');
+console.log('提取到 callpin: ' + (callpin ? '✅' : '❌'));
+console.log('提取到 sign: ' + (sign ? '✅' : '❌'));
+console.log('提取到 signDate: ' + (signDate ? '✅' : '❌'));
+console.log('提取到 email: ' + (email ? '✅' : '❌'));
+
+if (!callpin || !sign) {
+  console.log('❌ 缺少必要参数 (callpin 或 sign)');
   $.done();
-  return; // 关键：必须 return 才能真正终止执行
+  return;
 }
-
-console.log('提取成功！Token 长度: ' + token.length);
-console.log('用户标识: ' + (userId || 'unknown'));
 
 const account = {
-  userId: userId || 'unknown_' + Date.now(),
-  token: token,
+  userId: email || 'unknown_' + Date.now(),
+  callpin: callpin,
+  sign: sign,
+  signDate: signDate,
   ua: ua.substring(0, 300),
+  url: url,
   time: new Date().toISOString()
 };
 
@@ -63,7 +58,6 @@ const saved = $.getVal(storeKey);
 if (saved) {
   try {
     const parsed = JSON.parse(saved);
-    // 确保是数组
     accounts = Array.isArray(parsed) ? parsed : [];
     console.log('已存在账号数量: ' + accounts.length);
   } catch (e) {
@@ -74,14 +68,13 @@ if (saved) {
   console.log('首次保存账号');
 }
 
-console.log('当前账号数量: ' + (accounts.length || 0));
-
+// 去重：如果 callpin 已存在则更新，否则新增
 accounts = accounts.filter(function(acc) {
-  return acc && acc.userId !== account.userId;
+  return acc && acc.callpin !== account.callpin;
 });
 accounts.push(account);
 
-// 关键修复：检查写入返回值
+// 写入存储
 const writeSuccess = $.setVal(storeKey, JSON.stringify(accounts));
 
 if (writeSuccess) {
@@ -89,7 +82,6 @@ if (writeSuccess) {
   console.log('本次保存用户: ' + account.userId);
 } else {
   console.log('❌ 保存失败！$persistentStore.write() 返回 false');
-  console.log('可能原因：存储空间不足、权限问题、或数据过大');
 }
 
 $.done();
