@@ -1,8 +1,8 @@
-// 2026/04/22
+// 2026/04/22 Egern 完整无截断修复版 - PingMe Cookie 抓取
 /*
 @Name：PingMe Cookie 抓取（Egern 适配）
 @Author：Linsar 改自 怎么肥事
-@Desc：多账号支持，自动识别并保存，增强日志输出
+@Desc：多账号支持，自动识别并保存，强日志 + Egern 兼容
 */
 
 const scriptName = 'PingMe';
@@ -89,30 +89,34 @@ $.log(`\n=== ${scriptName} Cookie 抓取开始 ===`);
 const req = $request || {};
 const headers = req.headers || {};
 
-let cookie = headers['Cookie'] || headers['cookie'] || '';
+let cookie = headers['Cookie'] || headers['cookie'] || headers['COOKIE'] || '';
 let ua = headers['User-Agent'] || headers['user-agent'] || '';
 
-$.log(`检测到请求头长度: ${Object.keys(headers).length}`);
-$.log(`Cookie 长度: ${cookie.length}`);
+$.log(`请求URL: ${req.url || '无'}`);
+$.log(`请求头键名: ${Object.keys(headers).join(', ')}`);
+$.log(`Cookie 原始长度: ${cookie.length}`);
+$.log(`User-Agent 长度: ${ua.length}`);
 
-if (!cookie) {
-  $.log(`❌ 未检测到 Cookie，请确认抓取规则是否正确触发`);
+if (cookie.length === 0) {
+  $.log(`❌ 未检测到 Cookie`);
+  $.log(`💡 请确认：1. MITM 已开启并添加 pingme 域名  2. rewrite 规则使用 requires-body=1  3. 重新登录 App 触发请求`);
   $.done();
 }
 
-const tokenMatch = cookie.match(/token=([^;]+)/);
-const userIdMatch = cookie.match(/userId=([^;]+)/) || cookie.match(/uid=([^;]+)/);
+const tokenMatch = cookie.match(/token=([^;]+)/i);
+const userIdMatch = cookie.match(/userId=([^;]+)/i) || cookie.match(/uid=([^;]+)/i);
 
 if (!tokenMatch) {
-  $.log(`❌ 未在 Cookie 中找到 token`);
+  $.log(`❌ Cookie 中未找到 token`);
+  $.log(`Cookie 前200字符: ${cookie.substring(0, 200)}`);
   $.done();
 }
 
 const token = tokenMatch[1];
 const userId = userIdMatch ? userIdMatch[1] : 'unknown_' + Date.now();
 
-$.log(`✅ 成功提取到 token（长度: ${token.length}）`);
-$.log(`✅ 用户ID: ${userId}`);
+$.log(`✅ 提取成功 - 用户ID: ${userId}`);
+$.log(`Token 长度: ${token.length}`);
 
 const account = {
   userId: userId,
@@ -126,9 +130,9 @@ const saved = $.getVal(storeKey);
 if (saved) {
   try {
     accounts = JSON.parse(saved);
-    $.log(`已存在 ${accounts.length} 个账号`);
+    $.log(`已存在账号数量: ${accounts.length}`);
   } catch (e) {
-    $.log(`旧数据解析失败，将新建列表`);
+    $.log(`旧数据解析失败，新建列表`);
     accounts = [];
   }
 }
@@ -138,10 +142,10 @@ accounts.push(account);
 
 $.setVal(storeKey, JSON.stringify(accounts));
 
-$.log(`🎉 Cookie 保存成功！当前共 ${accounts.length} 个 PingMe 账号`);
-$.log(`账号已更新，用户ID: ${userId}`);
+$.log(`🎉 Cookie 保存成功！当前总账号: ${accounts.length}`);
+$.log(`本次保存用户ID: ${userId}`);
 
-$.done({ response: { status: 200, body: JSON.stringify({ code: 0, message: 'Cookie 保存成功' }) } });
+$.done({ response: { status: 200, body: JSON.stringify({ code: 0, message: '保存成功' }) } });
 
 function Env(name) {
   const $ = {};
