@@ -1,8 +1,8 @@
-// 2026/04/22 正确版 - 用 callpin 重新生成签名
+//2026/04/21
 /*
 @Name：PingMe 多账号签到（Egern 适配）
-@Author：Linsar
-@Desc：支持多账号签到、视频奖励，用 callpin 重新生成签名
+@Author：Linsar 改自 怎么肥事
+@Desc：支持多账号签到、视频奖励
 */
 
 const scriptName = 'PingMe';
@@ -13,34 +13,10 @@ const VIDEO_DELAY = 8000;
 const ACCOUNT_GAP = 3500;
 
 const IOS_VERSIONS = ['17.5.1','17.6.1','17.4.1','17.2.1','16.7.8','17.6','17.3.1','18.0.1','17.1.2','16.6.1'];
-
-console.log('【PingMe签到】脚本开始执行');
-
-function loadAccounts() {
-  const raw = $persistentStore.read(storeKey);
-  if (!raw) {
-    console.log('【PingMe签到】未找到存储数据');
-    return [];
-  }
-  try {
-    const accounts = JSON.parse(raw);
-    console.log('【PingMe签到】读取到账号数量:', accounts.length);
-    return Array.isArray(accounts) ? accounts : [];
-  } catch (e) {
-    console.log('【PingMe签到】数据解析失败:', e.message);
-    return [];
-  }
-}
-
-function pickItem(arr, seed) {
-  return arr[seed % arr.length];
-}
-
-function getUTCSignDate() {
-  const now = new Date();
-  const pad = n => String(n).padStart(2, '0');
-  return `${now.getUTCFullYear()}-${pad(now.getUTCMonth()+1)}-${pad(now.getUTCDate())} ${pad(now.getUTCHours())}:${pad(now.getUTCMinutes())}:${pad(now.getUTCSeconds())}`;
-}
+const IOS_SCALES = ['2.00','3.00','3.00','2.00','3.00'];
+const IPHONE_MODELS = ['iPhone14,3','iPhone13,3','iPhone15,3','iPhone16,1','iPhone14,7','iPhone13,2','iPhone15,2','iPhone12,1'];
+const CFN_VERS = ['1410.0.3','1494.0.7','1568.100.1','1209.1','1474.0.4','1568.200.2'];
+const DARWIN_VERS = ['22.6.0','23.5.0','23.6.0','24.0.0','22.4.0'];
 
 function MD5(string) {
   function RotateLeft(lValue, iShiftBits) { return (lValue << iShiftBits) | (lValue >>> (32 - iShiftBits)); }
@@ -115,9 +91,103 @@ function MD5(string) {
   return (WordToHex(a) + WordToHex(b) + WordToHex(c) + WordToHex(d)).toLowerCase();
 }
 
-function buildUA(seed) {
+function getUTCSignDate() {
+  const now = new Date();
+  const pad = n => String(n).padStart(2, '0');
+  return `${now.getUTCFullYear()}-${pad(now.getUTCMonth()+1)}-${pad(now.getUTCDate())} ${pad(now.getUTCHours())}:${pad(now.getUTCMinutes())}:${pad(now.getUTCSeconds())}`;
+}
+
+function loadStore() {
+  const raw = $persistentStore.read(storeKey);
+  if (!raw) return { version: 1, accounts: {}, order: [] };
+  try {
+    const obj = JSON.parse(raw);
+    
+    // 兼容旧格式（数组）：自动转换为新格式（对象）
+    if (Array.isArray(obj)) {
+      console.log("【PingMe签到】检测到旧格式数据（数组），自动转换...");
+      const newStore = { version: 1, accounts: {}, order: [] };
+      obj.forEach((acc, idx) => {
+        const fp = `legacy_${idx}`;
+        newStore.accounts[fp] = {
+          id: fp,
+          alias: acc.userId || `账号${idx+1}`,
+          uaSeed: idx,
+          baseUA: acc.ua || "",
+          capture: { url: "", paramsRaw: {}, headers: {} },
+          createdAt: acc.time || Date.now(),
+          updatedAt: Date.now()
+        };
+        newStore.order.push(fp);
+      });
+      return newStore;
+    }
+    
+    // 新格式（对象）
+    if (!obj.accounts) obj.accounts = {};
+    if (!Array.isArray(obj.order)) obj.order = Object.keys(obj.accounts);
+    return obj;
+  } catch (e) {
+    console.log("【PingMe签到】loadStore 异常:", e.message);
+    return { version: 1, accounts: {}, order: [] };
+  }
+}
+
+function pickItem(arr, seed) {
+  return arr[seed % arr.length];
+}
+
+function buildUA(baseUA, seed) {
   const iosVer = pickItem(IOS_VERSIONS, seed);
-  return `PingMe/1.0.0 (iPhone14,3; iOS ${iosVer}; Scale/3.00) CFNetwork/1410.0.3 Darwin/22.6.0`;
+  const scale = pickItem(IOS_SCALES, seed + 1);
+  const model = pickItem(IPHONE_MODELS, seed + 2);
+  const cfn = pickItem(CFN_VERS, seed + 3);
+  const darwin = pickItem(DARWIN_VERS, seed + 4);
+  if (baseUA && typeof baseUA === 'string') {
+    let ua = baseUA;
+    let changed = false;
+    if (/iOS \d+(\.\d+){0,2}/.test(ua)) { ua = ua.replace(/iOS \d+(\.\d+){0,2}/, `iOS ${iosVer}`); changed = true; }
+    if (/Scale\/\d+(\.\d+)?/.test(ua)) { ua = ua.replace(/Scale\/\d+(\.\d+)?/, `Scale/${scale}`); changed = true; }
+    if (/iPhone\d+,\d+/.test(ua)) { ua = ua.replace(/iPhone\d+,\d+/, model); changed = true; }
+    if (/CFNetwork\/[\d.]+/.test(ua)) { ua = ua.replace(/CFNetwork\/[\d.]+/, `CFNetwork/${cfn}`); changed = true; }
+    if (/Darwin\/[\d.]+/.test(ua)) { ua = ua.replace(/Darwin\/[\d.]+/, `Darwin/${darwin}`); changed = true; }
+    if (changed) return ua;
+  }
+  return `PingMe/1.0.0 (${model}; iOS ${iosVer}; Scale/${scale}) CFNetwork/${cfn} Darwin/${darwin}`;
+}
+
+function buildSignedParamsRaw(capture) {
+  const params = {};
+  Object.keys(capture.paramsRaw || {}).forEach(k => {
+    if (k !== 'sign' && k !== 'signDate') params[k] = capture.paramsRaw[k];
+  });
+  params.signDate = getUTCSignDate();
+  const signBase = Object.keys(params).sort().map(k => `${k}=${params[k]}`).join('&');
+  params.sign = MD5(signBase + SECRET);
+  return params;
+}
+
+function buildUrl(path, capture) {
+  const params = buildSignedParamsRaw(capture);
+  const qs = Object.keys(params).map(k => `${k}=${encodeURIComponent(params[k])}`).join('&');
+  return `https://api.pingmeapp.net/app/${path}?${qs}`;
+}
+
+function cloneHeaders(headers) {
+  const out = {};
+  Object.keys(headers || {}).forEach(k => out[k] = headers[k]);
+  return out;
+}
+
+function buildHeaders(capture, ua) {
+  const headers = cloneHeaders(capture.headers || {});
+  delete headers['Content-Length']; delete headers['content-length'];
+  delete headers[':authority']; delete headers[':method']; delete headers[':path']; delete headers[':scheme'];
+  headers['Host'] = 'api.pingmeapp.net';
+  headers['Accept'] = headers['Accept'] || 'application/json';
+  Object.keys(headers).forEach(k => { if (k.toLowerCase() === 'user-agent') delete headers[k]; });
+  headers['User-Agent'] = ua;
+  return headers;
 }
 
 function notify(title, body) {
@@ -128,41 +198,14 @@ function sleep(ms) {
   return new Promise(r => setTimeout(r, ms));
 }
 
-// 用 callpin 重新生成签名
-function buildSignedParams(callpin) {
-  const signDate = getUTCSignDate();
-  const params = {
-    callpin: callpin,
-    signDate: signDate
-  };
-  const signBase = Object.keys(params).sort().map(k => `${k}=${params[k]}`).join('&');
-  params.sign = MD5(signBase + SECRET);
-  return params;
-}
-
-// 构建请求 URL
-function buildUrl(path, callpin) {
-  const params = buildSignedParams(callpin);
-  const qs = Object.keys(params).map(k => `${k}=${encodeURIComponent(params[k])}`).join('&');
-  return `https://api.pingmeapp.net/app/${path}?${qs}`;
-}
-
 function runAccount(acc, index, total) {
-  const tag = `[账号${index+1}/${total} ${acc.userId}]`;
+  const tag = `[账号${index+1}/${total} ${acc.alias || acc.id}]`;
+  const ua = buildUA(acc.baseUA, acc.uaSeed);
+  const headers = buildHeaders(acc.capture, ua);
   const msgs = [tag];
-  
-  console.log('【PingMe签到】开始处理:', acc.userId);
 
   function fetchApi(path) {
-    const url = buildUrl(path, acc.callpin);
-    const headers = {
-      'Host': 'api.pingmeapp.net',
-      'Accept': 'application/json',
-      'User-Agent': buildUA(index)
-    };
-    
-    console.log('【PingMe签到】请求:', path);
-    return $task.fetch({ url, method: 'GET', headers });
+    return $task.fetch({ url: buildUrl(path, acc.capture), method: 'GET', headers });
   }
 
   function doVideoLoop(count) {
@@ -187,7 +230,7 @@ function runAccount(acc, index, total) {
               resolve();
             }
           }).catch(err => {
-            msgs.push(`❌ 视频${i}：请求失败`);
+            msgs.push(`❌ 视频${i}：${err.error || '请求失败'}`);
             resolve();
           });
         }, i === 0 ? 1500 : VIDEO_DELAY);
@@ -222,30 +265,24 @@ function runAccount(acc, index, total) {
   });
 }
 
-// 主逻辑
-const accounts = loadAccounts();
-if (!accounts.length) {
-  console.log('【PingMe签到】未找到账号，发送通知');
+const store = loadStore();
+const ids = store.order.filter(id => store.accounts[id]);
+if (!ids.length) {
   notify('⚠️ 未抓到任何账号', '请先打开 PingMe 触发抓包');
   $done();
 } else {
-  console.log('【PingMe签到】开始执行签到，账号数:', accounts.length);
-  const total = accounts.length;
+  const total = ids.length;
   const results = [];
   let chain = Promise.resolve();
-  
-  accounts.forEach((acc, idx) => {
-    chain = chain.then(() => runAccount(acc, idx, total))
+  ids.forEach((id, idx) => {
+    chain = chain.then(() => runAccount(store.accounts[id], idx, total))
       .then(text => { results.push(text); })
-      .then(() => idx < accounts.length - 1 ? sleep(ACCOUNT_GAP) : null);
+      .then(() => idx < ids.length - 1 ? sleep(ACCOUNT_GAP) : null);
   });
-  
   chain.then(() => {
-    console.log('【PingMe签到】全部完成');
     notify(`🎉 全部完成 (${total}个账号)`, results.join('\n———\n'));
     $done();
   }).catch(err => {
-    console.log('【PingMe签到】任务异常:', err);
     notify('❌ 任务异常', results.join('\n———\n') + '\n' + (err.error || String(err)));
     $done();
   });
