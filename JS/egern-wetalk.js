@@ -195,13 +195,28 @@ function sleep(ms) {
 }
 
 function runAccount(acc, index, total) {
+  console.log("【WeTalk签到】runAccount 开始，账号:", acc.id || "unknown");
   const tag = `[账号${index+1}/${total} ${acc.alias || acc.id}]`;
   const ua = buildUA(acc.baseUA, acc.uaSeed);
   const headers = buildHeaders(acc.capture, ua);
   const msgs = [tag];
 
   function fetchApi(path) {
-    return $task.fetch({ url: buildUrl(path, acc.capture), method: 'GET', headers });
+    const url = buildUrl(path, acc.capture);
+    console.log("【WeTalk签到】fetchApi 调用:", path);
+    console.log("【WeTalk签到】请求 URL:", url);
+    console.log("【WeTalk签到】请求 headers:", JSON.stringify(headers).substring(0, 200));
+    
+    return $task.fetch({ url, method: 'GET', headers })
+      .then(res => {
+        console.log("【WeTalk签到】API 响应 [" + path + "] 状态:", res.statusCode);
+        console.log("【WeTalk签到】API 响应 [" + path + "] body:", res.body ? res.body.substring(0, 300) : "empty");
+        return res;
+      })
+      .catch(err => {
+        console.log("【WeTalk签到】API 请求 [" + path + "] 失败:", err.error || String(err));
+        throw err;
+      });
   }
 
   function doVideoLoop(count) {
