@@ -212,6 +212,8 @@ function runAccount(acc, index, total) {
         setTimeout(() => {
           i++;
           fetchApi('videoBonus').then(res => {
+    console.log("【WeTalk签到】API 响应状态:", res.statusCode, "长度:", res.body ? res.body.length : 0);
+    console.log("【WeTalk签到】API 响应体:", res.body ? res.body.substring(0, 300) : "empty");
             try {
               const d = JSON.parse(res.body);
               if (d.retcode === 0) {
@@ -236,6 +238,8 @@ function runAccount(acc, index, total) {
   }
 
   return fetchApi('queryBalanceAndBonus').then(res => {
+    console.log("【WeTalk签到】API 响应状态:", res.statusCode, "长度:", res.body ? res.body.length : 0);
+    console.log("【WeTalk签到】API 响应体:", res.body ? res.body.substring(0, 300) : "empty");
     try {
       const d = JSON.parse(res.body);
       if (d.retcode === 0) msgs.push(`💰 余额：${d.result.balance} Coins`);
@@ -243,6 +247,8 @@ function runAccount(acc, index, total) {
     } catch (e) { msgs.push('❌ 查询：解析失败'); }
     return fetchApi('checkIn');
   }).then(res => {
+    console.log("【WeTalk签到】API 响应状态:", res.statusCode, "长度:", res.body ? res.body.length : 0);
+    console.log("【WeTalk签到】API 响应体:", res.body ? res.body.substring(0, 300) : "empty");
     try {
       const d = JSON.parse(res.body);
       if (d.retcode === 0) msgs.push(`✅ 签到：${(d.result?.bonusHint || d.retmsg || '').replace(/\n/g, ' ')}`);
@@ -250,6 +256,8 @@ function runAccount(acc, index, total) {
     } catch (e) { msgs.push('❌ 签到：解析失败'); }
     return doVideoLoop(MAX_VIDEO);
   }).then(() => fetchApi('queryBalanceAndBonus')).then(res => {
+    console.log("【WeTalk签到】API 响应状态:", res.statusCode, "长度:", res.body ? res.body.length : 0);
+    console.log("【WeTalk签到】API 响应体:", res.body ? res.body.substring(0, 300) : "empty");
     try {
       const d = JSON.parse(res.body);
       if (d.retcode === 0) msgs.push(`💰 最新余额：${d.result.balance} Coins`);
