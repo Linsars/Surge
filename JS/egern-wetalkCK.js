@@ -1,4 +1,4 @@
-//2026/04/21
+//2026/04/22
 /*
 @Name：WeTalk Cookie 抓取（Egern 适配）
 @Author：Linsar 改自 ZenMoFiShi
