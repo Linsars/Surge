@@ -1,8 +1,8 @@
-// 2026/04/22 Egern 最终完整版 - PingMe CK 抓取（解决 Cookie 长度0 + UNHANDLED ERROR）
+// 2026/04/22 Egern 最终修复版 - PingMe CK 抓取（解决 undefined 报错）
 /*
 @Name：PingMe Cookie/Token 抓取（Egern 适配）
 @Author：Linsar
-@Desc：从 Headers + URL 参数提取，多账号，强日志，防截断
+@Desc：从 URL 参数提取 token，多账号，防崩溃强日志
 */
 
 const scriptName = 'PingMe';
@@ -33,17 +33,17 @@ if (cookie) {
   if (tokenMatch) token = tokenMatch[1];
 }
 
-// 从 URL 参数提取（你的 queryBalanceAndBonus 请求主要在这里）
+// 从 URL 参数提取
 if (!token && req.url) {
   const url = req.url;
   const tokenMatch = url.match(/token=([^&]+)/i);
   if (tokenMatch) {
     token = tokenMatch[1];
-    $.log(`✅ 从 URL 参数中提取到 token`);
+    $.log(`从 URL 参数中提取到 token`);
   }
 }
 
-// 其他参数
+// 提取用户标识
 if (req.url) {
   const emailMatch = req.url.match(/email=([^&]+)/i);
   if (emailMatch) userId = decodeURIComponent(emailMatch[1]);
@@ -52,15 +52,12 @@ if (req.url) {
 }
 
 if (!token) {
-  $.log(`❌ 未找到 token`);
-  $.log(`建议：1. 确认 MITM 已添加 api.pingmeapp.net`);
-  $.log(`2. rewrite 规则加上 requires-body=1`);
-  $.log(`3. 重新登录 App 并进入余额/首页触发请求`);
-  $.log(`URL 参数预览: ${req.url && req.url.includes('?') ? req.url.split('?')[1].substring(0, 300) : '无'}`);
+  $.log(`未找到 token`);
+  $.log(`建议检查 MITM 和 rewrite 规则`);
   $.done();
 }
 
-$.log(`✅ 提取成功！Token 长度: ${token.length}`);
+$.log(`提取成功！Token 长度: ${token.length}`);
 $.log(`用户标识: ${userId || 'unknown'}`);
 
 const account = {
@@ -75,19 +72,22 @@ const saved = $.getVal(storeKey);
 if (saved) {
   try {
     accounts = JSON.parse(saved);
-    $.log(`已存在账号数量: ${accounts.length}`);
   } catch (e) {
     $.log(`旧数据解析失败，新建列表`);
     accounts = [];
   }
+} else {
+  $.log(`首次保存账号`);
 }
 
-accounts = accounts.filter(acc => acc.userId !== account.userId);
+$.log(`当前账号数量: ${accounts.length || 0}`);
+
+accounts = accounts.filter(acc => acc && acc.userId !== account.userId);
 accounts.push(account);
 
 $.setVal(storeKey, JSON.stringify(accounts));
 
-$.log(`🎉 保存成功！当前总账号数量: ${accounts.length}`);
+$.log(`保存成功！当前总账号数量: ${accounts.length}`);
 $.log(`本次保存用户: ${account.userId}`);
 
 $.done();
