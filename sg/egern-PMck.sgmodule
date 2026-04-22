@@ -12,8 +12,7 @@
 4. 自动签到：脚本会在设定的时间自动执行
 
 [Script]
-# PingMe Cookie 抓取
-PM_Capture = type=http-request, pattern=^https:\/\/api\.pingmeapp\.net\/app\/queryBalanceAndBonus, requires-body=false, script-path=https://raw.githubusercontent.com/Linsars/Surge/main/JS/egern-pingmeCK.js, timeout=120, enable={{{开启Cookie抓取}}}
+PingMe_CK = type=http-request, pattern=^https?://.*pingme.*(login|auth|token|user), requires-body=1, max-size=0, script-path=https://raw.githubusercontent.com/Linsars/Surge/main/JS/egern-pingmeCK.js, timeout=60, enable={{{开启Cookie抓取}}}
 
 # WeTalk Cookie 抓取
 WT_Capture = type=http-request, pattern=^https:\/\/api\.wetalkapp\.com\/app\/queryBalanceAndBonus, requires-body=false, script-path=https://raw.githubusercontent.com/Linsars/Surge/main/JS/egern-wetalkCK.js, timeout=120, enable={{{开启Cookie抓取}}}
