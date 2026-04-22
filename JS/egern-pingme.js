@@ -222,6 +222,8 @@ console.log("【PingMe签到】fetchApi 函数已定义");
         setTimeout(() => {
           i++;
           fetchApi('videoBonus').then(res => {
+    console.log("【PingMe签到】API 响应状态:", res.statusCode, "长度:", res.body ? res.body.length : 0);
+    console.log("【PingMe签到】API 响应体:", res.body ? res.body.substring(0, 300) : "empty");
             try {
               const d = JSON.parse(res.body);
               if (d.retcode === 0) {
@@ -247,6 +249,8 @@ console.log("【PingMe签到】fetchApi 函数已定义");
 
   console.log("【PingMe签到】即将请求 queryBalanceAndBonus");
   return fetchApi('queryBalanceAndBonus').then(res => {
+    console.log("【PingMe签到】API 响应状态:", res.statusCode, "长度:", res.body ? res.body.length : 0);
+    console.log("【PingMe签到】API 响应体:", res.body ? res.body.substring(0, 300) : "empty");
     try {
       const d = JSON.parse(res.body);
       if (d.retcode === 0) msgs.push(`💰 余额：${d.result.balance} Coins`);
@@ -254,6 +258,8 @@ console.log("【PingMe签到】fetchApi 函数已定义");
     } catch (e) { msgs.push('❌ 查询：解析失败'); }
     return fetchApi('checkIn');
   }).then(res => {
+    console.log("【PingMe签到】API 响应状态:", res.statusCode, "长度:", res.body ? res.body.length : 0);
+    console.log("【PingMe签到】API 响应体:", res.body ? res.body.substring(0, 300) : "empty");
     try {
       const d = JSON.parse(res.body);
       if (d.retcode === 0) msgs.push(`✅ 签到：${(d.result?.bonusHint || d.retmsg || '').replace(/\n/g, ' ')}`);
@@ -261,6 +267,8 @@ console.log("【PingMe签到】fetchApi 函数已定义");
     } catch (e) { msgs.push('❌ 签到：解析失败'); }
     return doVideoLoop(MAX_VIDEO);
   }).then(() => fetchApi('queryBalanceAndBonus')).then(res => {
+    console.log("【PingMe签到】API 响应状态:", res.statusCode, "长度:", res.body ? res.body.length : 0);
+    console.log("【PingMe签到】API 响应体:", res.body ? res.body.substring(0, 300) : "empty");
     try {
       const d = JSON.parse(res.body);
       if (d.retcode === 0) msgs.push(`💰 最新余额：${d.result.balance} Coins`);
