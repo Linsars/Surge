@@ -1,8 +1,8 @@
-// 2026/04/22 Egern 最终稳定版 - PingMe CK 抓取（解决 UNHANDLED ERROR）
+// 2026/04/22 修复版 - 检查写入返回值
 /*
 @Name：PingMe Token 抓取（Egern 适配）
 @Author：Linsar
-@Desc：从 URL 参数提取 token，多账号，最大化防崩溃
+@Desc：从 URL 参数提取 token，多账号，检查写入结果
 */
 
 const scriptName = 'PingMe';
@@ -27,7 +27,7 @@ console.log('User-Agent 长度: ' + ua.length);
 let token = '';
 let userId = '';
 
-// 从 URL 提取 token（你的请求主要在这里）
+// 从 URL 提取 token
 if (req.url) {
   const tokenMatch = req.url.match(/token=([^&]+)/i);
   if (tokenMatch) {
@@ -78,10 +78,16 @@ accounts = accounts.filter(function(acc) {
 });
 accounts.push(account);
 
-$.setVal(storeKey, JSON.stringify(accounts));
+// 关键修复：检查写入返回值
+const writeSuccess = $.setVal(storeKey, JSON.stringify(accounts));
 
-console.log('保存成功！当前总账号数量: ' + accounts.length);
-console.log('本次保存用户: ' + account.userId);
+if (writeSuccess) {
+  console.log('✅ 保存成功！当前总账号数量: ' + accounts.length);
+  console.log('本次保存用户: ' + account.userId);
+} else {
+  console.log('❌ 保存失败！$persistentStore.write() 返回 false');
+  console.log('可能原因：存储空间不足、权限问题、或数据过大');
+}
 
 $.done();
 
