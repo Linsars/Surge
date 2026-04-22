@@ -1,8 +1,8 @@
-// 2026/04/22 Egern 完整无截断版 - PingMe Token 抓取（适配 query 参数）
+// 2026/04/22-1030
 /*
-@Name：PingMe Token 抓取（Egern 适配）
+@Name：PingMe Token 抓取
 @Author：Linsar
-@Desc：从 URL 参数或 Headers 中提取 token，多账号支持，强日志
+@Desc：从 URL 参数 + Headers 中提取 token，多账号支持，强日志防截断
 */
 
 const scriptName = 'PingMe';
@@ -13,7 +13,7 @@ const $ = new Env(scriptName);
 $.log(`\n=== ${scriptName} Token 抓取开始 ===`);
 
 const req = $request || {};
-$.log(`请求 URL: ${req.url || '无'}`);
+$.log(`请求 URL: ${req.url || '无URL'}`);
 
 const headers = req.headers || {};
 $.log(`请求头键名: ${Object.keys(headers).join(', ')}`);
@@ -21,38 +21,38 @@ $.log(`请求头键名: ${Object.keys(headers).join(', ')}`);
 let token = '';
 let userId = '';
 
-// 1. 先尝试从 Headers Cookie 中找
+// 1. 从 Headers Cookie 尝试提取
 let cookie = headers['Cookie'] || headers['cookie'] || headers['COOKIE'] || '';
 if (cookie) {
   const tokenMatch = cookie.match(/token=([^;]+)/i);
-  if (tokenMatch) token = tokenMatch[1];
+  if (tokenMatch) {
+    token = tokenMatch[1];
+    $.log(`从 Cookie 中提取到 token`);
+  }
 }
 
-// 2. 从 URL 查询参数中提取（这是你当前请求的主要方式）
-if (!token) {
-  const url = req.url || '';
-  const tokenMatchUrl = url.match(/token=([^&]+)/i);
-  if (tokenMatchUrl) {
-    token = tokenMatchUrl[1];
+// 2. 从 URL 查询参数中提取（你当前请求的主要方式）
+if (!token && req.url) {
+  const url = req.url;
+  const tokenMatch = url.match(/token=([^&]+)/i);
+  if (tokenMatch) {
+    token = tokenMatch[1];
     $.log(`✅ 从 URL 参数中提取到 token`);
   }
 }
 
-// 3. 从 URL 中提取其他可能参数（如 callpin 或 sign 相关）
-if (!token) {
+// 3. 尝试其他可能参数（callpin、sign 等）
+if (!token && req.url) {
   const callpinMatch = req.url.match(/callpin=([^&]+)/i);
-  if (callpinMatch) {
-    $.log(`发现 callpin 参数: ${callpinMatch[1]}`);
-    // 如果你的 token 就是 callpin，可以在这里赋值 token = callpinMatch[1];
-  }
+  if (callpinMatch) $.log(`发现 callpin: ${callpinMatch[1]}`);
 }
 
-const userIdMatch = req.url.match(/email=([^&]+)/i) || req.url.match(/userId=([^&]+)/i);
-if (userIdMatch) userId = decodeURIComponent(userIdMatch[1]);
+const emailMatch = req.url ? req.url.match(/email=([^&]+)/i) : null;
+if (emailMatch) userId = decodeURIComponent(emailMatch[1]);
 
 if (!token) {
   $.log(`❌ 未找到 token`);
-  $.log(`当前 URL 参数片段: ${req.url.split('?')[1] ? req.url.split('?')[1].substring(0, 300) : '无参数'}`);
+  $.log(`URL 参数预览: ${req.url && req.url.includes('?') ? req.url.split('?')[1].substring(0, 400) : '无参数'}`);
   $.done();
 }
 
@@ -72,7 +72,9 @@ const saved = $.getVal(storeKey);
 if (saved) {
   try {
     accounts = JSON.parse(saved);
+    $.log(`已存在账号数量: ${accounts.length}`);
   } catch (e) {
+    $.log(`旧数据解析失败，新建列表`);
     accounts = [];
   }
 }
