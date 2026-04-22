@@ -1,4 +1,4 @@
-//2026/04/22
+//2026/04/21
 /*
 @Name：WeTalk 多账号签到（Egern 适配）
 @Author：Linsar 改自 ZenMoFiShi
@@ -102,10 +102,33 @@ function loadStore() {
   if (!raw) return { version: 1, accounts: {}, order: [] };
   try {
     const obj = JSON.parse(raw);
+    
+    // 兼容旧格式（数组）：自动转换为新格式（对象）
+    if (Array.isArray(obj)) {
+      console.log("【WeTalk签到】检测到旧格式数据（数组），自动转换...");
+      const newStore = { version: 1, accounts: {}, order: [] };
+      obj.forEach((acc, idx) => {
+        const fp = `legacy_${idx}`;
+        newStore.accounts[fp] = {
+          id: fp,
+          alias: acc.userId || `账号${idx+1}`,
+          uaSeed: idx,
+          baseUA: acc.ua || "",
+          capture: { url: "", paramsRaw: {}, headers: {} },
+          createdAt: acc.time || Date.now(),
+          updatedAt: Date.now()
+        };
+        newStore.order.push(fp);
+      });
+      return newStore;
+    }
+    
+    // 新格式（对象）
     if (!obj.accounts) obj.accounts = {};
     if (!Array.isArray(obj.order)) obj.order = Object.keys(obj.accounts);
     return obj;
   } catch (e) {
+    console.log("【WeTalk签到】loadStore 异常:", e.message);
     return { version: 1, accounts: {}, order: [] };
   }
 }
