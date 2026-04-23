@@ -152,6 +152,13 @@ function notify(title, body) {
   $notification.post(scriptName, title, body);
 }
 
+// 检查开关
+const captureSwitch = $persistentStore.read('pingme_cookie_capture');
+if (captureSwitch !== 'true') {
+  console.log(`【${scriptName}】Cookie 抓取开关未开启，跳过`);
+  $done({});
+}
+
 const paramsRaw = parseRawQuery($request.url);
 const headersMap = normalizeHeaderNameMap($request.headers || {});
 let baseUA = '';
