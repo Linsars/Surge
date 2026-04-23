@@ -129,8 +129,8 @@ function notify(title, body) {
   $notification.post(scriptName, title, body);
 }
 
-// 检查开关 - 关闭时完全静默
-const captureSwitch = $persistentStore.read('wetalk_cookie_capture');
+// 检查开关 - 从 argument 读取
+const captureSwitch = $argument;
 if (captureSwitch !== 'true') {
   $done({});
 }

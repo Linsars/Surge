@@ -247,7 +247,9 @@ function runAccount(acc, index, total) {
     return next();
   }
 
+  console.log(`【${scriptName}】开始执行 ${tag}`);
   return fetchApi('queryBalanceAndBonus').then(res => {
+    console.log(`【${scriptName}】查询余额响应: ${res.body}`);
     try {
       const d = JSON.parse(res.body);
       if (d.retcode === 0) msgs.push(`💰 余额：${d.result.balance} Coins`);
@@ -255,6 +257,7 @@ function runAccount(acc, index, total) {
     } catch (e) { msgs.push('❌ 查询：解析失败'); }
     return fetchApi('checkIn');
   }).then(res => {
+    console.log(`【${scriptName}】签到响应: ${res.body}`);
     try {
       const d = JSON.parse(res.body);
       if (d.retcode === 0) msgs.push(`✅ 签到：${(d.result?.bonusHint || d.retmsg || '').replace(/\n/g, ' ')}`);
@@ -262,12 +265,14 @@ function runAccount(acc, index, total) {
     } catch (e) { msgs.push('❌ 签到：解析失败'); }
     return doVideoLoop(MAX_VIDEO);
   }).then(() => fetchApi('queryBalanceAndBonus')).then(res => {
+    console.log(`【${scriptName}】最终余额响应: ${res.body}`);
     try {
       const d = JSON.parse(res.body);
       if (d.retcode === 0) msgs.push(`💰 最新余额：${d.result.balance} Coins`);
     } catch (e) {}
     return msgs.join('\n');
   }).catch(err => {
+    console.log(`【${scriptName}】执行异常: ${err.message}`);
     msgs.push(`❌ 异常：${err.message}`);
     return msgs.join('\n');
   });
@@ -275,7 +280,9 @@ function runAccount(acc, index, total) {
 
 const store = loadStore();
 const ids = store.order.filter(id => store.accounts[id]);
+console.log(`【${scriptName}】加载账号数据: ${ids.length} 个账号`);
 if (!ids.length) {
+  console.log(`【${scriptName}】未找到账号，退出`);
   notify('⚠️ 未抓到任何账号', '请先打开 PingMe 触发抓包');
   $done();
 } else {
@@ -283,14 +290,19 @@ if (!ids.length) {
   const results = [];
   let chain = Promise.resolve();
   ids.forEach((id, idx) => {
-    chain = chain.then(() => runAccount(store.accounts[id], idx, total))
+    chain = chain.then(() => {
+      console.log(`【${scriptName}】开始处理账号 ${idx + 1}/${total} (id: ${id})`);
+      return runAccount(store.accounts[id], idx, total);
+    })
       .then(text => { results.push(text); })
       .then(() => idx < ids.length - 1 ? sleep(ACCOUNT_GAP) : null);
   });
   chain.then(() => {
+    console.log(`【${scriptName}】全部账号处理完成`);
     notify(`🎉 全部完成 (${total}个账号)`, results.join('\n———\n'));
     $done();
   }).catch(err => {
+    console.log(`【${scriptName}】任务异常: ${err.message}`);
     notify('❌ 任务异常', results.join('\n———\n') + '\n' + err.message);
     $done();
   });
