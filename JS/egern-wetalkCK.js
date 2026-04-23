@@ -129,10 +129,9 @@ function notify(title, body) {
   $notification.post(scriptName, title, body);
 }
 
-// 检查开关
+// 检查开关 - 关闭时完全静默
 const captureSwitch = $persistentStore.read('wetalk_cookie_capture');
 if (captureSwitch !== 'true') {
-  console.log(`【${scriptName}】Cookie 抓取开关未开启，跳过`);
   $done({});
 }
 
