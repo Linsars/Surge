@@ -202,6 +202,7 @@ function runAccount(acc, index, total) {
 
   function fetchApi(path) {
     const url = buildUrl(path, acc.capture);
+    console.log(`【${scriptName}】请求: ${url}`);
     return withTimeout(
       new Promise((resolve, reject) => {
         $httpClient.get({ url, headers }, (err, resp, data) => {
@@ -209,6 +210,7 @@ function runAccount(acc, index, total) {
             reject(new Error(err));
             return;
           }
+          console.log(`【${scriptName}】响应 ${resp.status}: ${data}`);
           resolve({ statusCode: resp.status, body: data });
         });
       }),
