@@ -243,30 +243,47 @@ function runAccount(acc, index, total) {
 
   console.log(`【${scriptName}】开始执行 ${tag}`);
   return fetchApi('queryBalanceAndBonus').then(res => {
-    console.log(`【${scriptName}】查询余额响应: ${res.body}`);
     try {
       const d = JSON.parse(res.body);
-      if (d.retcode === 0) msgs.push(`💰 余额：${d.result.balance} Coins`);
-      else msgs.push(`⚠️ 查询：${d.retmsg}`);
-    } catch (e) { msgs.push('❌ 查询：解析失败'); }
+      if (d.retcode === 0) {
+        msgs.push(`💰 余额：${d.result.balance} Coins`);
+        console.log(`【${scriptName}】余额查询成功：${d.result.balance} Coins`);
+      } else {
+        msgs.push(`⚠️ 查询：${d.retmsg}`);
+        console.log(`【${scriptName}】余额查询失败：${d.retmsg}`);
+      }
+    } catch (e) {
+      msgs.push('❌ 查询：解析失败');
+      console.log(`【${scriptName}】余额查询解析失败：${res.body}`);
+    }
     return fetchApi('checkIn');
   }).then(res => {
-    console.log(`【${scriptName}】签到响应: ${res.body}`);
     try {
       const d = JSON.parse(res.body);
-      if (d.retcode === 0) msgs.push(`✅ 签到：${(d.result?.bonusHint || d.retmsg || '').replace(/\n/g, ' ')}`);
-      else msgs.push(`⚠️ 签到：${d.retmsg}`);
-    } catch (e) { msgs.push('❌ 签到：解析失败'); }
+      if (d.retcode === 0) {
+        msgs.push(`✅ 签到：${(d.result?.bonusHint || d.retmsg || '').replace(/\n/g, ' ')}`);
+        console.log(`【${scriptName}】签到成功：${d.result?.bonusHint || d.retmsg}`);
+      } else {
+        msgs.push(`⚠️ 签到：${d.retmsg}`);
+        console.log(`【${scriptName}】签到失败：[${d.retcode}] ${d.retmsg}`);
+      }
+    } catch (e) {
+      msgs.push('❌ 签到：解析失败');
+      console.log(`【${scriptName}】签到解析失败：${res.body}`);
+    }
     return doVideoLoop(MAX_VIDEO);
   }).then(() => fetchApi('queryBalanceAndBonus')).then(res => {
-    console.log(`【${scriptName}】最终余额响应: ${res.body}`);
     try {
       const d = JSON.parse(res.body);
-      if (d.retcode === 0) msgs.push(`💰 最新余额：${d.result.balance} Coins`);
+      if (d.retcode === 0) {
+        msgs.push(`💰 最新余额：${d.result.balance} Coins`);
+        console.log(`【${scriptName}】最新余额：${d.result.balance} Coins`);
+      }
     } catch (e) {}
     return msgs.join('\n');
   }).catch(err => {
-    console.log(`【${scriptName}】执行异常: ${err.message}`);
+    msgs.push(`❌ 异常：${err.message}`);
+    console.log(`【${scriptName}】执行异常：${err.message}`);
     msgs.push(`❌ 异常：${err.message}`);
     return msgs.join('\n');
   });
