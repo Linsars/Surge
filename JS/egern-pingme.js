@@ -206,12 +206,14 @@ function runAccount(acc, index, total) {
     return withTimeout(
       new Promise((resolve, reject) => {
         $httpClient.get({ url, headers }, (err, resp, data) => {
-          if (err) {
+          if (err && !resp) {
             reject(new Error(err));
             return;
           }
-          console.log(`【${scriptName}】响应 ${resp.status}: ${data}`);
-          resolve({ statusCode: resp.status, body: data });
+          const body = data || (err || '');
+          const status = resp ? resp.status : 0;
+          console.log(`【${scriptName}】响应 ${status}: ${body}`);
+          resolve({ statusCode: status, body });
         });
       }),
       REQUEST_TIMEOUT
