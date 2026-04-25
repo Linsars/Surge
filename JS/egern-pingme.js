@@ -5,7 +5,7 @@ const SECRET = '0fOiukQq7jXZV2GRi9LGlO';
 const MAX_VIDEO = 5;
 const VIDEO_DELAY = 8000;
 const ACCOUNT_GAP = 3500;
-const REQUEST_TIMEOUT = 15000;
+const REQUEST_TIMEOUT = 30000; // 延长请求超时时间，防止网络慢导致脚本被 Egern 截断
 
 const IOS_VERSIONS = ['17.5.1','17.6.1','17.4.1','17.2.1','16.7.8','17.6','17.3.1','18.0.1','17.1.2','16.6.1'];
 const IOS_SCALES = ['2.00','3.00','3.00','2.00','3.00'];
@@ -298,11 +298,11 @@ if (!ids.length) {
       .then(() => idx < ids.length - 1 ? sleep(ACCOUNT_GAP) : null);
   });
   chain.then(() => {
-    console.log(`【${scriptName}】全部账号处理完成`);
+    console.log(`【${scriptName}】全部账号处理完成\n${results.join('\n———\n')}`);
     notify(`🎉 全部完成 (${total}个账号)`, results.join('\n———\n'));
     $done();
   }).catch(err => {
-    console.log(`【${scriptName}】任务异常: ${err.message}`);
+    console.log(`【${scriptName}】任务异常: ${err.message}\n${results.join('\n———\n')}`);
     notify('❌ 任务异常', results.join('\n———\n') + '\n' + err.message);
     $done();
   });
