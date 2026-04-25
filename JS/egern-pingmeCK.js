@@ -152,8 +152,8 @@ function notify(title, body) {
   $notification.post(scriptName, title, body);
 }
 
-// 检查开关 - 从 argument 读取
-const captureSwitch = $argument;
+// 检查开关
+const captureSwitch = $persistentStore.read('pingme_cookie_capture');
 if (captureSwitch !== 'true') {
   $done({});
 }
