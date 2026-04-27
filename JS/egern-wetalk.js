@@ -247,7 +247,7 @@ function runAccount(acc, index, total) {
       const d = JSON.parse(res.body);
       if (d.retcode === 0) {
         msgs.push(`💰 余额：${d.result.balance} Coins`);
-        console.log(`【${scriptName}】余额查询成功：${d.result.balance} Coins`);
+        // console.log(`【${scriptName}】余额查询成功：${d.result.balance} Coins`);
       } else {
         msgs.push(`⚠️ 查询：${d.retmsg}`);
         console.log(`【${scriptName}】余额查询失败：${d.retmsg}`);
