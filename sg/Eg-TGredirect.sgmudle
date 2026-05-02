@@ -13,6 +13,7 @@ env_schema:
       - iMe
       - Nicegram
       - Lingogram
+      - Teledark
 scriptings:
   - http_request:
       name: "Telegram 链接重定向"
