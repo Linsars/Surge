@@ -18,27 +18,32 @@ export default async function(ctx) {
   const policy = (ctx.env && ctx.env.POLICY) ? ctx.env.POLICY : "";
   const BASE_UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1";
 
+  function applyPolicy(opts) {
+    if (policy && policy !== "DIRECT") {
+      opts.policy = policy;
+      opts.policyDescriptor = policy;
+    }
+    return opts;
+  }
+
   async function safe(fn) { try { return await fn(); } catch (e) { return null; } }
   async function get(url, headers) {
     const opts = { timeout: 6000 };
     if (headers) opts.headers = headers;
-    if (policy && policy !== "DIRECT") opts.policy = policy;
-    const res = await ctx.http.get(url, opts);
+    const res = await ctx.http.get(url, applyPolicy(opts));
     return await res.text();
   }
   async function post(url, body, headers) {
     const opts = { timeout: 6000, body: body };
     if (headers) opts.headers = headers;
-    if (policy && policy !== "DIRECT") opts.policy = policy;
-    const res = await ctx.http.post(url, opts);
+    const res = await ctx.http.post(url, applyPolicy(opts));
     return await res.text();
   }
   async function getRaw(url, headers, extraOpts) {
     const opts = { timeout: 6000 };
     if (headers) opts.headers = headers;
-    if (policy && policy !== "DIRECT") opts.policy = policy;
     if (extraOpts) Object.assign(opts, extraOpts);
-    return await ctx.http.get(url, opts);
+    return await ctx.http.get(url, applyPolicy(opts));
   }
   function jp(s) { try { return JSON.parse(s); } catch (e) { return null; } }
   function ti(v) { const n = Number(v); return Number.isFinite(n) ? Math.round(n) : null; }
@@ -394,7 +399,7 @@ export default async function(ctx) {
         alignItems: 'center',
         gap: HEADER_GAP,
         children: [
-          { type: 'text', text: '数据中心(DCH)', font: { size: HEADER_FONT, weight: 'heavy' }, textColor: C_TITLE, flex: 1 },
+          { type: 'text', text: policy && policy !== "DIRECT" ? `数据中心(DCH) · ${policy}` : '数据中心(DCH)', font: { size: HEADER_FONT, weight: 'heavy' }, textColor: C_TITLE, flex: 1 },
           { type: 'image', src: `sf-symbol:${summaryIcon}`, color: summaryCol, width: 12, height: 12 },
           { type: 'text', text: summaryTxt, font: { size: 10, weight: 'bold' }, textColor: summaryCol },
           { type: 'spacer' },

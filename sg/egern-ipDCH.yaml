@@ -6,8 +6,8 @@ icon: "globe.asia.australia.fill"
 env_schema:
   POLICY:
     name: 代理策略
-    description: 用于 IP 检测和解锁检测请求的代理策略组名称（如 PROXY、GLOBAL 等），留空表示直连
-    default_value: ""
+    description: "用于 IP 检测和解锁检测请求的代理策略组名称（如 PROXY、GLOBAL 等），留空表示直连。注意：请务必填写，否则默认值不会生效。"
+    default_value: "PROXY"
 
 scriptings:
   - generic:
@@ -18,3 +18,5 @@ scriptings:
 widgets:
   - name: "数据中心DCH"
     update_interval: 300
+    env:
+      POLICY: "PROXY"
