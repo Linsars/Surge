@@ -1,0 +1,12 @@
+name: "数据中心DCH"
+description: "检测当前节点是否支持流媒体、AI、本地IP、落地IP、IP纯净度"
+author: "Linsar"
+
+scriptings:
+  - generic:
+      name: "数据中心DCH"
+      script_url: "https://raw.githubusercontent.com/Linsars/Surge/main/JS/egern-ipDCH.js"
+      timeout: 120
+
+widgets:
+  - name: "数据中心DCH"
