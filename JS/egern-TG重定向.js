@@ -8,6 +8,8 @@
 
 const SCHEME = {
   Telegram: "tg",
+  Teledark: "telegram",
+  Telega: "telega",
   Swiftgram: "sg",
   Turrit: "turrit",
   iMe: "ime",
