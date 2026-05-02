@@ -5,7 +5,7 @@
 #!arguments=EVENT_SCRIPT_NAME:数据中心DCH,PANEL_NAME:数据中心DCH,UPDATE-INTERVAL:-1
 
 [Script]
-{{{EVENT_SCRIPT_NAME}}} = type=event,event-name=network-changed,timeout=120,script-path=https://raw.githubusercontent.com/Linsars/Surge/main/JS/egern-ipDCH.js
+{{{EVENT_SCRIPT_NAME}}} = type=event,event-name=数据中心DCH,timeout=120,script-path=https://raw.githubusercontent.com/Linsars/Surge/main/JS/egern-ipDCH.js
 
 数据中心DCH = type=generic,timeout=120,script-path=https://raw.githubusercontent.com/Linsars/Surge/main/JS/egern-ipDCH.js
 
