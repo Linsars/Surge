@@ -1,6 +1,13 @@
 name: "数据中心DCH"
 description: "检测当前节点是否支持流媒体、AI、本地IP、落地IP、IP纯净度"
 author: "Linsar"
+icon: "globe.asia.australia.fill"
+
+env_schema:
+  POLICY:
+    name: 代理策略
+    description: 用于 IP 检测和解锁检测请求的代理策略组名称（如 PROXY、GLOBAL 等），留空表示直连
+    default_value: ""
 
 scriptings:
   - generic:
@@ -10,3 +17,4 @@ scriptings:
 
 widgets:
   - name: "数据中心DCH"
+    update_interval: 300
