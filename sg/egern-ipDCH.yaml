@@ -3,11 +3,57 @@ description: "检测当前节点是否支持流媒体、AI、本地IP、落地IP
 author: "Linsar"
 icon: "globe.asia.australia.fill"
 
+compat_arguments:
+  POLICY: "DIRECT"
+
 env_schema:
   POLICY:
     name: 代理策略
-    description: "用于 IP 检测和解锁检测请求的代理策略组名称（如 PROXY、GLOBAL 等），留空表示直连。注意：请务必填写，否则默认值不会生效。"
-    default_value: "PROXY"
+    description: "用于流媒体/IP检测请求的策略组名称（如 PROXY、GLOBAL、你的节点组名等），DIRECT 表示直连"
+    default_value: "DIRECT"
+
+rules:
+  # 落地 IP 检测
+  - domain_suffix:
+      match: my.ippure.com
+      policy: "{{{POLICY}}}"
+  - domain_suffix:
+      match: ip-api.com
+      policy: "{{{POLICY}}}"
+  - domain_suffix:
+      match: api.ipapi.is
+      policy: "{{{POLICY}}}"
+  - domain_suffix:
+      match: ipinfo.io
+      policy: "{{{POLICY}}}"
+  - domain_suffix:
+      match: ip.sb
+      policy: "{{{POLICY}}}"
+  # 流媒体解锁检测
+  - domain_suffix:
+      match: chatgpt.com
+      policy: "{{{POLICY}}}"
+  - domain_suffix:
+      match: openai.com
+      policy: "{{{POLICY}}}"
+  - domain_suffix:
+      match: gemini.google.com
+      policy: "{{{POLICY}}}"
+  - domain_suffix:
+      match: youtube.com
+      policy: "{{{POLICY}}}"
+  - domain_suffix:
+      match: googlevideo.com
+      policy: "{{{POLICY}}}"
+  - domain_suffix:
+      match: netflix.com
+      policy: "{{{POLICY}}}"
+  - domain_suffix:
+      match: nflxvideo.net
+      policy: "{{{POLICY}}}"
+  - domain_suffix:
+      match: tiktok.com
+      policy: "{{{POLICY}}}"
 
 scriptings:
   - generic:
@@ -19,4 +65,4 @@ widgets:
   - name: "数据中心DCH"
     update_interval: 300
     env:
-      POLICY: "PROXY"
+      POLICY: "DIRECT"
