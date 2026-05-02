@@ -6,11 +6,10 @@ icon: "globe.asia.australia.fill"
 compat_arguments:
   POLICY: "DIRECT"
 
-env_schema:
-  POLICY:
-    name: 代理策略
-    description: "用于流媒体/IP检测请求的策略组名称（如 PROXY、GLOBAL、你的节点组名等），DIRECT 表示直连"
-    default_value: "DIRECT"
+compat_arguments_desc: |
+  POLICY: 流媒体/IP检测请求走的策略组名称。
+  DIRECT = 直连（默认），PROXY = 代理，或填你自定义的节点组名。
+  修改方式：在 Egern 的模块编辑页面 → 参数(compat_arguments) → POLICY 填入你的策略组名。
 
 rules:
   # 落地 IP 检测
@@ -28,6 +27,9 @@ rules:
       policy: "{{{POLICY}}}"
   - domain_suffix:
       match: ip.sb
+      policy: "{{{POLICY}}}"
+  - domain_suffix:
+      match: ippure.com
       policy: "{{{POLICY}}}"
   # 流媒体解锁检测
   - domain_suffix:
@@ -64,5 +66,3 @@ scriptings:
 widgets:
   - name: "数据中心DCH"
     update_interval: 300
-    env:
-      POLICY: "DIRECT"
