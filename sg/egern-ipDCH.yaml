@@ -10,12 +10,7 @@ compat_arguments_desc: |
   POLICY: 流媒体/IP检测请求走的策略组名称。
   DIRECT = 直连（默认），PROXY = 代理，或填你自定义的节点组名。
   修改方式：在 Egern 的模块编辑页面 → 参数(compat_arguments) → POLICY 填入你的策略组名。
-
-env_schema:
-  POLICY:
-    name: 策略组显示名
-    description: "仅用于小组件内显示当前策略组名称，不影响路由。请与上方参数 POLICY 保持一致。"
-    default_value: "DIRECT"
+  小组件会自动显示此名称。
 
 rules:
   # 落地 IP 检测
@@ -72,3 +67,5 @@ scriptings:
 widgets:
   - name: "数据中心DCH"
     update_interval: 300
+    env:
+      POLICY: "{{{POLICY}}}"
