@@ -1,0 +1,12 @@
+#!name = 数据中心DCH
+#!desc = 检测当前节点（兜底）是否支持流媒体、AI、本地IP、落地IP、IP纯净度
+#!author = Linsar
+#!icon = https://raw.githubusercontent.com/getsomecat/GetSomeCats/main/icon/gpt.png
+
+[Script]
+{{{EVENT_SCRIPT_NAME}}} = type=event,event-name=network-changed,timeout=120,script-path=https://raw.githubusercontent.com/Linsars/Surge/main/JS/egern-ipDCH.js
+
+数据中心DCH = type=generic,timeout=120,script-path=https://raw.githubusercontent.com/Linsars/Surge/main/JS/egern-ipDCH.js
+
+[Panel]
+{{{PANEL_NAME}}} = script-name=数据中心DCH,update-interval={{{UPDATE-INTERVAL}}}
