@@ -399,13 +399,7 @@ export default async function(ctx) {
         children: [
           { type: 'text', text: '数据中心(DCH)', font: { size: HEADER_FONT, weight: 'heavy' }, textColor: C_TITLE, flex: 1 },
           { type: 'image', src: `sf-symbol:${summaryIcon}`, color: summaryCol, width: 12, height: 12 },
-          ...(policy && policy !== "DIRECT" ? [
-            { type: 'text', text: `${summaryTxt} ·`, font: { size: 10, weight: 'bold' }, textColor: summaryCol },
-            { type: 'image', src: `sf-symbol:${policyOk ? 'checkmark.circle.fill' : (policyWarn ? 'exclamationmark.circle.fill' : 'questionmark.circle.fill')}`, color: policyOk ? C_GREEN : (policyWarn ? C_ORANGE : C_SUB), width: 10, height: 10 },
-            { type: 'text', text: policy, font: { size: 10, weight: 'bold' }, textColor: policyOk ? C_GREEN : (policyWarn ? C_ORANGE : C_SUB) },
-          ] : [
-            { type: 'text', text: summaryTxt, font: { size: 10, weight: 'bold' }, textColor: summaryCol },
-          ]),
+          { type: 'text', text: summaryTxt, font: { size: 10, weight: 'bold' }, textColor: summaryCol },
           { type: 'spacer' },
           {
             type: 'stack',
@@ -419,6 +413,16 @@ export default async function(ctx) {
           }
         ]
       },
+      ...(policy && policy !== "DIRECT" ? [{
+        type: 'stack',
+        direction: 'row',
+        alignItems: 'center',
+        gap: 4,
+        children: [
+          { type: 'image', src: `sf-symbol:${policyOk ? 'checkmark.circle.fill' : (policyWarn ? 'exclamationmark.circle.fill' : 'questionmark.circle.fill')}`, color: policyOk ? C_GREEN : (policyWarn ? C_ORANGE : C_SUB), width: 10, height: 10 },
+          { type: 'text', text: policy, font: { size: 10, weight: 'bold' }, textColor: policyOk ? C_GREEN : (policyWarn ? C_ORANGE : C_SUB) }
+        ]
+      }] : []),
       {
         type: 'stack',
         direction: 'row',
