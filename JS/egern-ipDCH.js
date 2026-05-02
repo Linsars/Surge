@@ -1,4 +1,5 @@
 export default async function(ctx) {
+  if (!ctx.env) ctx.env = {};
   const widgetFamily = ctx.widgetFamily || 'systemMedium';
   const BG_COLOR = { light: '#FFFFFF', dark: '#1C1C1E' };
   const C_TITLE = { light: '#1A1A1A', dark: '#FFD700' };
@@ -14,7 +15,7 @@ export default async function(ctx) {
     return { type: 'widget', padding: 16, backgroundColor: BG_COLOR, children: [{ type: 'text', text: '请使用中号或大号组件', font: { size: 'callout' }, textColor: C_MAIN, textAlign: 'center' }] };
   }
 
-  const policy = ctx.env.POLICY || "";
+  const policy = (ctx.env && ctx.env.POLICY) ? ctx.env.POLICY : "";
   const BASE_UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1";
 
   async function safe(fn) { try { return await fn(); } catch (e) { return null; } }
