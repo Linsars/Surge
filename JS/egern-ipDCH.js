@@ -145,24 +145,29 @@ export default async function(ctx) {
   };
 
   let lIp = "获取失败", lLoc = "未知位置", lIsp = "未知运营商";
+  // 用 ctx.device 获取真实本地 IP（不经过代理）
+  if (ctx.device && ctx.device.ipv4 && ctx.device.ipv4.address) {
+    lIp = ctx.device.ipv4.address;
+  }
+  // 本地位置和运营商仍从 API 获取
   try {
-    const lRes = await ctx.http.get('https://myip.ipip.net/json', { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 3000, policy: 'DIRECT' });
+    const lRes = await ctx.http.get('https://myip.ipip.net/json', { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 3000 });
     const body = JSON.parse(await lRes.text());
     if (body?.data) {
-      lIp = body.data.ip || "获取失败";
+      if (lIp === "获取失败") lIp = body.data.ip || "获取失败";
       const locArr = body.data.location || [];
       lLoc = `🇨🇳 ${locArr[1] || ""} ${locArr[2] || ""}`.trim() || "未知位置";
       lIsp = fmtISP(locArr[4] || locArr[3]);
     }
   } catch (e) {}
-  if (lIp === "获取失败") {
+  if (lIsp === "未知运营商" || lLoc === "未知位置") {
     try {
-      const res126 = await ctx.http.get('https://ipservice.ws.126.net/locate/api/getLocByIp', { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 3000, policy: 'DIRECT' });
+      const res126 = await ctx.http.get('https://ipservice.ws.126.net/locate/api/getLocByIp', { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 3000 });
       const body126 = JSON.parse(await res126.text());
       if (body126?.result) {
-        lIp = body126.result.ip;
-        lLoc = `🇨🇳 ${body126.result.province || ""} ${body126.result.city || ""}`.trim();
-        lIsp = fmtISP(body126.result.operator || body126.result.company);
+        if (lIp === "获取失败") lIp = body126.result.ip;
+        if (lLoc === "未知位置") lLoc = `🇨🇳 ${body126.result.province || ""} ${body126.result.city || ""}`.trim();
+        if (lIsp === "未知运营商") lIsp = fmtISP(body126.result.operator || body126.result.company);
       }
     } catch (e) {}
   }
@@ -397,7 +402,7 @@ export default async function(ctx) {
         alignItems: 'center',
         gap: HEADER_GAP,
         children: [
-          { type: 'text', text: '数据中心(DCH)', font: { size: HEADER_FONT, weight: 'heavy' }, textColor: C_TITLE, flex: 1 },
+          { type: 'text', text: '数据中心(DCH)', font: { size: HEADER_FONT, weight: 'heavy' }, textColor: C_TITLE, flex: 1, maxLines: 1, minScale: 0.7 },
           { type: 'image', src: `sf-symbol:${summaryIcon}`, color: summaryCol, width: 12, height: 12 },
           { type: 'text', text: summaryTxt, font: { size: 10, weight: 'bold' }, textColor: summaryCol },
           { type: 'spacer' },
