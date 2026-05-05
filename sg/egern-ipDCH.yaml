@@ -13,6 +13,13 @@ compat_arguments_desc: |
   小组件会自动显示此名称。
 
 rules:
+  # 本地 IP 检测（强制直连，获取真实本地IP）
+  - domain_suffix:
+      match: ipip.net
+      policy: "DIRECT"
+  - domain_suffix:
+      match: 126.net
+      policy: "DIRECT"
   # 落地 IP 检测
   - domain_suffix:
       match: my.ippure.com

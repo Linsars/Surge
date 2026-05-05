@@ -145,29 +145,24 @@ export default async function(ctx) {
   };
 
   let lIp = "获取失败", lLoc = "未知位置", lIsp = "未知运营商";
-  // 用 ctx.device 获取真实本地 IP（不经过代理）
-  if (ctx.device && ctx.device.ipv4 && ctx.device.ipv4.address) {
-    lIp = ctx.device.ipv4.address;
-  }
-  // 本地位置和运营商仍从 API 获取
   try {
     const lRes = await ctx.http.get('https://myip.ipip.net/json', { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 3000 });
     const body = JSON.parse(await lRes.text());
     if (body?.data) {
-      if (lIp === "获取失败") lIp = body.data.ip || "获取失败";
+      lIp = body.data.ip || "获取失败";
       const locArr = body.data.location || [];
       lLoc = `🇨🇳 ${locArr[1] || ""} ${locArr[2] || ""}`.trim() || "未知位置";
       lIsp = fmtISP(locArr[4] || locArr[3]);
     }
   } catch (e) {}
-  if (lIsp === "未知运营商" || lLoc === "未知位置") {
+  if (lIp === "获取失败") {
     try {
       const res126 = await ctx.http.get('https://ipservice.ws.126.net/locate/api/getLocByIp', { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 3000 });
       const body126 = JSON.parse(await res126.text());
       if (body126?.result) {
-        if (lIp === "获取失败") lIp = body126.result.ip;
-        if (lLoc === "未知位置") lLoc = `🇨🇳 ${body126.result.province || ""} ${body126.result.city || ""}`.trim();
-        if (lIsp === "未知运营商") lIsp = fmtISP(body126.result.operator || body126.result.company);
+        lIp = body126.result.ip;
+        lLoc = `🇨🇳 ${body126.result.province || ""} ${body126.result.city || ""}`.trim();
+        lIsp = fmtISP(body126.result.operator || body126.result.company);
       }
     } catch (e) {}
   }
