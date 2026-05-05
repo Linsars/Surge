@@ -146,7 +146,7 @@ export default async function(ctx) {
 
   let lIp = "获取失败", lLoc = "未知位置", lIsp = "未知运营商";
   try {
-    const lRes = await ctx.http.get('https://myip.ipip.net/json', { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 3000 });
+    const lRes = await ctx.http.get('https://myip.ipip.net/json', { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 3000, policy: 'DIRECT' });
     const body = JSON.parse(await lRes.text());
     if (body?.data) {
       lIp = body.data.ip || "获取失败";
@@ -157,7 +157,7 @@ export default async function(ctx) {
   } catch (e) {}
   if (lIp === "获取失败") {
     try {
-      const res126 = await ctx.http.get('https://ipservice.ws.126.net/locate/api/getLocByIp', { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 3000 });
+      const res126 = await ctx.http.get('https://ipservice.ws.126.net/locate/api/getLocByIp', { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 3000, policy: 'DIRECT' });
       const body126 = JSON.parse(await res126.text());
       if (body126?.result) {
         lIp = body126.result.ip;
