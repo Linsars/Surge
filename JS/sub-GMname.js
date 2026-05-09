@@ -205,12 +205,14 @@ async function operator(proxies = [], targetPlatform, env) {
       const resp = await $.http.get({ url: 'http://ip-api.com/json/' + host + '?fields=countryCode,city&lang=zh-CN', timeout: 3000 });
       let d;
       try { d = typeof resp.body === 'string' ? JSON.parse(resp.body) : resp.body; } catch (e) { d = null; }
-      const geo = { cc: (d && d.countryCode) ? d.countryCode.toUpperCase() : 'XX', city: (d && d.city) || '' };
-      geoCache[host] = geo;
-      ccMap[host] = geo;
-      if (cacheEnabled) cache.set('geo:' + host, geo);
+      if (d && d.countryCode) {
+        const geo = { cc: d.countryCode.toUpperCase(), city: d.city || '' };
+        geoCache[host] = geo;
+        ccMap[host] = geo;
+        if (cacheEnabled) cache.set('geo:' + host, geo);
+      }
     } catch (e) {
-      ccMap[host] = { cc: 'XX', city: '' };
+      // 请求失败：保留已有缓存，不覆盖
     }
   }
 
@@ -237,7 +239,7 @@ async function operator(proxies = [], targetPlatform, env) {
 
   function geoLabel(server) {
     const geo = ccMap[server];
-    if (!geo || geo.cc === 'XX') return null;
+    if (!geo || !geo.cc || geo.cc === 'XX') return null;
     return (geo.cc === 'CN' && geo.city) ? geo.city : geo.cc;
   }
 
