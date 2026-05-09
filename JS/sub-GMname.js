@@ -1,328 +1,298 @@
 // ==UserScript==
-// @name         智慧重命名 - 支持 GPT 区判断（超级全面版）
-// @version      1.3
-// @description  为substore代理节点重命名，支持多种循环命名 + 对非港台&不支持GPT地区追加文字（参数不区分大小写）
+// @name         智慧重命名 - GeoIP + 创意命名
+// @version      4.0
+// @description  SubStore 节点重命名：GeoIP 真实出口检测 + GPT 支持判断 + 多种创意循环命名
 // @author       Linsar
-// @example      https://raw.githubusercontent.com/Linsars/Surge/main/JS/sub-GMname.js#qz=repo&gm=生肖&hz=gemini&zn=1&znre=all  节点名就会变成repo｜子鼠｜gemini｜all，参数znre需要zn为1支持
+// @example      #gm=诡秘&qz=机场&hz=GPT
 // ==/UserScript==
-// 参数说明（用 # 开头，多个用 & 连接）
-// QZ=      前缀文字（最前面）          示例：qz=小林机场 或 QZ=小林机场
-// HZ=      后缀文字（最末尾）          示例：hz=香港
-// fgf=     分隔符（前缀/国旗/名字/序号 都用这个）  默认｜    示例：fgf=｜ 或 FGF= - 
-// GM=      命名模式控制（不区分大小写）
-//          GM=生肖      → 十二生肖循环 + 重复时加¹²³…¹⁰¹¹…
-//          GM=塔罗      → 塔罗牌（英文超简版）循环
-//          GM=塔罗X     → 塔罗牌（中文简洁版）循环
-//          GM=罪        → 七宗罪循环
-//          GM=天使      → 十二天使（英文名）循环
-//          GM=天使X     → 十二天使（中文名）循环
-//          GM=血族      → 西方吸血鬼传说阶位（简洁英文）循环
-//          GM=节气      → 中国古代二十四节气循环
-//          GM=唐朝      → 中国古代唐朝官职循环
-//          GM=斗罗      → 小说斗破苍穹中等级循环
-//          GM=斗破      → 小说斗罗大陆中等级循环
-//          GM=任意文字  → 全部使用你输入的文字作为基础名 + 重复时加序号
-//          不传或其它值 → 只加前缀/后缀，不改原名，也不加序号
-// ZN=      是否对非港台&非GPT支持节点追加文字   1=开启，0=关闭（默认）   示例：zn=1
-// ZNre=    自定义追加的文本（仅 ZN=1 时生效，没传则用默认 " | GPT"）  示例：znre= | NF+GPT
-// ======================================================================
+//
+// ── 参数 ─────────────────────────────────────────────────
+// QZ=   前缀                              示例：qz=机场
+// HZ=   后缀                              示例：hz=GPT 或 hz=香港
+//         hz=GPT  → 仅对支持 GPT 的地区追加，已含 GPT 的跳过
+//         hz=其他  → 对所有节点追加
+// FGF=  分隔符（默认｜）
+// GM=   命名模式（不传 → 节点名改为 地区-序号，CN 用城市名）
+//
+// ── GM 命名模式列表（含可用数量） ─────────────────────────
+// 生肖      780项    12生肖循环，64八卦兜底，数字兜底
+// 塔罗      3916项   44塔罗牌（中英合并）循环，88星座兜底，数字兜底
+// 天使      288项    36天使（中英合并+血族）循环，7宗罪兜底，数字兜底
+// 农药      3810项   127王者荣耀英雄循环，首杀~团灭+斗罗斗破兜底，数字兜底
+// 节气      600项    24节气循环，24唐朝官职兜底，数字兜底
+// 吃货      1856项   64满汉全席菜名循环，清朝皇帝年号兜底，数字兜底
+// 戏神      495项    九君人名→18神道→九君·初代~六代→九君·初代~六代·人~尸体，数字兜底
+// 诡秘      198项    22途径×9序列（真实序列名）循环，数字兜底
+// 任意文字   —       自定义文字循环，数字兜底
 
 const args = $arguments || {};
-
-// 将所有参数 key 转为大写，方便不区分大小写处理
-const args_upper = {};
-for (const key in args) {
-    if (Object.prototype.hasOwnProperty.call(args, key)) {
-        args_upper[key.toUpperCase()] = args[key];
-    }
+const U = {};
+for (const k in args) {
+  if (Object.prototype.hasOwnProperty.call(args, k)) U[k.toUpperCase()] = args[k];
 }
 
-// ── 基础命名参数 ────────────────────────────────────────
-const PREFIX = args_upper.QZ   ? decodeURI(args_upper.QZ)   + (args_upper.FGF || "｜") : "";
-const SUFFIX = args_upper.HZ   ? (args_upper.FGF || "｜") + decodeURI(args_upper.HZ) : "";
-const SEP    = args_upper.FGF  ? decodeURI(args_upper.FGF)  : "｜";
+const SEP = U.FGF ? decodeURI(U.FGF) : '｜';
+const PREFIX = U.QZ ? decodeURI(U.QZ) + SEP : '';
+const SUFFIX = U.HZ ? SEP + decodeURI(U.HZ) : '';
+const HZ_TEXT = U.HZ ? decodeURI(U.HZ) : '';
+const IS_GPT = HZ_TEXT.toUpperCase() === 'GPT';
+const GM = U.GM ? decodeURI(U.GM).trim() : '';
 
-const GM_MODE   = args_upper.GM ? decodeURI(args_upper.GM).trim() : "";
-const USE_CUSTOM = !!GM_MODE;
+const UNSUPPORTED = new Set([
+  'HK', 'TW', 'MO',
+  'CN', 'RU', 'IR', 'KP', 'CU', 'BY', 'SY', 'AF', 'MM', 'LY', 'YE',
+  'SD', 'ER', 'CF', 'TD', 'SS', 'MK'
+]);
 
-// ── 追加文字控制 ────────────────────────────────────────
-const APPEND_ENABLED = (args_upper.ZN === "1" || args_upper.ZN === 1);
+const ZODIAC = ['子鼠','丑牛','寅虎','卯兔','辰龙','巳蛇','午马','未羊','申猴','酉鸡','戌狗','亥猪'];
+const TAROT = ['愚者','魔术师','女祭司','皇后','皇帝','教皇','恋人','战车','力量','隐士','命运之轮','正义','倒吊人','死神','节制','恶魔','塔','星星','月亮','太阳','审判','世界','Fool','Magician','Priestess','Empress','Emperor','Hierophant','Lovers','Chariot','Strength','Hermit','Wheel','Justice','Hanged','Death','Temperance','Devil','Tower','Star','Moon','Sun','Judgement','World'];
+const ANGELS = ['米迦勒','加百列','拉斐尔','乌列尔','拉贵尔','萨列尔','雷米尔','扎基尔','约菲尔','卡麦尔','哈尼尔','巴拉基勒','Michael','Gabriel','Raphael','Uriel','Raguel','Sariel','Remiel','Zadkiel','Jophiel','Chamuel','Haniel','Barachiel','Fledgling','Neonate','Ancilla','Elder','Methuselah','Antediluvian','Baron','Count','Duke','Prince','Archon','Justicar'];
+const SOLAR = ['立春','雨水','惊蛰','春分','清明','谷雨','立夏','小满','芒种','夏至','小暑','大暑','立秋','处暑','白露','秋分','寒露','霜降','立冬','小雪','大雪','冬至','小寒','大寒'];
+const DOUBATTLE = ['魂士','魂师','大魂师','魂尊','魂宗','魂王','魂帝','魂圣','魂斗罗','封号斗罗','神级','斗之气','斗者','斗师','大斗师','斗灵','斗王','斗皇','斗宗','斗尊','斗圣','斗帝'];
+const GUA_64 = ['乾','坤','屯','蒙','需','讼','师','比','小畜','履','泰','否','同人','大有','谦','豫','随','蛊','临','观','噬嗑','贲','剥','复','无妄','大畜','颐','大过','坎','离','咸','恒','遁','大壮','晋','明夷','家人','睽','蹇','解','损','益','夬','姤','萃','升','困','井','革','鼎','震','艮','渐','归妹','丰','旅','巽','兑','涣','节','中孚','小过','既济','未济'];
+const SINS = ['傲慢','嫉妒','暴怒','懒惰','贪婪','暴食','色欲'];
+const TANG = ['宰相','尚书','侍郎','郎中','员外郎','御史','太守','刺史','县令','主簿','司空','司徒','司马','太尉','中书令','门下侍中','尚书令','给事中','谏议大夫','大夫','卿','将军','校尉','都督'];
+const CONSTELLATIONS_88 = ['仙女','唧筒','天燕','宝瓶','天鹰','天坛','白羊','御夫','牧夫','雕具','鹿豹','巨蟹','猎犬','大犬','小犬','摩羯','船底','仙后','半人马','仙王','鲸鱼','蝘蜓','圆规','天鸽','后发','南冕','北冕','乌鸦','巨爵','南十字','天鹅','海豚','箭鱼','天龙','小马','波江','天炉','双子','天鹤','武仙','时钟','长蛇','水蛇','印第安','蝎虎','狮子','小狮','天兔','天秤','豺狼','天猫','天琴','山案','显微镜','麒麟','苍蝇','矩尺','南极','蛇夫','猎户','孔雀','飞马','英仙','凤凰','绘架','双鱼','南鱼','船尾','罗盘','网罟','天箭','人马','天蝎','玉夫','盾牌','巨蛇','六分仪','金牛','望远镜','三角','南三角','杜鹃','大熊','小熊','室女','飞鱼','狐狸','船帆'];
 
-const DEFAULT_APPEND = " | GPT";
-let APPEND_TEXT = DEFAULT_APPEND;
-
-if (APPEND_ENABLED && args_upper.ZNRE !== undefined) {
-    const custom = decodeURI(args_upper.ZNRE);
-    if (custom.trim() !== "") {
-        APPEND_TEXT = custom;
+function mergeArrays(main, helpers) {
+  const result = [];
+  for (let c = 0; ; c++) {
+    const suffix = c === 0 ? '' : (helpers && c - 1 < helpers.length ? SEP + helpers[c - 1] : SEP + c);
+    let added = false;
+    for (let i = 0; i < main.length; i++) {
+      result.push(main[i] + suffix);
+      added = true;
     }
+    if (!added || !helpers || c > helpers.length) break;
+  }
+  return result;
 }
 
-// 香港/台湾 + 全球 OpenAI/ChatGPT 不支持/被禁地区关键词（不区分大小写，2026最新）
-const hkTwKeywords = [
-    '香港', '港', 'HK', 'HKG', 'HongKong', 'Hong Kong', 'Hong-Kong', '九龙', '新界',
-    '台湾', '台灣', '台', 'TW', 'Taiwan', 'Taipei', 'TPE', 'TaiPei', '桃園', '桃园',
-    '高雄', 'Kaohsiung', 'KHH', '台中', 'Taichung', 'RMQ', '台南', 'Tainan', 'TNN',
-    '新北', '彰化', 'Changhua', '基隆', 'Keelung', '宜兰', '花莲', 'Hualien', '台东',
-    '中国', '大陆', 'CN', 'China', 'Mainland', '北京', '上海', '广州', '深圳', '成都', '杭州',
-    '俄罗斯', '俄国', 'RU', 'Russia', 'Moscow', '莫斯科', '圣彼得堡', 'SPB',
-    '伊朗', 'IR', 'Iran', 'Tehran', '德黑兰', '波斯',
-    '朝鲜', '北朝鲜', '北韩', 'KP', 'Korea North', 'DPRK', 'Pyongyang', '平壤',
-    '古巴', 'Cuba', 'CU', 'Havana', '哈瓦那',
-    '叙利亚', 'SY', 'Syria', 'Damascus', '大马士革',
-    '阿富汗', 'AF', 'Afghanistan', 'Kabul', '喀布尔',
-    '白俄罗斯', '白俄', 'BY', 'Belarus', 'Minsk', '明斯克',
-    '缅甸', 'Burma', 'Myanmar', 'MM', 'Yangon', '仰光', '内比都',
-    '利比亚', 'LY', 'Libya', 'Tripoli', '的黎波里',
-    '也门', 'Yemen', 'YE', 'Sanaa',
-    '苏丹', 'Sudan', 'SD', 'Khartoum',
-    '厄立特里亚', 'ER', 'Eritrea',
-    '中非', 'Central African Republic', 'CF',
-    '乍得', 'Chad', 'TD',
-    '沙特', 'Saudi Arabia', 'SA', 'Riyadh', '利雅得',
-    '埃及', 'Egypt', 'EG', 'Cairo', '开罗',
-    '老挝', 'Laos', 'LA', 'Vientiane',
-    '哈萨克斯坦', 'Kazakhstan', 'KZ', 'Almaty', '阿拉木图',
-    '埃塞俄比亚', 'Ethiopia', 'ET', 'Addis Ababa',
-    '委内瑞拉', 'Venezuela', 'VE', 'Caracas',
-    '巴林', 'Bahrain', 'BH',
-    '吉布提', 'Djibouti',
-    '马其顿', 'North Macedonia', 'MK',
-    '南苏丹', 'South Sudan', 'SS'
+const CHIHUO = ['凤凰趴窝','龙肝凤髓','红烧麒麟面','红梅珠香','宫保野兔','祥龙双飞','爆炒田鸡','芫爆仔鸽','金丝烧麦','佛手金卷','龙凤柔情','明珠豆腐','砂锅煨鹿筋','红烧猴头蘑','鸡丝银耳','桂花鱼条','八宝兔酱','玉笋蕨菜','罗汉大虾','花菇鸭掌','五彩牛柳','挂炉走油鸡','麻辣牛肉','红烧鲍鱼','清蒸鳜鱼','松鼠鳜鱼','翠玉豆糕','栗子糕','双色豆糕','如意卷','绣球乾贝','炒珍珠鸡','奶汁鱼片','干连福海参','花菇鲟龙鱼','龙舟镢鱼','滑溜贝球','酱焖鹌鹑','蟹肉双笋丝','砂锅鱼翅','红烧鸡棕菌','牡丹银耳汤','清汤燕窝','凤尾鱼翅','金蟾玉鲍','一品鲍鱼羹','龙井竹荪','玉掌献寿','鸡枞菌汤','草菇西兰花','杏仁豆腐','挂炉烤鸭','燕窝八珍汤','桂花糕','荷花酥','莲子糕','杏仁露','冰糖银耳','拔丝苹果','一品官燕','奶汤蒲菜','御膳八珍','红烧肘子','清蒸龙虾'];
+
+const XISHEN_PATHS = ['书','医','兵','黄','青','巧','弈','戏','偶','巫','力','卜','盗','娼','帝','鬼','天','邪'];
+const XISHEN_RANKS = ['I阶','II阶','III阶','IV阶','V阶','VI阶','VII阶','VIII阶','半神'];
+const JIUYUN_LORDS = [
+  ['若水君','温若水'], ['极光君','杨宵'], ['红尘君','苏知微'],
+  ['无极君','楼羽'], ['悬玉君','姬悬'], ['南海君','褚常青'],
+  ['灵虚君','吴同源'], ['天枢君','陆循'], ['藏云君','齐暮云']
+];
+const JIUYUN_GEN = ['初代','二代','三代','四代','五代','六代'];
+const JIUYUN_BEYOND = ['人','半神','神','鬼','尸体'];
+const XISHEN = [];
+// 第一循环：九君人名
+for (let l = 0; l < JIUYUN_LORDS.length; l++) {
+  XISHEN.push(JIUYUN_LORDS[l][0] + '·' + JIUYUN_LORDS[l][1]);
+}
+// 第二循环：18神道（主）× 9位阶（辅）
+for (let r = 0; r < XISHEN_RANKS.length; r++) {
+  for (let p = 0; p < XISHEN_PATHS.length; p++) {
+    XISHEN.push(XISHEN_PATHS[p] + '神道·' + XISHEN_RANKS[r]);
+  }
+}
+// 第三循环：九君·初代~六代
+for (let l = 0; l < JIUYUN_LORDS.length; l++) {
+  for (let g = 0; g < JIUYUN_GEN.length; g++) {
+    XISHEN.push(JIUYUN_LORDS[l][0] + '·' + JIUYUN_LORDS[l][1] + '·' + JIUYUN_GEN[g]);
+  }
+}
+// 第四循环：九君·初代~六代·人~尸体
+for (let l = 0; l < JIUYUN_LORDS.length; l++) {
+  for (let g = 0; g < JIUYUN_GEN.length; g++) {
+    for (let b = 0; b < JIUYUN_BEYOND.length; b++) {
+      XISHEN.push(JIUYUN_LORDS[l][0] + '·' + JIUYUN_LORDS[l][1] + '·' + JIUYUN_GEN[g] + '·' + JIUYUN_BEYOND[b]);
+    }
+  }
+}
+
+const GUIMI_PATHS = [
+  ['愚者','占卜家','小丑','魔术师','无面人','秘偶大师','诡法师','古代学者','奇迹师','诡秘侍者'],
+  ['门','学徒','诈骗师','戏法大师','记录官','旅行家','秘术导师','神话学专家','旅法师','门之主'],
+  ['错误','偷盗者','诈骗师','盗火人','窃梦家','盗贼','寄生者','神偷','解密学者','错误'],
+  ['空想家','观众','读心者','心理医生','催眠师','梦境行者','操纵师','织梦人','洞察者','作家'],
+  ['白塔','阅读者','博学者','秘术导师','知识皇帝','智者','全知者','天国使者','视界主宰','白塔'],
+  ['倒吊人','秘祈人','倾听者','隐修士','蔷薇主教','牧羊人','黑骑士','三首圣堂','秽语长老','暗天使'],
+  ['暴君','水手','暴风祭司','航海家','风暴使者','海洋歌者','灾祸祭司','海神','灾难主宰','雷霆之主'],
+  ['太阳','歌颂者','祈光人','太阳神官','公证人','光之祭司','无暗之火','巡夜人','圣者','太阳'],
+  ['真理','通识者','考古学家','环境分析师','机械专家','物理学家','工匠','博学者','知识教皇','贤者'],
+  ['死神','收尸人','掘墓人','不死者','幽魂','怨魂','不死之王','冥使','死亡执政官','死神'],
+  ['黑皇帝','律师','野蛮人','贿赂者','警长','仲裁人','堕落伯爵','混乱导师','暴君','黑皇帝'],
+  ['审判者','仲裁人','治安官','审判者','公证人','执法者','秩序之首','法官','秩序执法官','裁决者'],
+  ['魔女','刺客','潜行者','女巫','欢愉魔女','痛苦魔女','绝望魔女','不老魔女','灾祸魔女','黑魔女'],
+  ['战神','猎人','格斗家','纵火家','阴谋家','狼人','猎魔者','征服者','天气支配者','铁血骑士'],
+  ['命运之轮','怪物','诈骗师','机器之心','预言家','幸运儿','灾祸之主','神秘学家','智慧之眼','命运之轮'],
+  ['大地母神','耕种者','工匠','知识导师','农业学者','自然行者','神谕使','荒野之神','丰收女神','大地之母'],
+  ['大地神','药师','医生','药理学家','魔药师','德鲁伊','药王','植物学家','神医','丰收之子'],
+  ['战士','战士','格斗家','武器大师','封印师','光之祭司','无暗之火','耀骑士','荣耀战神','铁血骑士'],
+  ['隐者','窥秘人','占星人','神秘学家','隐者','星象师','先知','智者','视界主宰','知识皇帝'],
+  ['深渊','罪犯','变异人','纵火家','恐惧使者','恐惧之王','梦魇','恶魔','灾祸之主','堕落之主'],
+  ['黑夜女神','不眠者','午夜诗人','梦魇','守夜人','灵巫','恐惧之王','隐秘之仆','梦境执政官','黑夜女神'],
+  ['红祭司','猎人','格斗家','纵火家','阴谋家','狼人','猎魔者','征服者','天气支配者','铁血骑士']
+];
+const GUIMI = [];
+for (let r = 0; r < 9; r++) {
+  for (let p = 0; p < GUIMI_PATHS.length; p++) {
+    GUIMI.push(GUIMI_PATHS[p][0] + '·' + GUIMI_PATHS[p][r + 1]);
+  }
+}
+
+const QING_EMPERORS = [
+  '天命','天聪','崇德','顺治','康熙','雍正','乾隆',
+  '嘉庆','道光','咸丰','同治','光绪','宣统',
+  '努尔哈赤','皇太极','多尔衮','孝庄','康熙帝',
+  '雍正帝','乾隆帝','和珅','嘉庆帝','道光帝',
+  '咸丰帝','慈禧','同治帝','光绪帝','溥仪'
 ];
 
-const hkTwRegex = new RegExp(hkTwKeywords.join('|'), 'i');
-
-// ── 循环命名数组 ────────────────────────────────────────
-const ZODIAC = [
-    "子鼠", "丑牛", "寅虎", "卯兔", "辰龙", "巳蛇",
-    "午马", "未羊", "申猴", "酉鸡", "戌狗", "亥猪"
+const NONGYAO = [
+  '廉颇','小乔','赵云','墨子','妲己','嬴政','孙尚香','鲁班七号','庄周','刘禅',
+  '高渐离','阿轲','钟无艳','孙膑','扁鹊','白起','芈月','吕布','周瑜','夏侯惇',
+  '甄姬','曹操','典韦','宫本武藏','李白','马可波罗','狄仁杰','达摩','项羽',
+  '武则天','老夫子','关羽','貂蝉','安琪拉','程咬金','露娜','姜子牙','刘邦',
+  '韩信','王昭君','兰陵王','花木兰','张良','不知火舞','娜可露露','橘右京',
+  '亚瑟','孙悟空','牛魔','后羿','刘备','张飞','李元芳','虞姬','钟馗','杨玉环',
+  '杨戬','女娲','哪吒','干将莫邪','雅典娜','蔡文姬','太乙真人','东皇太一',
+  '鬼谷子','诸葛亮','大乔','黄忠','铠','百里守约','百里玄策','苏烈','梦奇',
+  '明世隐','公孙离','裴擒虎','狂铁','米莱狄','元歌','孙策','司马懿','盾山',
+  '伽罗','李信','上官婉儿','嫦娥','猪八戒','盘古','瑶','云中君','曜','马超',
+  '西施','鲁班大师','蒙犽','蒙恬','镜','澜','阿古朵','夏洛特','司空震','艾琳',
+  '云缨','金蝉','暃','桑启','戈娅','海月','赵怀真','莱西奥','姬小满','亚连',
+  '朵莉亚','海诺','敖隐','大司命','元流之子','少司缘','影','苍','空空儿',
+  '蚩奼','大禹','孙权','沈梦溪'
 ];
 
-const TAROT_EN = [
-    "Fool", "Magician", "High Priestess", "Empress", "Emperor", "Hierophant",
-    "Lovers", "Chariot", "Strength", "Hermit", "Wheel of Fortune", "Justice",
-    "Hanged Man", "Death", "Temperance", "Devil", "Tower", "Star",
-    "Moon", "Sun", "Judgement", "World"
-];
+const KILL_STREAKS = ['首杀','单杀','双杀','三杀','四杀','五杀','团灭'];
+const NONGYAO_HELPERS = KILL_STREAKS.concat(DOUBATTLE);
 
-const TAROT_CN = [
-    "愚者", "魔术师", "女祭司", "皇后", "皇帝", "教皇",
-    "恋人", "战车", "力量", "隐士", "命运之轮", "正义",
-    "倒吊人", "死神", "节制", "恶魔", "塔", "星星",
-    "月亮", "太阳", "审判", "世界"
-];
-
-const SINS = [
-    "傲慢", "嫉妒", "暴怒", "懒惰", "贪婪", "暴食", "色欲"
-];
-
-const ANGELS_EN = [
-    "Michael", "Gabriel", "Raphael", "Uriel", "Raguel", "Sariel",
-    "Remiel", "Zadkiel", "Jophiel", "Chamuel", "Haniel", "Barachiel"
-];
-
-const ANGELS_CN = [
-    "米迦勒", "加百列", "拉斐尔", "乌列尔", "拉贵尔", "萨列尔",
-    "雷米尔", "扎基尔", "约菲尔", "卡麦尔", "哈尼尔", "巴拉基勒"
-];
-
-const VAMPIRE_RANKS = [
-    "Fledgling", "Neonate", "Ancilla", "Elder", "Methuselah", "Antediluvian",
-    "Baron", "Count", "Duke", "Prince", "Archon", "Justicar"
-];
-
-const SOLAR_TERMS = [
-    "立春", "雨水", "惊蛰", "春分", "清明", "谷雨",
-    "立夏", "小满", "芒种", "夏至", "小暑", "大暑",
-    "立秋", "处暑", "白露", "秋分", "寒露", "霜降",
-    "立冬", "小雪", "大雪", "冬至", "小寒", "大寒"
-];
-
-const TANG_OFFICIALS = [
-    "宰相", "尚书", "侍郎", "郎中", "员外郎", "御史", "太守", "刺史",
-    "县令", "主簿", "司空", "司徒", "司马", "太尉", "中书令", "门下侍中",
-    "尚书令", "给事中", "谏议大夫", "大夫", "卿", "将军", "校尉", "都督"
-];
-
-const DOUPO_LEVELS = [
-    "斗之气", "斗者", "斗师", "大斗师", "斗灵", "斗王",
-    "斗皇", "斗宗", "斗尊", "斗圣", "斗帝"
-];
-
-const DOULUO_LEVELS = [
-    "魂士", "魂师", "大魂师", "魂尊", "魂宗", "魂王",
-    "魂帝", "魂圣", "魂斗罗", "封号斗罗", "神级"
-];
-
-const SUPER_DIGITS = {
-    '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴',
-    '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹'
+const MODES = {
+  '生肖': mergeArrays(ZODIAC, GUA_64),
+  '塔罗': mergeArrays(TAROT, CONSTELLATIONS_88),
+  '天使': mergeArrays(ANGELS, SINS),
+  '农药': mergeArrays(NONGYAO, NONGYAO_HELPERS),
+  '节气': mergeArrays(SOLAR, TANG),
+  '吃货': mergeArrays(CHIHUO, QING_EMPERORS),
+  '戏神': XISHEN,
+  '诡秘': GUIMI
 };
 
-function toSuperscript(num) {
-    if (num <= 0) return '';
-    const str = num.toString();
-    let result = '';
-    for (let char of str) {
-        result += SUPER_DIGITS[char] || char;
+async function operator(proxies = [], targetPlatform, env) {
+  if (!proxies?.length) return proxies;
+  const $ = $substore;
+  const cache = scriptResourceCache;
+  const cacheEnabled = !!$arguments.cache;
+  const ccMap = {};
+  const geoCache = {};
+
+  const servers = [];
+  const seen = {};
+  for (let i = 0; i < proxies.length; i++) {
+    const s = proxies[i].server;
+    if (!seen[s]) { seen[s] = true; servers.push(s); }
+  }
+
+  async function geoLookup(host) {
+    if (geoCache[host]) { ccMap[host] = geoCache[host]; return; }
+    if (cacheEnabled) {
+      const cached = cache.get('geo:' + host);
+      if (cached != null) {
+        const geo = typeof cached === 'string' ? { cc: cached, city: '' } : cached;
+        geoCache[host] = geo;
+        ccMap[host] = geo;
+        return;
+      }
     }
-    return result;
-}
+    try {
+      const resp = await $.http.get({ url: 'http://ip-api.com/json/' + host + '?fields=countryCode,city&lang=zh-CN', timeout: 3000 });
+      let d;
+      try { d = typeof resp.body === 'string' ? JSON.parse(resp.body) : resp.body; } catch (e) { d = null; }
+      const geo = { cc: (d && d.countryCode) ? d.countryCode.toUpperCase() : 'XX', city: (d && d.city) || '' };
+      geoCache[host] = geo;
+      ccMap[host] = geo;
+      if (cacheEnabled) cache.set('geo:' + host, geo);
+    } catch (e) {
+      ccMap[host] = { cc: 'XX', city: '' };
+    }
+  }
 
-function operator(proxies) {
-    if (!proxies?.length) return proxies;
+  const start = Date.now();
+  for (let i = 0; i < servers.length; i += 5) {
+    if (Date.now() - start > 40000) break;
+    await Promise.all(servers.slice(i, i + 5).map(h => geoLookup(h)));
+    if (i + 5 < servers.length) await new Promise(r => setTimeout(r, 200));
+  }
 
-    let result = [];
+  const SUP = {'0':'⁰','1':'¹','2':'²','3':'³','4':'⁴','5':'⁵','6':'⁶','7':'⁷','8':'⁸','9':'⁹'};
+  function sup(n) {
+    if (n <= 0) return '';
+    let s = '';
+    for (const c of n.toString()) s += SUP[c] || c;
+    return s;
+  }
 
-    // 第一阶段：处理前缀 + 循环命名 / 序号
-    if (!USE_CUSTOM) {
-        proxies.forEach(proxy => {
-            const newName = PREFIX + proxy.name.trim() + SUFFIX;
-            proxy.name = newName;
-            result.push(proxy);
-        });
+  function baseName(mode, idx) {
+    const arr = MODES[mode];
+    if (arr) { const i = idx % arr.length; const c = Math.floor(idx / arr.length); return c > 0 ? arr[i] + sup(c + 1) : arr[i]; }
+    return mode;
+  }
+
+  function geoLabel(server) {
+    const geo = ccMap[server];
+    if (!geo || geo.cc === 'XX') return null;
+    return (geo.cc === 'CN' && geo.city) ? geo.city : geo.cc;
+  }
+
+  function isSupported(server) {
+    const geo = ccMap[server];
+    return geo && geo.cc && geo.cc !== 'XX' && !UNSUPPORTED.has(geo.cc);
+  }
+
+  const result = [];
+
+  if (GM) {
+    const groups = {};
+    for (let i = 0; i < proxies.length; i++) {
+      proxies[i]._b = baseName(GM, i);
+      if (!groups[proxies[i]._b]) groups[proxies[i]._b] = [];
+      groups[proxies[i]._b].push(proxies[i]);
+    }
+    for (const b of Object.keys(groups)) {
+      const arr = groups[b];
+      for (let i = 0; i < arr.length; i++) {
+        const geo = geoLabel(arr[i].server);
+        const cc = geo ? geo + SEP : '';
+        const name = arr.length > 1 ? b + sup(i + 1) : b;
+        arr[i].name = PREFIX + cc + name;
+        delete arr[i]._b;
+        result.push(arr[i]);
+      }
+    }
+  } else {
+    const counter = {};
+    for (let i = 0; i < proxies.length; i++) {
+      const geo = geoLabel(proxies[i].server);
+      if (geo) {
+        if (!counter[geo]) counter[geo] = 0;
+        counter[geo]++;
+        proxies[i].name = PREFIX + geo + '-' + String(counter[geo]).padStart(2, '0');
+      } else {
+        proxies[i].name = PREFIX + proxies[i].name.trim();
+      }
+      result.push(proxies[i]);
+    }
+  }
+
+  if (HZ_TEXT) {
+    if (IS_GPT) {
+      for (let i = 0; i < result.length; i++) {
+        if (isSupported(result[i].server)) result[i].name += SUFFIX;
+      }
     } else {
-        let getBaseName;
-
-        if (GM_MODE === "生肖") {
-            getBaseName = (index) => {
-                const zIdx = index % 12;
-                const cycle = Math.floor(index / 12);
-                let z = ZODIAC[zIdx];
-                if (cycle > 0) z += cycle;
-                return z;
-            };
-        }
-        else if (GM_MODE === "塔罗") {
-            getBaseName = (index) => {
-                const tIdx = index % 22;
-                const cycle = Math.floor(index / 22);
-                let card = TAROT_EN[tIdx];
-                if (cycle > 0) card += cycle;
-                return card;
-            };
-        }
-        else if (GM_MODE === "塔罗X") {
-            getBaseName = (index) => {
-                const tIdx = index % 22;
-                const cycle = Math.floor(index / 22);
-                let card = TAROT_CN[tIdx];
-                if (cycle > 0) card += cycle;
-                return card;
-            };
-        }
-        else if (GM_MODE === "罪") {
-            getBaseName = (index) => {
-                const sIdx = index % 7;
-                const cycle = Math.floor(index / 7);
-                let sin = SINS[sIdx];
-                if (cycle > 0) sin += cycle;
-                return sin;
-            };
-        }
-        else if (GM_MODE === "天使") {
-            getBaseName = (index) => {
-                const aIdx = index % 12;
-                const cycle = Math.floor(index / 12);
-                let angel = ANGELS_EN[aIdx];
-                if (cycle > 0) angel += cycle;
-                return angel;
-            };
-        }
-        else if (GM_MODE === "天使X") {
-            getBaseName = (index) => {
-                const aIdx = index % 12;
-                const cycle = Math.floor(index / 12);
-                let angel = ANGELS_CN[aIdx];
-                if (cycle > 0) angel += cycle;
-                return angel;
-            };
-        }
-        else if (GM_MODE === "血族") {
-            getBaseName = (index) => {
-                const vIdx = index % VAMPIRE_RANKS.length;
-                const cycle = Math.floor(index / VAMPIRE_RANKS.length);
-                let rank = VAMPIRE_RANKS[vIdx];
-                if (cycle > 0) rank += cycle;
-                return rank;
-            };
-        }
-        else if (GM_MODE === "节气") {
-            getBaseName = (index) => {
-                const sIdx = index % SOLAR_TERMS.length;
-                const cycle = Math.floor(index / SOLAR_TERMS.length);
-                let term = SOLAR_TERMS[sIdx];
-                if (cycle > 0) term += cycle;
-                return term;
-            };
-        }
-        else if (GM_MODE === "唐朝") {
-            getBaseName = (index) => {
-                const oIdx = index % TANG_OFFICIALS.length;
-                const cycle = Math.floor(index / TANG_OFFICIALS.length);
-                let official = TANG_OFFICIALS[oIdx];
-                if (cycle > 0) official += cycle;
-                return official;
-            };
-        }
-        else if (GM_MODE === "斗罗") {
-            getBaseName = (index) => {
-                const dIdx = index % DOUPO_LEVELS.length;
-                const cycle = Math.floor(index / DOUPO_LEVELS.length);
-                let level = DOUPO_LEVELS[dIdx];
-                if (cycle > 0) level += cycle;
-                return level;
-            };
-        }
-        else if (GM_MODE === "斗破") {
-            getBaseName = (index) => {
-                const dIdx = index % DOULUO_LEVELS.length;
-                const cycle = Math.floor(index / DOULUO_LEVELS.length);
-                let level = DOULUO_LEVELS[dIdx];
-                if (cycle > 0) level += cycle;
-                return level;
-            };
-        }
-        else {
-            getBaseName = () => GM_MODE;
-        }
-
-        const nameGroups = {};
-        proxies.forEach((proxy, idx) => {
-            const base = getBaseName(idx);
-            proxy._base = base;
-            if (!nameGroups[base]) nameGroups[base] = [];
-            nameGroups[base].push(proxy);
-        });
-
-        Object.keys(nameGroups).forEach(base => {
-            const nodes = nameGroups[base];
-            const count = nodes.length;
-
-            nodes.forEach((node, i) => {
-                let part = base;
-                if (count > 1) {
-                    const sup = toSuperscript(i + 1);
-                    part += sup;
-                }
-                node.name = PREFIX + part + SUFFIX;
-                delete node._base;
-                result.push(node);
-            });
-        });
+      for (let i = 0; i < result.length; i++) {
+        result[i].name += SUFFIX;
+      }
     }
+  }
 
-    // 第二阶段：如果 ZN=1，则对**非港台 & 非支持区**节点追加 APPEND_TEXT
-    if (APPEND_ENABLED) {
-        result = result.map(p => {
-            if (hkTwRegex.test(p.name)) {
-                return p;  // 匹配到港台或不支持区关键词 → 不加
-            }
-            p.name += APPEND_TEXT;
-            return p;
-        });
-    }
-
-    return result;
+  $.notify('命名', '', '完成 ' + result.length + ' 节点');
+  return result;
 }
