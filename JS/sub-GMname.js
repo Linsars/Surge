@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         智慧重命名 - GeoIP + 创意命名
-// @version      4.8
+// @version      4.9
 // @description  SubStore 节点重命名：GeoIP 真实出口检测 + GPT 支持判断 + 多种创意循环命名
 // @author       Linsar
 // @example      #gm=诡秘&qz=机场&hz=GPT
@@ -216,8 +216,8 @@ async function operator(proxies = [], targetPlatform, env) {
       } catch (e) {}
     }
     const apis = [
+      { url: 'http://ip-api.com/json/' + target + '?fields=countryCode,city&lang=zh-CN', cc: 'countryCode', city: 'city' },
       { url: 'https://ipinfo.io/' + target + '/json', cc: 'country', city: 'city' },
-      { url: 'http://ip-api.com/json/' + target + '?fields=countryCode,city', cc: 'countryCode', city: 'city' },
       { url: 'https://api.ip.sb/geoip/' + target, cc: 'country_code', city: 'city' }
     ];
     for (const api of apis) {
@@ -330,8 +330,8 @@ async function operator(proxies = [], targetPlatform, env) {
     if (geo && geo.cc && geo.cc !== 'XX') namedOK++;
   }
   const msg = geoFail > 0
-    ? 'v4.8 地区码 ' + namedOK + '/' + result.length + ' 服务器 ' + geoOK + '/' + servers.length + ' 失败 ' + geoFail
-    : 'v4.8 地区码 ' + namedOK + '/' + result.length;
+    ? 'v4.9 地区码 ' + namedOK + '/' + result.length + ' 服务器 ' + geoOK + '/' + servers.length + ' 失败 ' + geoFail
+    : 'v4.9 地区码 ' + namedOK + '/' + result.length;
   $.notify('命名', '', msg);
   return result;
 }
