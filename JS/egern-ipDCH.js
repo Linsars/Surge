@@ -18,51 +18,48 @@ export default async function(ctx) {
   const policy = (ctx.env && ctx.env.POLICY) ? ctx.env.POLICY : "";
   const BASE_UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1";
 
-  function applyPolicy(opts) {
-    return opts;
-  }
-
   async function safe(fn) { try { return await fn(); } catch (e) { return null; } }
-  async function get(url, headers) {
-    const opts = { timeout: 6000 };
+  async function get(url, headers, timeout) {
+    const opts = { timeout: timeout || 8000 };
     if (headers) opts.headers = headers;
-    const res = await ctx.http.get(url, applyPolicy(opts));
+    const res = await ctx.http.get(url, opts);
     return await res.text();
   }
-  async function post(url, body, headers) {
-    const opts = { timeout: 6000, body: body };
+  async function post(url, body, headers, timeout) {
+    const opts = { timeout: timeout || 8000, body: body };
     if (headers) opts.headers = headers;
-    const res = await ctx.http.post(url, applyPolicy(opts));
+    const res = await ctx.http.post(url, opts);
     return await res.text();
   }
   async function getRaw(url, headers, extraOpts) {
-    const opts = { timeout: 6000 };
+    const opts = { timeout: 8000 };
     if (headers) opts.headers = headers;
     if (extraOpts) Object.assign(opts, extraOpts);
-    return await ctx.http.get(url, applyPolicy(opts));
+    return await ctx.http.get(url, opts);
   }
   function jp(s) { try { return JSON.parse(s); } catch (e) { return null; } }
   function ti(v) { const n = Number(v); return Number.isFinite(n) ? Math.round(n) : null; }
 
   async function checkChatGPT() {
     try {
-      const headRes = await getRaw("https://chatgpt.com", { "User-Agent": BASE_UA }, { redirect: 'manual' });
-      const webAccessible = !!headRes;
+      const traceTxt = await get("https://chatgpt.com/cdn-cgi/trace", null, 5000);
+      const tm = traceTxt ? traceTxt.match(/loc=([A-Z]{2})/) : null;
+      if (tm && tm[1]) {
+        try {
+          const apiRes = await getRaw("https://chatgpt.com/backend-api/models", { "User-Agent": BASE_UA, "Authorization": "Bearer " });
+          if (apiRes && apiRes.status && apiRes.status !== 403) return tm[1];
+        } catch (e) {}
+        return tm[1];
+      }
+    } catch (e) {}
+    try {
       const iosRes = await getRaw("https://ios.chat.openai.com", { "User-Agent": BASE_UA });
       const iosBody = iosRes ? await iosRes.text() : "";
       let cfDetails = "";
       try { cfDetails = jp(iosBody)?.cf_details || ""; } catch (e2) {}
       const appBlocked = !iosBody || iosBody.includes("blocked_why_headline") || iosBody.includes("unsupported_country_region_territory") || cfDetails.includes("(1)") || cfDetails.includes("(2)");
-      const appAccessible = !!iosBody && !appBlocked;
-      if (!webAccessible && !appAccessible) return "Cross";
-      if (appAccessible && !webAccessible) return "APP";
-      if (webAccessible && appAccessible) {
-        const traceTxt = await get("https://chatgpt.com/cdn-cgi/trace");
-        const tm = traceTxt ? traceTxt.match(/loc=([A-Z]{2})/) : null;
-        if (tm && tm[1]) return tm[1];
-        return "OK";
-      }
-      return "Cross";
+      if (appBlocked) return "Cross";
+      return "APP";
     } catch (e) { return "Cross"; }
   }
 
@@ -77,6 +74,7 @@ export default async function(ctx) {
       if (m && m[1]) return m[1].toUpperCase();
       m = txt.match(/\[\[\\?"([A-Z]{2})\\?",\\?"S/);
       if (m && m[1]) return m[1].toUpperCase();
+      if (txt.includes("Bard isn't currently supported")) return "Cross";
       return "OK";
     } catch (e) { return "Cross"; }
   }
@@ -105,9 +103,9 @@ export default async function(ctx) {
       const bodies = await Promise.all([fetchTitle(titles[0]), fetchTitle(titles[1])]);
       const t1 = bodies[0], t2 = bodies[1];
       if (!t1 && !t2) return "Cross";
-      const oh1 = /oh no!/i.test(t1 || "");
-      const oh2 = /oh no!/i.test(t2 || "");
-      if (oh1 && oh2) return "Popcorn";
+      const blocked1 = /oh no!/i.test(t1 || "") || /not available/i.test(t1 || "") || /Sorry/i.test(t1 || "");
+      const blocked2 = /oh no!/i.test(t2 || "") || /not available/i.test(t2 || "") || /Sorry/i.test(t2 || "");
+      if (blocked1 && blocked2) return "Popcorn";
       const allBodies = [t1, t2];
       for (let b of allBodies) {
         if (!b) continue;
@@ -144,9 +142,14 @@ export default async function(ctx) {
     return isp;
   };
 
+  const fmtFlag = (code) => {
+    if (!code || code.length !== 2 || code.toUpperCase() === 'XX') return "🌍";
+    return String.fromCodePoint(...code.toUpperCase().split('').map(c => 127397 + c.charCodeAt(0)));
+  };
+
   let lIp = "获取失败", lLoc = "未知位置", lIsp = "未知运营商";
   try {
-    const lRes = await ctx.http.get('https://myip.ipip.net/json', { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 3000 });
+    const lRes = await ctx.http.get('https://myip.ipip.net/json', { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 8000 });
     const body = JSON.parse(await lRes.text());
     if (body?.data) {
       lIp = body.data.ip || "获取失败";
@@ -157,7 +160,7 @@ export default async function(ctx) {
   } catch (e) {}
   if (lIp === "获取失败") {
     try {
-      const res126 = await ctx.http.get('https://ipservice.ws.126.net/locate/api/getLocByIp', { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 3000 });
+      const res126 = await ctx.http.get('https://ipservice.ws.126.net/locate/api/getLocByIp', { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 8000 });
       const body126 = JSON.parse(await res126.text());
       if (body126?.result) {
         lIp = body126.result.ip;
@@ -167,18 +170,16 @@ export default async function(ctx) {
     } catch (e) {}
   }
 
-  let nIp = "获取失败";
-  let nLoc = "未知位置";
-  let nativeText = "未知";
+  let nIp = "获取失败", nLoc = "未知位置", nativeText = "未知";
   let riskIPPureTxt = "低危 (0)", riskIPPureCol = C_GREEN, ippSev = 0;
 
   try {
-    const res = await ctx.http.get('https://my.ippure.com/v1/info', { timeout: 4000 });
+    const res = await ctx.http.get('https://my.ippure.com/v1/info', { timeout: 8000 });
     const d = JSON.parse(await res.text());
     nIp = d.ip || "获取失败";
     let code = d.countryCode || "";
     if (code.toUpperCase() === 'TW') code = 'CN';
-    const flag = code ? String.fromCodePoint(...code.toUpperCase().split('').map(c => 127397 + c.charCodeAt())) : "🌍";
+    const flag = fmtFlag(code);
     nLoc = `${flag} ${d.country || ""} ${d.city || ""}`.trim() || "未知位置";
     nativeText = d.isResidential === true ? "🏠 原生住宅" : (d.isResidential === false ? "🏢 商业机房" : "未知");
     const risk = ti(d.fraudScore);
@@ -190,12 +191,24 @@ export default async function(ctx) {
     }
   } catch (e) {}
 
+  if (nIp === "获取失败") {
+    try {
+      const res2 = await ctx.http.get('https://api.ip.sb/geoip', { timeout: 8000 });
+      const d2 = JSON.parse(await res2.text());
+      if (d2 && d2.ip) {
+        nIp = d2.ip;
+        let code2 = d2.country_code || "";
+        if (code2.toUpperCase() === 'TW') code2 = 'CN';
+        nLoc = `${fmtFlag(code2)} ${d2.country || ""} ${d2.city || ""}`.trim();
+        nativeText = "未知";
+      }
+    } catch (e) {}
+  }
+
   let riskIpapiTxt = "低危 (0%)", riskIpapiCol = C_GREEN, apiSev = 0;
-  try {
-    const ipRes = await ctx.http.get('http://ip-api.com/json/?lang=zh-CN', { timeout: 3000 });
-    const ipData = JSON.parse(await ipRes.text());
-    if (ipData.query) {
-      const apiRes = await ctx.http.get(`https://api.ipapi.is/?q=${ipData.query}`, { timeout: 4000 });
+  if (nIp !== "获取失败") {
+    try {
+      const apiRes = await ctx.http.get(`https://api.ipapi.is/?q=${nIp}`, { timeout: 8000 });
       const j = JSON.parse(await apiRes.text());
       if (j && j.company && j.company.abuser_score) {
         const m = String(j.company.abuser_score).match(/([0-9.]+)\s*\(([^)]+)\)/);
@@ -207,8 +220,8 @@ export default async function(ctx) {
           apiSev = lv.includes('High') || lv.includes('Very High') ? 3 : (lv.includes('Elevated') ? 2 : 0);
         }
       }
-    }
-  } catch (e) {}
+    } catch (e) {}
+  }
 
   const [gptStatus, geminiStatus, youtubeStatus, netflixStatus, tiktokStatus] = await Promise.all([
     checkChatGPT(),
@@ -225,16 +238,13 @@ export default async function(ctx) {
   const getUnlockResult = (status) => {
     if (status === "Cross") return "不可用";
     if (status === "CN") return "CN";
-    return status; 
+    return status;
   };
 
   let riskGrades = [];
   if (proxySuccess) {
     riskGrades.push({ sev: ippSev, t: `IPPure: ${riskIPPureTxt}` });
     riskGrades.push({ sev: apiSev, t: `ipapi: ${riskIpapiTxt}` });
-    riskGrades.push({ sev: 0, t: 'IP2Location: 低危 (3)' });
-    riskGrades.push({ sev: 0, t: 'DB-IP: 低危 (0)' });
-    riskGrades.push({ sev: 0, t: 'ipregistry: 低危 (0)' });
   } else {
     riskGrades.push({ sev: 4, t: '获取失败' });
   }
@@ -270,10 +280,7 @@ export default async function(ctx) {
 
   function smallInfoRow(iconName, label, value, valueCol = C_MAIN) {
     return {
-      type: 'stack',
-      direction: 'row',
-      alignItems: 'center',
-      gap: 5,
+      type: 'stack', direction: 'row', alignItems: 'center', gap: 5,
       children: [
         { type: 'image', src: `sf-symbol:${iconName}`, color: C_ICON, width: SMALL_ICON, height: SMALL_ICON },
         { type: 'text', text: label, font: { size: SMALL_FONT }, textColor: C_SUB },
@@ -288,10 +295,7 @@ export default async function(ctx) {
     const iconCol = getUnlockColor(status);
     const result = getUnlockResult(status);
     return {
-      type: 'stack',
-      direction: 'row',
-      alignItems: 'center',
-      gap: 4,
+      type: 'stack', direction: 'row', alignItems: 'center', gap: 4,
       children: [
         { type: 'image', src: `sf-symbol:${iconName}`, color: iconCol, width: SMALL_ICON, height: SMALL_ICON },
         { type: 'text', text: name, font: { size: SMALL_FONT, weight: 'medium' }, textColor: C_MAIN, flex: 1 },
@@ -307,10 +311,7 @@ export default async function(ctx) {
     const src = parts[0] || grade.t;
     const val = parts[1] || '';
     return {
-      type: 'stack',
-      direction: 'row',
-      alignItems: 'center',
-      gap: 4,
+      type: 'stack', direction: 'row', alignItems: 'center', gap: 4,
       children: [
         { type: 'image', src: `sf-symbol:${sevIcon(grade.sev)}`, color: col, width: SMALL_ICON, height: SMALL_ICON },
         { type: 'text', text: src, font: { size: SMALL_FONT }, textColor: C_SUB },
@@ -335,10 +336,7 @@ export default async function(ctx) {
   const COL_GAP = 12;
 
   const leftColumn = {
-    type: 'stack',
-    direction: 'column',
-    gap: INFO_GAP,
-    flex: 1,
+    type: 'stack', direction: 'column', gap: INFO_GAP, flex: 1,
     children: [
       smallInfoRow("house.fill", "本地IP：", lIp, C_GREEN),
       smallInfoRow("mappin.and.ellipse", "本地位置：", lLoc),
@@ -347,10 +345,7 @@ export default async function(ctx) {
   };
 
   const rightColumn = {
-    type: 'stack',
-    direction: 'column',
-    gap: INFO_GAP,
-    flex: 1,
+    type: 'stack', direction: 'column', gap: INFO_GAP, flex: 1,
     children: [
       smallInfoRow("network", "落地IP：", nIp, proxySuccess ? C_GREEN : C_RED),
       smallInfoRow("map.fill", "落地位置：", nLoc, proxySuccess ? C_MAIN : C_RED),
@@ -359,9 +354,7 @@ export default async function(ctx) {
   };
 
   const unlockLeft = {
-    type: 'stack',
-    direction: 'column',
-    gap: BOTTOM_GAP_LEFT,
+    type: 'stack', direction: 'column', gap: BOTTOM_GAP_LEFT,
     children: [
       UnlockRow("GPT", gptStatus),
       UnlockRow("Gemini", geminiStatus),
@@ -372,16 +365,12 @@ export default async function(ctx) {
   };
 
   const unlockRight = {
-    type: 'stack',
-    direction: 'column',
-    gap: BOTTOM_GAP_RIGHT,
+    type: 'stack', direction: 'column', gap: BOTTOM_GAP_RIGHT,
     children: riskGrades.map(g => ScoreRow(g))
   };
 
   const unlockSection = {
-    type: 'stack',
-    direction: 'row',
-    gap: COL_GAP,
+    type: 'stack', direction: 'row', gap: COL_GAP,
     children: [unlockLeft, unlockRight]
   };
 
@@ -392,10 +381,7 @@ export default async function(ctx) {
     backgroundColor: BG_COLOR,
     children: [
       {
-        type: 'stack',
-        direction: 'row',
-        alignItems: 'center',
-        gap: HEADER_GAP,
+        type: 'stack', direction: 'row', alignItems: 'center', gap: HEADER_GAP,
         children: [
           { type: 'text', text: '数据中心(DCH)', font: { size: HEADER_FONT, weight: 'heavy' }, textColor: C_TITLE, flex: 1, maxLines: 1, minScale: 0.7 },
           { type: 'image', src: `sf-symbol:${summaryIcon}`, color: summaryCol, width: 12, height: 12 },
@@ -406,10 +392,7 @@ export default async function(ctx) {
             { type: 'text', text: policy, font: { size: 10, weight: 'bold' }, textColor: policyOk ? C_GREEN : (policyWarn ? C_ORANGE : C_SUB) },
           ] : []),
           {
-            type: 'stack',
-            direction: 'row',
-            alignItems: 'center',
-            gap: 3,
+            type: 'stack', direction: 'row', alignItems: 'center', gap: 3,
             children: [
               { type: 'image', src: 'sf-symbol:arrow.clockwise', color: C_SUB, width: HEADER_ICON, height: HEADER_ICON },
               { type: 'text', text: timeStr, font: { size: HEADER_TIME_FONT }, textColor: C_SUB }
@@ -418,9 +401,7 @@ export default async function(ctx) {
         ]
       },
       {
-        type: 'stack',
-        direction: 'row',
-        gap: COL_GAP,
+        type: 'stack', direction: 'row', gap: COL_GAP,
         children: [leftColumn, rightColumn]
       },
       { type: 'stack', height: 0.5, backgroundColor: { light: 'rgba(0,0,0,0.08)', dark: 'rgba(255,255,255,0.12)' } },
