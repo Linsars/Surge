@@ -202,22 +202,22 @@ async function operator(proxies = [], targetPlatform, env) {
       }
     }
     try {
-      const resp = await $.http.get({ url: 'https://ipinfo.io/' + host + '/json', timeout: 5000 });
+      const resp = await $.http.get({ url: 'https://api.ip.sb/geoip/' + host, timeout: 5000 });
       let d;
       try { d = typeof resp.body === 'string' ? JSON.parse(resp.body) : resp.body; } catch (e) { d = null; }
-      if (d && d.country) {
-        const geo = { cc: d.country.toUpperCase(), city: d.city || '' };
+      if (d && d.country_code) {
+        const geo = { cc: d.country_code.toUpperCase(), city: d.city || '' };
         geoCache[host] = geo;
         ccMap[host] = geo;
         if (cacheEnabled) cache.set('geo:' + host, geo);
       }
     } catch (e) {
       try {
-        const resp2 = await $.http.get({ url: 'https://api.ip.sb/geoip/' + host, timeout: 5000 });
+        const resp2 = await $.http.get({ url: 'https://ipinfo.io/' + host + '/json', timeout: 5000 });
         let d2;
         try { d2 = typeof resp2.body === 'string' ? JSON.parse(resp2.body) : resp2.body; } catch (e2) { d2 = null; }
-        if (d2 && d2.country_code) {
-          const geo2 = { cc: d2.country_code.toUpperCase(), city: d2.city || '' };
+        if (d2 && d2.country) {
+          const geo2 = { cc: d2.country.toUpperCase(), city: d2.city || '' };
           geoCache[host] = geo2;
           ccMap[host] = geo2;
           if (cacheEnabled) cache.set('geo:' + host, geo2);
@@ -305,6 +305,12 @@ async function operator(proxies = [], targetPlatform, env) {
     }
   }
 
-  $.notify('命名', '', '完成 ' + result.length + ' 节点');
+  let geoOK = 0;
+  for (const k in ccMap) { if (ccMap[k] && ccMap[k].cc && ccMap[k].cc !== 'XX') geoOK++; }
+  const geoFail = servers.length - geoOK;
+  const msg = geoFail > 0
+    ? '地区码 ' + geoOK + '/' + servers.length + ' 失败 ' + geoFail
+    : '地区码 ' + geoOK + '/' + servers.length;
+  $.notify('命名', '', msg);
   return result;
 }
