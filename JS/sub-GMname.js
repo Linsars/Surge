@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         智慧重命名 - GeoIP + 创意命名
-// @version      4.7
+// @version      4.8
 // @description  SubStore 节点重命名：GeoIP 真实出口检测 + GPT 支持判断 + 多种创意循环命名
 // @author       Linsar
 // @example      #gm=诡秘&qz=机场&hz=GPT
@@ -258,10 +258,15 @@ async function operator(proxies = [], targetPlatform, env) {
     return mode;
   }
 
+  function cc2flag(cc) {
+    if (!cc || cc.length !== 2) return '';
+    return String.fromCodePoint(...cc.toUpperCase().split('').map(c => 127397 + c.charCodeAt(0)));
+  }
   function geoLabel(server) {
     const geo = ccMap[server];
     if (!geo || !geo.cc || geo.cc === 'XX') return null;
-    return (geo.cc === 'CN' && geo.city) ? geo.city : geo.cc;
+    if (geo.cc === 'CN' && geo.city) return geo.city;
+    return cc2flag(geo.cc);
   }
 
   function isSupported(server) {
@@ -325,8 +330,8 @@ async function operator(proxies = [], targetPlatform, env) {
     if (geo && geo.cc && geo.cc !== 'XX') namedOK++;
   }
   const msg = geoFail > 0
-    ? 'v4.7 地区码 ' + namedOK + '/' + result.length + ' 服务器 ' + geoOK + '/' + servers.length + ' 失败 ' + geoFail
-    : 'v4.7 地区码 ' + namedOK + '/' + result.length;
+    ? 'v4.8 地区码 ' + namedOK + '/' + result.length + ' 服务器 ' + geoOK + '/' + servers.length + ' 失败 ' + geoFail
+    : 'v4.8 地区码 ' + namedOK + '/' + result.length;
   $.notify('命名', '', msg);
   return result;
 }
