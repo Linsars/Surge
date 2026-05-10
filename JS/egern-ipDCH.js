@@ -206,21 +206,59 @@ export default async function(ctx) {
   }
 
   let riskIpapiTxt = "低危 (0%)", riskIpapiCol = C_GREEN, apiSev = 0;
-  if (nIp !== "获取失败") {
-    try {
-      const apiRes = await ctx.http.get(`https://api.ipapi.is/?q=${nIp}`, { timeout: 8000 });
-      const j = JSON.parse(await apiRes.text());
-      if (j && j.company && j.company.abuser_score) {
-        const m = String(j.company.abuser_score).match(/([0-9.]+)\s*\(([^)]+)\)/);
-        if (m) {
-          const pct = Math.round(Number(m[1]) * 10000) / 100 + '%';
-          const lv = m[2].trim();
-          riskIpapiTxt = `${lv} (${pct}) Abuser`;
-          riskIpapiCol = lv.includes('High') || lv.includes('Very High') ? C_ORANGE : (lv.includes('Elevated') ? C_YELLOW : C_GREEN);
-          apiSev = lv.includes('High') || lv.includes('Very High') ? 3 : (lv.includes('Elevated') ? 2 : 0);
-        }
+  let riskIP2LTxt = "低危", riskIP2LCol = C_GREEN, ip2lSev = 0;
+  let riskDBIPTxt = "低危", riskDBIPCol = C_GREEN, dbipSev = 0;
+  let riskIPRegTxt = "未查询", riskIPRegCol = C_SUB, ipregSev = 0;
+
+  const ipChecks = nIp !== "获取失败" ? await Promise.allSettled([
+    ctx.http.get(`https://api.ipapi.is/?q=${nIp}`, { timeout: 8000 }).then(r => r.text()),
+    ctx.http.get(`https://api.ip2location.io/?ip=${nIp}&key=free`, { timeout: 8000 }).then(r => r.text()),
+    ctx.http.get(`https://api.db-ip.com/v2/free/${nIp}`, { timeout: 8000 }).then(r => r.text()),
+    ctx.http.get(`https://api.ipregistry.co/${nIp}?key=tryout`, { timeout: 8000 }).then(r => r.text()),
+  ]) : [];
+
+  if (ipChecks[0]?.status === 'fulfilled') {
+    const j = jp(ipChecks[0].value);
+    if (j?.company?.abuser_score) {
+      const m = String(j.company.abuser_score).match(/([0-9.]+)\s*\(([^)]+)\)/);
+      if (m) {
+        const pct = Math.round(Number(m[1]) * 10000) / 100 + '%';
+        const lv = m[2].trim();
+        riskIpapiTxt = `${lv} (${pct}) Abuser`;
+        riskIpapiCol = lv.includes('High') || lv.includes('Very High') ? C_ORANGE : (lv.includes('Elevated') ? C_YELLOW : C_GREEN);
+        apiSev = lv.includes('High') || lv.includes('Very High') ? 3 : (lv.includes('Elevated') ? 2 : 0);
       }
-    } catch (e) {}
+    }
+  }
+
+  if (ipChecks[1]?.status === 'fulfilled') {
+    const j = jp(ipChecks[1].value);
+    if (j?.is_proxy !== undefined) {
+      const isProxy = j.is_proxy;
+      riskIP2LTxt = isProxy ? "代理 (高危)" : "非代理 (低危)";
+      riskIP2LCol = isProxy ? C_ORANGE : C_GREEN;
+      ip2lSev = isProxy ? 3 : 0;
+    }
+  }
+
+  if (ipChecks[2]?.status === 'fulfilled') {
+    const j = jp(ipChecks[2].value);
+    if (j?.threatLevel) {
+      const lv = j.threatLevel;
+      riskDBIPTxt = lv === 'high' ? `高危` : lv === 'medium' ? `中等` : `低危`;
+      riskDBIPCol = lv === 'high' ? C_ORANGE : lv === 'medium' ? C_YELLOW : C_GREEN;
+      dbipSev = lv === 'high' ? 3 : lv === 'medium' ? 2 : 0;
+    }
+  }
+
+  if (ipChecks[3]?.status === 'fulfilled') {
+    const j = jp(ipChecks[3].value);
+    if (j?.security) {
+      const isProxy = j.security.is_proxy || j.security.is_webproxy || j.security.is_tor;
+      riskIPRegTxt = isProxy ? "代理 (高危)" : "非代理 (低危)";
+      riskIPRegCol = isProxy ? C_ORANGE : C_GREEN;
+      ipregSev = isProxy ? 3 : 0;
+    }
   }
 
   const [gptStatus, geminiStatus, youtubeStatus, netflixStatus, tiktokStatus] = await Promise.all([
@@ -245,6 +283,9 @@ export default async function(ctx) {
   if (proxySuccess) {
     riskGrades.push({ sev: ippSev, t: `IPPure: ${riskIPPureTxt}` });
     riskGrades.push({ sev: apiSev, t: `ipapi: ${riskIpapiTxt}` });
+    riskGrades.push({ sev: ip2lSev, t: `IP2Location: ${riskIP2LTxt}` });
+    riskGrades.push({ sev: dbipSev, t: `DB-IP: ${riskDBIPTxt}` });
+    riskGrades.push({ sev: ipregSev, t: `ipregistry: ${riskIPRegTxt}` });
   } else {
     riskGrades.push({ sev: 4, t: '获取失败' });
   }
