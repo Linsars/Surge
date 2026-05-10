@@ -214,7 +214,7 @@ export default async function(ctx) {
     ctx.http.get(`https://api.ipapi.is/?q=${nIp}`, { timeout: 8000 }).then(r => r.text()),
     ctx.http.get(`https://api.ip2location.io/?ip=${nIp}&key=free`, { timeout: 8000 }).then(r => r.text()),
     ctx.http.get(`https://api.db-ip.com/v2/free/${nIp}`, { timeout: 8000 }).then(r => r.text()),
-    ctx.http.get(`https://api.ipregistry.co/${nIp}?key=tryout`, { timeout: 8000 }).then(r => r.text()),
+    ctx.http.get(`https://api.ipregistry.co/${nIp}?key=${ctx.env.IPREGISTRY_KEY || 'tryout'}`, { timeout: 8000 }).then(r => r.text()),
   ]) : [];
 
   if (ipChecks[0]?.status === 'fulfilled') {
