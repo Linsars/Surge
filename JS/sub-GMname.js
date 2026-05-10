@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         智慧重命名 - GeoIP + 创意命名
-// @version      4.5
+// @version      4.6
 // @description  SubStore 节点重命名：GeoIP 真实出口检测 + GPT 支持判断 + 多种创意循环命名
 // @author       Linsar
 // @example      #gm=诡秘&qz=机场&hz=GPT
@@ -215,30 +215,25 @@ async function operator(proxies = [], targetPlatform, env) {
         }
       } catch (e) {}
     }
-    try {
-      const resp = await $.http.get({ url: 'https://api.ip.sb/geoip/' + target, timeout: 5000 });
-      let d;
-      try { d = typeof resp.body === 'string' ? JSON.parse(resp.body) : resp.body; } catch (e) { d = null; }
-      if (d && d.country_code) {
-        const geo = { cc: d.country_code.toUpperCase(), city: d.city || '' };
-        geoCache[host] = geo;
-        ccMap[host] = geo;
-        if (cacheEnabled) cache.set('geo:' + host, geo);
-        return;
-      }
-    } catch (e) {}
-    try {
-      const resp2 = await $.http.get({ url: 'https://ipinfo.io/' + target + '/json', timeout: 5000 });
-      let d2;
-      try { d2 = typeof resp2.body === 'string' ? JSON.parse(resp2.body) : resp2.body; } catch (e) { d2 = null; }
-      if (d2 && d2.country) {
-        const geo2 = { cc: d2.country.toUpperCase(), city: d2.city || '' };
-        geoCache[host] = geo2;
-        ccMap[host] = geo2;
-        if (cacheEnabled) cache.set('geo:' + host, geo2);
-        return;
-      }
-    } catch (e) {}
+    const apis = [
+      { url: 'https://ipinfo.io/' + target + '/json', cc: 'country', city: 'city' },
+      { url: 'http://ip-api.com/json/' + target + '?fields=countryCode,city', cc: 'countryCode', city: 'city' },
+      { url: 'https://api.ip.sb/geoip/' + target, cc: 'country_code', city: 'city' }
+    ];
+    for (const api of apis) {
+      try {
+        const resp = await $.http.get({ url: api.url, timeout: 5000 });
+        let d;
+        try { d = typeof resp.body === 'string' ? JSON.parse(resp.body) : resp.body; } catch (e) { d = null; }
+        if (d && d[api.cc]) {
+          const geo = { cc: d[api.cc].toUpperCase(), city: d[api.city] || '' };
+          geoCache[host] = geo;
+          ccMap[host] = geo;
+          if (cacheEnabled) cache.set('geo:' + host, geo);
+          return;
+        }
+      } catch (e) {}
+    }
     geoCache[host] = { cc: 'XX', city: '' };
   }
 
@@ -325,8 +320,8 @@ async function operator(proxies = [], targetPlatform, env) {
   for (const k in ccMap) { if (ccMap[k] && ccMap[k].cc && ccMap[k].cc !== 'XX') geoOK++; }
   const geoFail = servers.length - geoOK;
   const msg = geoFail > 0
-    ? 'v4.5 地区码 ' + geoOK + '/' + servers.length + ' 失败 ' + geoFail
-    : 'v4.5 地区码 ' + geoOK + '/' + servers.length;
+    ? 'v4.6 地区码 ' + geoOK + '/' + servers.length + ' 失败 ' + geoFail
+    : 'v4.6 地区码 ' + geoOK + '/' + servers.length;
   $.notify('命名', '', msg);
   return result;
 }
