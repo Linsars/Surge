@@ -44,13 +44,12 @@ export default async function(ctx) {
     try {
       const traceTxt = await get("https://chatgpt.com/cdn-cgi/trace", null, 5000);
       const tm = traceTxt ? traceTxt.match(/loc=([A-Z]{2})/) : null;
-      if (tm && tm[1]) {
-        try {
-          const apiRes = await getRaw("https://chatgpt.com/backend-api/models", { "User-Agent": BASE_UA, "Authorization": "Bearer " });
-          if (apiRes && apiRes.status && apiRes.status !== 403) return tm[1];
-        } catch (e) {}
-        return tm[1];
-      }
+      const loc = tm && tm[1] ? tm[1] : null;
+      try {
+        const apiRes = await getRaw("https://chatgpt.com/backend-api/models", { "User-Agent": BASE_UA, "Authorization": "Bearer " });
+        if (apiRes && apiRes.status && apiRes.status !== 403) return loc || "OK";
+      } catch (e) {}
+      if (loc) return loc;
     } catch (e) {}
     try {
       const iosRes = await getRaw("https://ios.chat.openai.com", { "User-Agent": BASE_UA });
@@ -355,9 +354,9 @@ export default async function(ctx) {
       type: 'stack', direction: 'row', alignItems: 'center', gap: 4,
       children: [
         { type: 'image', src: `sf-symbol:${sevIcon(grade.sev)}`, color: col, width: SMALL_ICON, height: SMALL_ICON },
-        { type: 'text', text: src, font: { size: SMALL_FONT }, textColor: C_SUB },
+        { type: 'text', text: src, font: { size: SMALL_FONT, weight: 'medium' }, textColor: C_SUB },
         { type: 'spacer' },
-        { type: 'text', text: val, font: { size: SMALL_FONT, weight: 'bold', family: 'Menlo' }, textColor: col, maxLines: 1, minScale: 0.5, lineBreakMode: 'tail' }
+        { type: 'text', text: val, font: { size: SMALL_FONT, weight: 'bold' }, textColor: col, maxLines: 1, minScale: 0.5, lineBreakMode: 'tail' }
       ]
     };
   }
