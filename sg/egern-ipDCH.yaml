@@ -6,7 +6,8 @@ icon: "globe.asia.australia.fill"
 compat_arguments:
   POLICY: "DIRECT"
   IPREGISTRY_KEY: "tryout"
-  IPQS_KEY: "PpJIdiRHgZ6p1PM4uSkcPm1BSxFMMxEN"
+  IPQS_KEY: ""
+  IPDATA_KEY: ""
 
 compat_arguments_desc: |
   POLICY: 流媒体/IP检测请求走的策略组名称。DIRECT=直连（默认），或填策略组名。
@@ -52,6 +53,9 @@ rules:
       match: ipqualityscore.com
       policy: "{{{POLICY}}}"
   - domain_suffix:
+      match: ipdata.co
+      policy: "{{{POLICY}}}"
+  - domain_suffix:
       match: chatgpt.com
       policy: "{{{POLICY}}}"
   - domain_suffix:
@@ -89,3 +93,4 @@ widgets:
       POLICY: "{{{POLICY}}}"
       IPREGISTRY_KEY: "{{{IPREGISTRY_KEY}}}"
       IPQS_KEY: "{{{IPQS_KEY}}}"
+      IPDATA_KEY: "{{{IPDATA_KEY}}}"
