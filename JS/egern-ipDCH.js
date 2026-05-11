@@ -205,18 +205,14 @@ export default async function(ctx) {
   let riskIP2LTxt = "低危", riskIP2LCol = C_GREEN, ip2lSev = 0;
   let riskDBIPTxt = "低危", riskDBIPCol = C_GREEN, dbipSev = 0;
   let riskIPRegTxt = "未查询", riskIPRegCol = C_SUB, ipregSev = 0;
-  let riskScamTxt = "未查询", riskScamCol = C_SUB, scamSev = 0;
-  let riskWhoisTxt = "未查询", riskWhoisCol = C_SUB, whoisSev = 0;
-  let riskIpdTxt = "未查询", riskIpdCol = C_SUB, ipdSev = 0;
+  let riskIPQSTxt = "未查询", riskIPQSCol = C_SUB, ipqsSev = 0;
 
   const ipChecks = nIp !== "获取失败" ? await Promise.allSettled([
     ctx.http.get(`https://api.ipapi.is/?q=${nIp}`, { timeout: 8000 }).then(r => r.text()),
     ctx.http.get(`https://api.ip2location.io/?ip=${nIp}&key=free`, { timeout: 8000 }).then(r => r.text()),
     ctx.http.get(`https://api.db-ip.com/v2/free/${nIp}`, { timeout: 8000 }).then(r => r.text()),
     ctx.http.get(`https://api.ipregistry.co/${nIp}?key=${ctx.env.IPREGISTRY_KEY || 'tryout'}`, { timeout: 8000 }).then(r => r.text()),
-    ctx.http.get(`https://api11.scamalytics.com/v3/${ctx.env.SCAMALYTICS_KEY || 'trial'}/?ip=${nIp}`, { timeout: 8000 }).then(r => r.text()),
-    ctx.http.get(`https://ipwho.is/${nIp}`, { timeout: 8000 }).then(r => r.text()),
-    ctx.http.get(`https://api.ipdata.is/v1/${nIp}?api-key=${ctx.env.IPDATA_KEY || 'free'}`, { timeout: 8000 }).then(r => r.text()),
+    ctx.http.get(`https://www.ipqualityscore.com/api/json/ip/${ctx.env.IPQS_KEY || 'PpJIdiRHgZ6p1PM4uSkcPm1BSxFMMxEN'}/${nIp}`, { timeout: 8000 }).then(r => r.text()),
   ]) : [];
 
   if (ipChecks[0]?.status === 'fulfilled') {
@@ -260,31 +256,12 @@ export default async function(ctx) {
   }
   if (ipChecks[4]?.status === 'fulfilled') {
     const j = jp(ipChecks[4].value);
-    if (j?.risk_score !== undefined) {
-      const s = ti(j.risk_score);
-      riskScamTxt = s !== null ? `${s}/100` : '未知';
-      if (s !== null) {
-        riskScamCol = s >= 70 ? C_ORANGE : s >= 40 ? C_YELLOW : C_GREEN;
-        scamSev = s >= 70 ? 3 : s >= 40 ? 2 : 0;
-      }
-    }
-  }
-  if (ipChecks[5]?.status === 'fulfilled') {
-    const j = jp(ipChecks[5].value);
-    if (j?.security) {
-      const isP = j.security.is_proxy || j.security.is_vpn || j.security.is_tor;
-      riskWhoisTxt = isP ? "代理/VPN" : "正常";
-      riskWhoisCol = isP ? C_ORANGE : C_GREEN;
-      whoisSev = isP ? 3 : 0;
-    }
-  }
-  if (ipChecks[6]?.status === 'fulfilled') {
-    const j = jp(ipChecks[6].value);
-    if (j?.threat?.is_threat !== undefined) {
-      const isT = j.threat.is_threat;
-      riskIpdTxt = isT ? "威胁" : "正常";
-      riskIpdCol = isT ? C_RED : C_GREEN;
-      ipdSev = isT ? 4 : 0;
+    if (j && j.fraud_score !== undefined) {
+      const s = ti(j.fraud_score);
+      const isP = j.is_proxy || j.is_vpn || j.is_tor;
+      riskIPQSTxt = isP ? `代理 (${s})` : `${s}/100`;
+      riskIPQSCol = s >= 85 ? C_RED : s >= 70 ? C_ORANGE : s >= 40 ? C_YELLOW : C_GREEN;
+      ipqsSev = s >= 85 ? 4 : s >= 70 ? 3 : s >= 40 ? 2 : 0;
     }
   }
 
@@ -307,9 +284,7 @@ export default async function(ctx) {
     riskGrades.push({ sev: ip2lSev, t: `IP2Location`, v: riskIP2LTxt, col: riskIP2LCol });
     riskGrades.push({ sev: dbipSev, t: `DB-IP`, v: riskDBIPTxt, col: riskDBIPCol });
     riskGrades.push({ sev: ipregSev, t: `ipregistry`, v: riskIPRegTxt, col: riskIPRegCol });
-    riskGrades.push({ sev: scamSev, t: `Scamalytics`, v: riskScamTxt, col: riskScamCol });
-    riskGrades.push({ sev: whoisSev, t: `IPWhois`, v: riskWhoisTxt, col: riskWhoisCol });
-    riskGrades.push({ sev: ipdSev, t: `ipdata`, v: riskIpdTxt, col: riskIpdCol });
+    riskGrades.push({ sev: ipqsSev, t: `IPQualityScore`, v: riskIPQSTxt, col: riskIPQSCol });
   } else {
     riskGrades.push({ sev: 4, t: '获取失败', v: '', col: C_RED });
   }
