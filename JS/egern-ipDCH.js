@@ -260,7 +260,7 @@ export default async function(ctx) {
     const j = jp(ipChecks[4].value);
     if (j && j.fraud_score !== undefined) {
       const s = ti(j.fraud_score);
-      const isP = j.is_proxy || j.is_vpn || j.is_tor;
+      const isP = j.proxy || j.vpn || j.tor;
       riskIPQSTxt = isP ? `代理 (${s})` : `${s}/100`;
       riskIPQSCol = s >= 85 ? C_RED : s >= 70 ? C_ORANGE : s >= 40 ? C_YELLOW : C_GREEN;
       ipqsSev = s >= 85 ? 4 : s >= 70 ? 3 : s >= 40 ? 2 : 0;
@@ -387,16 +387,12 @@ export default async function(ctx) {
   };
   const riskSection = { type: 'stack', direction: 'row', gap: COL_GAP, children: [riskLeft, riskRight] };
 
-  const riskAlerts = riskGrades.filter(g => g.sev >= 1);
+  const riskSorted = [...riskGrades].sort((a, b) => b.sev - a.sev);
   const dynamicRiskLeft = { type: 'stack', direction: 'column', gap: GAP, flex: 1,
-    children: riskAlerts.length > 0
-      ? riskAlerts.slice(0, 4).map(g => RiskRow(g))
-      : [{ type: 'text', text: '✅ 全部低危', font: { size: FONT }, textColor: C_GREEN }]
+    children: riskSorted.slice(0, 4).map(g => RiskRow(g))
   };
   const dynamicRiskRight = { type: 'stack', direction: 'column', gap: GAP, flex: 1,
-    children: riskAlerts.length > 4
-      ? riskAlerts.slice(4).map(g => RiskRow(g))
-      : [{ type: 'text', text: '无其他风险', font: { size: FONT }, textColor: C_SUB }]
+    children: riskSorted.slice(4, 7).map(g => RiskRow(g))
   };
   const dynamicRiskSection = { type: 'stack', direction: 'row', gap: COL_GAP, children: [dynamicRiskLeft, dynamicRiskRight] };
 
