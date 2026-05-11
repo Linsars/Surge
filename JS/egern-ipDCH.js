@@ -244,54 +244,51 @@ export default async function(ctx) {
 
   if (ipChecks[1]?.status === 'fulfilled') {
     const j = jp(ipChecks[1].value);
-    if (j) {
-      const s = ti(j.fraud_score);
-      const isP = j.is_proxy;
-      if (s !== null) {
-        riskIP2LTxt = isP ? `代理 (${s})` : `${s}`;
-        riskIP2LCol = s >= 80 ? C_RED : s >= 50 ? C_ORANGE : s >= 20 ? C_YELLOW : C_GREEN;
-        ip2lSev = s >= 80 ? 4 : s >= 50 ? 3 : s >= 20 ? 2 : 0;
-      } else {
-        riskIP2LTxt = isP ? "代理" : "正常";
-        riskIP2LCol = isP ? C_ORANGE : C_GREEN;
-        ip2lSev = isP ? 3 : 0;
-      }
+    if (j && !j.error) {
+      const isP = j.is_proxy === 'Y';
+      riskIP2LTxt = isP ? '代理 (100)' : '0';
+      riskIP2LCol = isP ? C_RED : C_GREEN;
+      ip2lSev = isP ? 4 : 0;
+    } else {
+      riskIP2LTxt = '免费版无数据';
+      riskIP2LCol = C_SUB;
     }
   }
 
   if (ipChecks[2]?.status === 'fulfilled') {
     const j = jp(ipChecks[2].value);
-    if (j?.threatLevel) {
-      const lv = j.threatLevel;
-      const s = ti(j.threatScore);
-      riskDBIPTxt = s !== null ? `${s} (${lv})` : lv;
-      riskDBIPCol = lv === 'high' ? C_ORANGE : lv === 'medium' ? C_YELLOW : C_GREEN;
-      dbipSev = lv === 'high' ? 3 : lv === 'medium' ? 2 : 0;
+    if (j && j.ipAddress) {
+      riskDBIPTxt = j.threatLevel || '无威胁数据';
+      riskDBIPCol = j.threatLevel === 'high' ? C_RED : j.threatLevel === 'medium' ? C_ORANGE : C_GREEN;
+      dbipSev = j.threatLevel === 'high' ? 4 : j.threatLevel === 'medium' ? 3 : 0;
     }
   }
 
   if (ipChecks[3]?.status === 'fulfilled') {
     const j = jp(ipChecks[3].value);
     if (j?.security) {
-      const s = ti(j.security.threat_score ?? j.security.abuse_score ?? 0);
-      const isP = j.security.is_proxy || j.security.is_webproxy || j.security.is_tor;
-      riskIPRegTxt = isP ? `代理 (${s})` : `${s}`;
-      riskIPRegCol = s >= 75 ? C_RED : s >= 50 ? C_ORANGE : s >= 25 ? C_YELLOW : C_GREEN;
-      ipregSev = s >= 75 ? 4 : s >= 50 ? 3 : s >= 25 ? 2 : 0;
+      const sec = j.security;
+      const flags = ['is_proxy','is_vpn','is_tor','is_tor_exit','is_abuser','is_attacker','is_threat','is_relay','is_bogon'].filter(k => sec[k]);
+      const s = flags.length * 15;
+      riskIPRegTxt = flags.length > 0 ? `${flags[0].replace('is_','')} (${s})` : `${s}`;
+      riskIPRegCol = s >= 75 ? C_RED : s >= 45 ? C_ORANGE : s >= 15 ? C_YELLOW : C_GREEN;
+      ipregSev = s >= 75 ? 4 : s >= 45 ? 3 : s >= 15 ? 2 : 0;
     }
   }
 
   if (ipChecks[4]?.status === 'fulfilled') {
     const j = jp(ipChecks[4].value);
-    if (j) {
+    if (j && !j.message) {
       const isP = j.is_proxy || j.is_vpn || j.is_tor;
-      const threat = j.threat || {};
-      const isT = threat.is_threat || threat.is_tor;
-      const isVpn = threat.is_vpn;
+      const isT = (j.threat || {}).is_threat || (j.threat || {}).is_tor;
+      const isVpn = (j.threat || {}).is_vpn;
       const s = isT ? 100 : isP ? 75 : isVpn ? 50 : 0;
       riskIpdTxt = isT ? `威胁 (${s})` : isP ? `代理 (${s})` : isVpn ? `VPN (${s})` : `${s}`;
       riskIpdCol = s >= 80 ? C_RED : s >= 50 ? C_ORANGE : s >= 25 ? C_YELLOW : C_GREEN;
       ipdSev = s >= 80 ? 4 : s >= 50 ? 3 : s >= 25 ? 2 : 0;
+    } else {
+      riskIpdTxt = '需有效API Key';
+      riskIpdCol = C_SUB;
     }
   }
 
