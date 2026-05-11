@@ -208,14 +208,27 @@ export default async function(ctx) {
   let riskIPQSTxt = "未查询", riskIPQSCol = C_SUB, ipqsSev = 0;
   let riskIpdTxt = "未查询", riskIpdCol = C_SUB, ipdSev = 0;
 
-  const ipChecks = nIp !== "获取失败" ? await Promise.allSettled([
-    ctx.http.get(`https://api.ipapi.is/?q=${nIp}`, { timeout: 8000 }).then(r => r.text()),
-    ctx.http.get(`https://api.ip2location.io/?ip=${nIp}&key=free`, { timeout: 8000 }).then(r => r.text()),
-    ctx.http.get(`https://api.db-ip.com/v2/free/${nIp}`, { timeout: 8000 }).then(r => r.text()),
-    ctx.http.get(`https://api.ipregistry.co/${nIp}?key=${ctx.env.IPREGISTRY_KEY || 'tryout'}`, { timeout: 8000 }).then(r => r.text()),
-    ctx.http.get(`https://www.ipqualityscore.com/api/json/ip/${ctx.env.IPQS_KEY}/${nIp}`, { timeout: 8000 }).then(r => r.text()),
-    ctx.http.get(`https://api.ipdata.co/${nIp}?api-key=${ctx.env.IPDATA_KEY || 'free'}`, { timeout: 8000 }).then(r => r.text()),
-  ]) : [];
+  const riskCacheKey = `risk_${nIp}`;
+  let cachedRisk = null;
+  try {
+    const raw = $persistentStore.read(riskCacheKey);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && parsed.ts && Date.now() - parsed.ts < 86400000) cachedRisk = parsed;
+    }
+  } catch (e) {}
+
+  let ipChecks = [];
+  if (!cachedRisk && nIp !== "获取失败") {
+    ipChecks = await Promise.allSettled([
+      ctx.http.get(`https://api.ipapi.is/?q=${nIp}`, { timeout: 8000 }).then(r => r.text()),
+      ctx.http.get(`https://api.ip2location.io/?ip=${nIp}&key=free`, { timeout: 8000 }).then(r => r.text()),
+      ctx.http.get(`https://api.db-ip.com/v2/free/${nIp}`, { timeout: 8000 }).then(r => r.text()),
+      ctx.http.get(`https://api.ipregistry.co/${nIp}?key=${ctx.env.IPREGISTRY_KEY || 'tryout'}`, { timeout: 8000 }).then(r => r.text()),
+      ctx.env.IPQS_KEY ? ctx.http.get(`https://www.ipqualityscore.com/api/json/ip/${ctx.env.IPQS_KEY}/${nIp}`, { timeout: 8000 }).then(r => r.text()) : Promise.reject(new Error('no key')),
+      ctx.env.IPDATA_KEY ? ctx.http.get(`https://api.ipdata.co/${nIp}?api-key=${ctx.env.IPDATA_KEY}`, { timeout: 8000 }).then(r => r.text()) : Promise.reject(new Error('no key')),
+    ]);
+  }
 
   if (ipChecks[0]?.status === 'fulfilled') {
     const j = jp(ipChecks[0].value);
@@ -293,6 +306,26 @@ export default async function(ctx) {
       riskIpdCol = isT ? C_RED : isVpn ? C_YELLOW : C_GREEN;
       ipdSev = isT ? 4 : isVpn ? 2 : 0;
     }
+  }
+
+  if (ipChecks.length > 0) {
+    try {
+      $persistentStore.write(JSON.stringify({
+        ts: Date.now(),
+        ipp: riskIPPureTxt, api: riskIpapiTxt, ip2l: riskIP2LTxt,
+        dbip: riskDBIPTxt, ipreg: riskIPRegTxt, ipqs: riskIPQSTxt, ipd: riskIpdTxt
+      }), riskCacheKey);
+    } catch (e) {}
+  }
+
+  if (cachedRisk) {
+    riskIPPureTxt = cachedRisk.ipp || riskIPPureTxt;
+    riskIpapiTxt = cachedRisk.api || riskIpapiTxt;
+    riskIP2LTxt = cachedRisk.ip2l || riskIP2LTxt;
+    riskDBIPTxt = cachedRisk.dbip || riskDBIPTxt;
+    riskIPRegTxt = cachedRisk.ipreg || riskIPRegTxt;
+    riskIPQSTxt = cachedRisk.ipqs || riskIPQSTxt;
+    riskIpdTxt = cachedRisk.ipd || riskIpdTxt;
   }
 
   // ── 流媒体检测 ──
