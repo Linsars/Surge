@@ -341,7 +341,7 @@ export default async function(ctx) {
   const now = new Date();
   const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
   const isLarge = widgetFamily === 'systemLarge';
-  const PAD = isLarge ? [10, 12] : [8, 10];
+  const PAD = [8, 10];
   const GAP = 2.5;
   const COL_GAP = 12;
 
