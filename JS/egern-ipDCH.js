@@ -224,46 +224,63 @@ export default async function(ctx) {
       if (m) {
         const pct = Math.round(Number(m[1]) * 10000) / 100 + '%';
         const lv = m[2].trim();
-        riskIpapiTxt = `${lv} (${pct})`;
+        riskIpapiTxt = `${pct} ${lv}`;
         riskIpapiCol = lv.includes('High') || lv.includes('Very High') ? C_ORANGE : (lv.includes('Elevated') ? C_YELLOW : C_GREEN);
         apiSev = lv.includes('High') || lv.includes('Very High') ? 3 : (lv.includes('Elevated') ? 2 : 0);
       }
     }
   }
+
   if (ipChecks[1]?.status === 'fulfilled') {
     const j = jp(ipChecks[1].value);
-    if (j?.is_proxy !== undefined) {
-      riskIP2LTxt = j.is_proxy ? "代理" : "正常";
-      riskIP2LCol = j.is_proxy ? C_ORANGE : C_GREEN;
-      ip2lSev = j.is_proxy ? 3 : 0;
+    if (j) {
+      const s = ti(j.fraud_score);
+      const isP = j.is_proxy;
+      if (s !== null) {
+        riskIP2LTxt = isP ? `代理 (${s})` : `${s}`;
+        riskIP2LCol = s >= 80 ? C_RED : s >= 50 ? C_ORANGE : s >= 20 ? C_YELLOW : C_GREEN;
+        ip2lSev = s >= 80 ? 4 : s >= 50 ? 3 : s >= 20 ? 2 : 0;
+      } else {
+        riskIP2LTxt = isP ? "代理" : "正常";
+        riskIP2LCol = isP ? C_ORANGE : C_GREEN;
+        ip2lSev = isP ? 3 : 0;
+      }
     }
   }
+
   if (ipChecks[2]?.status === 'fulfilled') {
     const j = jp(ipChecks[2].value);
     if (j?.threatLevel) {
       const lv = j.threatLevel;
-      riskDBIPTxt = lv === 'high' ? '高危' : lv === 'medium' ? '中等' : '低危';
+      const s = ti(j.threatScore);
+      riskDBIPTxt = s !== null ? `${s} (${lv})` : lv;
       riskDBIPCol = lv === 'high' ? C_ORANGE : lv === 'medium' ? C_YELLOW : C_GREEN;
       dbipSev = lv === 'high' ? 3 : lv === 'medium' ? 2 : 0;
     }
   }
+
   if (ipChecks[3]?.status === 'fulfilled') {
     const j = jp(ipChecks[3].value);
     if (j?.security) {
       const isP = j.security.is_proxy || j.security.is_webproxy || j.security.is_tor;
-      riskIPRegTxt = isP ? "代理" : "正常";
-      riskIPRegCol = isP ? C_ORANGE : C_GREEN;
-      ipregSev = isP ? 3 : 0;
+      const abuse = ti(j.security?.abuse_score || 0);
+      riskIPRegTxt = isP ? `代理 (${abuse})` : `${abuse}`;
+      riskIPRegCol = abuse >= 75 ? C_ORANGE : abuse >= 25 ? C_YELLOW : C_GREEN;
+      ipregSev = abuse >= 75 ? 3 : abuse >= 25 ? 2 : 0;
     }
   }
+
   if (ipChecks[4]?.status === 'fulfilled') {
     const j = jp(ipChecks[4].value);
-    if (j && j.fraud_score !== undefined) {
+    if (j && j.success !== false && j.fraud_score !== undefined) {
       const s = ti(j.fraud_score);
       const isP = j.proxy || j.vpn || j.tor;
-      riskIPQSTxt = isP ? `代理 (${s})` : `${s}/100`;
+      riskIPQSTxt = isP ? `代理 (${s})` : `${s}`;
       riskIPQSCol = s >= 85 ? C_RED : s >= 70 ? C_ORANGE : s >= 40 ? C_YELLOW : C_GREEN;
       ipqsSev = s >= 85 ? 4 : s >= 70 ? 3 : s >= 40 ? 2 : 0;
+    } else if (j && j.success === false) {
+      riskIPQSTxt = "Key无效";
+      riskIPQSCol = C_SUB;
     }
   }
 
