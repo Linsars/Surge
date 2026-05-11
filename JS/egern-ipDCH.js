@@ -396,29 +396,43 @@ export default async function(ctx) {
   };
   const dynamicRiskSection = { type: 'stack', direction: 'row', gap: COL_GAP, children: [dynamicRiskLeft, dynamicRiskRight] };
 
-  const unlockLeftCol = { type: 'stack', direction: 'column', gap: GAP, flex: 1, children: [
-    UnlockRow("GPT", gptStatus), UnlockRow("Gemini", geminiStatus), UnlockRow("YouTube", youtubeStatus)
-  ]};
-  const unlockRightCol = { type: 'stack', direction: 'column', gap: GAP, flex: 1, children: [
-    UnlockRow("奈飞", netflixStatus), UnlockRow("TikTok", tiktokStatus)
-  ]};
-  const unlockSection = { type: 'stack', direction: 'row', gap: COL_GAP, children: [unlockLeftCol, unlockRightCol] };
-
   const divider = { type: 'stack', height: 0.5, backgroundColor: { light: 'rgba(0,0,0,0.08)', dark: 'rgba(255,255,255,0.12)' } };
-
-  const mediumBottom = { type: 'stack', direction: 'row', gap: COL_GAP, children: [
-    { type: 'stack', direction: 'column', gap: GAP, flex: 1, children: [
-      UnlockRow("GPT", gptStatus), UnlockRow("Gemini", geminiStatus), UnlockRow("YouTube", youtubeStatus),
-      UnlockRow("奈飞", netflixStatus), UnlockRow("TikTok", tiktokStatus)
-    ]},
-    dynamicRiskSection
-  ]};
 
   let children;
   if (isLarge) {
+    const unlockLeftCol = { type: 'stack', direction: 'column', gap: GAP, flex: 1, children: [
+      UnlockRow("GPT", gptStatus), UnlockRow("Gemini", geminiStatus), UnlockRow("YouTube", youtubeStatus)
+    ]};
+    const unlockRightCol = { type: 'stack', direction: 'column', gap: GAP, flex: 1, children: [
+      UnlockRow("奈飞", netflixStatus), UnlockRow("TikTok", tiktokStatus)
+    ]};
+    const unlockSection = { type: 'stack', direction: 'row', gap: COL_GAP, children: [unlockLeftCol, unlockRightCol] };
     children = [header, ipInfo, divider, unlockSection, divider, riskSection];
   } else {
-    children = [header, ipInfo, divider, mediumBottom];
+    children = [
+      header,
+      {
+        type: 'stack', direction: 'row', gap: COL_GAP,
+        children: [
+          { type: 'stack', direction: 'column', gap: GAP, flex: 1, children: [
+            Row("house.fill", "本地IP", lIp, C_GREEN),
+            Row("mappin.and.ellipse", "本地位置", lLoc),
+            Row("simcard.fill", "本地运营商", lIsp),
+            UnlockRow("GPT", gptStatus),
+            UnlockRow("Gemini", geminiStatus),
+            UnlockRow("YouTube", youtubeStatus),
+            UnlockRow("奈飞", netflixStatus),
+            UnlockRow("TikTok", tiktokStatus),
+          ]},
+          { type: 'stack', direction: 'column', gap: GAP, flex: 1, children: [
+            Row("network", "落地IP", nIp, proxySuccess ? C_GREEN : C_RED),
+            Row("map.fill", "落地位置", nLoc, proxySuccess ? C_MAIN : C_RED),
+            Row("building.2.fill", "原生属性", nativeText, proxySuccess ? C_MAIN : C_RED),
+            ...riskSorted.map(g => RiskRow(g)),
+          ]}
+        ]
+      }
+    ];
   }
 
   return { type: 'widget', padding: PAD, gap: 3, backgroundColor: BG_COLOR, children };
