@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         智慧重命名 - GeoIP + 创意命名
-// @version      5.0
+// @version      5.1
 // @description  SubStore 节点重命名：GeoIP 真实出口检测 + GPT 支持判断 + 多种创意循环命名
 // @author       Linsar
 // @example      #gm=诡秘&qz=机场&hz=GPT
@@ -205,15 +205,23 @@ async function operator(proxies = [], targetPlatform, env) {
     }
     let target = host;
     if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(host) && host.indexOf(':') === -1) {
-      try {
-        const dnsResp = await $.http.get({ url: 'https://cloudflare-dns.com/dns-query?name=' + encodeURIComponent(host) + '&type=A', timeout: 5000, headers: { 'Accept': 'application/dns-json' } });
-        const dnsData = typeof dnsResp.body === 'string' ? JSON.parse(dnsResp.body) : dnsResp.body;
-        if (dnsData && dnsData.Answer) {
-          for (let i = 0; i < dnsData.Answer.length; i++) {
-            if (dnsData.Answer[i].type === 1) { target = dnsData.Answer[i].data; break; }
+      const dnsServers = [
+        'https://cloudflare-dns.com/dns-query?name=' + encodeURIComponent(host) + '&type=A',
+        'https://dns.alidns.com/resolve?name=' + encodeURIComponent(host) + '&type=A',
+        'https://doh.pub/dns-query?name=' + encodeURIComponent(host) + '&type=A',
+      ];
+      for (const dnsUrl of dnsServers) {
+        try {
+          const dnsResp = await $.http.get({ url: dnsUrl, timeout: 5000, headers: { 'Accept': 'application/dns-json' } });
+          const dnsData = typeof dnsResp.body === 'string' ? JSON.parse(dnsResp.body) : dnsResp.body;
+          if (dnsData && dnsData.Answer) {
+            for (let i = 0; i < dnsData.Answer.length; i++) {
+              if (dnsData.Answer[i].type === 1) { target = dnsData.Answer[i].data; break; }
+            }
           }
-        }
-      } catch (e) {}
+          if (target !== host) break;
+        } catch (e) {}
+      }
     }
     const geo = await geoQuery(target);
     if (geo) {
@@ -349,8 +357,8 @@ async function operator(proxies = [], targetPlatform, env) {
     if (geo && geo.cc && geo.cc !== 'XX') namedOK++;
   }
   const msg = geoFail > 0
-    ? 'v5.0 地区码 ' + namedOK + '/' + result.length + ' 服务器 ' + geoOK + '/' + servers.length + ' 失败 ' + geoFail
-    : 'v5.0 地区码 ' + namedOK + '/' + result.length;
+    ? 'v5.1 地区码 ' + namedOK + '/' + result.length + ' 服务器 ' + geoOK + '/' + servers.length + ' 失败 ' + geoFail
+    : 'v5.1 地区码 ' + namedOK + '/' + result.length;
   $.notify('命名', '', msg);
   return result;
 }
