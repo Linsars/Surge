@@ -225,11 +225,11 @@ async function operator(proxies = [], targetPlatform, env) {
       ]
       for (var di = 0; di < dnsList.length; di++) {
         try {
-          var r = await $.http.get({ url: dnsList[di], timeout: 5000, headers: { 'Accept': 'application/dns-json' } })
-          var j = typeof r.body === 'string' ? JSON.parse(r.body) : r.body
-          if (j && j.Answer) {
-            for (var ai = 0; ai < j.Answer.length; ai++) {
-              if (j.Answer[ai].type === 1) { ip = j.Answer[ai].data; break }
+          var dr = await $.http.get({ url: dnsList[di], timeout: 5000, headers: { 'Accept': 'application/dns-json' } })
+          var dj = typeof dr.body === 'string' ? JSON.parse(dr.body) : dr.body
+          if (dj && dj.Answer) {
+            for (var ai = 0; ai < dj.Answer.length; ai++) {
+              if (dj.Answer[ai].type === 1) { ip = dj.Answer[ai].data; break }
             }
           }
           if (ip !== host) break
@@ -240,19 +240,29 @@ async function operator(proxies = [], targetPlatform, env) {
     try {
       var r1 = await $.http.get({ url: 'https://ipwho.is/' + ip, timeout: 5000 })
       var d1 = typeof r1.body === 'string' ? JSON.parse(r1.body) : r1.body
-      if (d1 && d1.success && d1.country_code) return { cc: d1.country_code.toUpperCase(), city: d1.city || '' }
-    } catch (e) {}
-
-    try {
-      var r2 = await $.http.get({ url: 'http://ip-api.com/json/' + host + '?fields=countryCode,city&lang=zh-CN', timeout: 5000 })
-      var d2 = typeof r2.body === 'string' ? JSON.parse(r2.body) : r2.body
-      if (d2 && d2.countryCode) return { cc: d2.countryCode.toUpperCase(), city: d2.city || '' }
+      if (d1 && d1.success && d1.country_code) {
+        var cc = d1.country_code.toUpperCase()
+        if (cc === 'CN') {
+          try {
+            var r4 = await $.http.get({ url: 'http://ip-api.com/json/' + host + '?fields=countryCode,city&lang=zh-CN', timeout: 5000 })
+            var d4 = typeof r4.body === 'string' ? JSON.parse(r4.body) : r4.body
+            if (d4 && d4.countryCode) return { cc: 'CN', city: d4.city || '' }
+          } catch (e) {}
+        }
+        return { cc: cc, city: d1.city || '' }
+      }
     } catch (e) {}
 
     try {
       var r3 = await $.http.get({ url: 'https://ipinfo.io/' + ip + '/json', timeout: 5000 })
       var d3 = typeof r3.body === 'string' ? JSON.parse(r3.body) : r3.body
       if (d3 && d3.country) return { cc: d3.country.toUpperCase(), city: d3.city || '' }
+    } catch (e) {}
+
+    try {
+      var r2 = await $.http.get({ url: 'http://ip-api.com/json/' + host + '?fields=countryCode,city&lang=zh-CN', timeout: 5000 })
+      var d2 = typeof r2.body === 'string' ? JSON.parse(r2.body) : r2.body
+      if (d2 && d2.countryCode) return { cc: d2.countryCode.toUpperCase(), city: d2.city || '' }
     } catch (e) {}
 
     return null
