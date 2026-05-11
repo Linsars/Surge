@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         智慧重命名 - GeoIP + 创意命名
-// @version      5.2
+// @version      5.3
 // @description  SubStore 节点重命名：GeoIP 真实出口检测 + GPT 支持判断 + 多种创意循环命名
 // @author       Linsar
 // @example      #gm=诡秘&qz=机场&hz=GPT
@@ -214,33 +214,54 @@ async function operator(proxies = [], targetPlatform, env) {
   }
 
   async function geoQuery(host) {
-    // ipwho.is: 直接支持域名，免费无限制
+    // ip-api.com: 支持域名，CN 返回中文城市名
     try {
-      const resp = await $.http.get({ url: 'https://ipwho.is/' + encodeURIComponent(host), timeout: 5000 })
-      let d
-      try { d = typeof resp.body === 'string' ? JSON.parse(resp.body) : resp.body } catch (e) { d = null }
-      if (d && d.success && d.country_code) {
-        return { cc: d.country_code.toUpperCase(), city: d.city || '' }
-      }
-    } catch (e) {}
-
-    // CN 节点用 ip-api.com 拿中文城市名
-    try {
-      const resp = await $.http.get({ url: 'http://ip-api.com/json/' + host + '?fields=countryCode,country,city&lang=zh-CN', timeout: 5000 })
+      const resp = await $.http.get({ url: 'http://ip-api.com/json/' + host + '?fields=countryCode,city&lang=zh-CN', timeout: 5000 })
       let d
       try { d = typeof resp.body === 'string' ? JSON.parse(resp.body) : resp.body } catch (e) { d = null }
       if (d && d.countryCode) {
-        const cc = d.countryCode.toUpperCase()
-        if (cc === 'CN') return { cc: 'CN', city: d.city || '' }
+        return { cc: d.countryCode.toUpperCase(), city: d.city || '' }
       }
     } catch (e) {}
 
-    // ipinfo.io 兜底
-    try {
-      const resp = await $.http.get({ url: 'https://ipinfo.io/' + host + '/json', timeout: 5000 })
-      let d
-      try { d = typeof resp.body === 'string' ? JSON.parse(resp.body) : resp.body } catch (e) { d = null }
-      if (d && d.country) {
+    // 以下需要 IP，先解析域名
+    var ip = host
+    if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(host) && host.indexOf(':') === -1) {
+      const dnsServers = [
+        'https://cloudflare-dns.com/dns-query?name=' + encodeURIComponent(host) + '&type=A',
+        'https://dns.alidns.com/resolve?name=' + encodeURIComponent(host) + '&type=A',
+      ]
+      for (const dnsUrl of dnsServers) {
+        try {
+          const dnsResp = await $.http.get({ url: dnsUrl, timeout: 5000, headers: { 'Accept': 'application/dns-json' } })
+          const dnsData = typeof dnsResp.body === 'string' ? JSON.parse(dnsResp.body) : dnsResp.body
+          if (dnsData && dnsData.Answer) {
+            for (let i = 0; i < dnsData.Answer.length; i++) {
+              if (dnsData.Answer[i].type === 1) { ip = dnsData.Answer[i].data; break }
+            }
+          }
+          if (ip !== host) break
+        } catch (e) {}
+      }
+    }
+
+    // ipwho.is: 需要 IP
+    if (ip !== host || /^\d{1,3}(\.\d{1,3}){3}$/.test(host)) {
+      try {
+        const resp = await $.http.get({ url: 'https://ipwho.is/' + ip, timeout: 5000 })
+        let d
+        try { d = typeof resp.body === 'string' ? JSON.parse(resp.body) : resp.body } catch (e) { d = null }
+        if (d && d.success && d.country_code) {
+          return { cc: d.country_code.toUpperCase(), city: d.city || '' }
+        }
+      } catch (e) {}
+
+      // ipinfo.io: 需要 IP
+      try {
+        const resp = await $.http.get({ url: 'https://ipinfo.io/' + ip + '/json', timeout: 5000 })
+        let d
+        try { d = typeof resp.body === 'string' ? JSON.parse(resp.body) : resp.body } catch (e) { d = null }
+        if (d && d.country) {
         return { cc: d.country.toUpperCase(), city: d.city || '' };
       }
     } catch (e) {}
@@ -348,8 +369,8 @@ async function operator(proxies = [], targetPlatform, env) {
     if (geo && geo.cc && geo.cc !== 'XX') namedOK++;
   }
   const msg = geoFail > 0
-    ? 'v5.2 地区码 ' + namedOK + '/' + result.length + ' 服务器 ' + geoOK + '/' + servers.length + ' 失败 ' + geoFail
-    : 'v5.2 地区码 ' + namedOK + '/' + result.length;
+    ? 'v5.3 地区码 ' + namedOK + '/' + result.length + ' 服务器 ' + geoOK + '/' + servers.length + ' 失败 ' + geoFail
+    : 'v5.3 地区码 ' + namedOK + '/' + result.length;
   $.notify('命名', '', msg);
   return result;
 }
