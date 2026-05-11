@@ -206,13 +206,15 @@ export default async function(ctx) {
   let riskDBIPTxt = "低危", riskDBIPCol = C_GREEN, dbipSev = 0;
   let riskIPRegTxt = "未查询", riskIPRegCol = C_SUB, ipregSev = 0;
   let riskIPQSTxt = "未查询", riskIPQSCol = C_SUB, ipqsSev = 0;
+  let riskIpdTxt = "未查询", riskIpdCol = C_SUB, ipdSev = 0;
 
   const ipChecks = nIp !== "获取失败" ? await Promise.allSettled([
     ctx.http.get(`https://api.ipapi.is/?q=${nIp}`, { timeout: 8000 }).then(r => r.text()),
     ctx.http.get(`https://api.ip2location.io/?ip=${nIp}&key=free`, { timeout: 8000 }).then(r => r.text()),
     ctx.http.get(`https://api.db-ip.com/v2/free/${nIp}`, { timeout: 8000 }).then(r => r.text()),
     ctx.http.get(`https://api.ipregistry.co/${nIp}?key=${ctx.env.IPREGISTRY_KEY || 'tryout'}`, { timeout: 8000 }).then(r => r.text()),
-    ctx.http.get(`https://www.ipqualityscore.com/api/json/ip/${ctx.env.IPQS_KEY || 'PpJIdiRHgZ6p1PM4uSkcPm1BSxFMMxEN'}/${nIp}`, { timeout: 8000 }).then(r => r.text()),
+    ctx.http.get(`https://www.ipqualityscore.com/api/json/ip/${ctx.env.IPQS_KEY}/${nIp}`, { timeout: 8000 }).then(r => r.text()),
+    ctx.http.get(`https://api.ipdata.co/${nIp}?api-key=${ctx.env.IPDATA_KEY || 'free'}`, { timeout: 8000 }).then(r => r.text()),
   ]) : [];
 
   if (ipChecks[0]?.status === 'fulfilled') {
@@ -265,6 +267,17 @@ export default async function(ctx) {
     }
   }
 
+  if (ipChecks[5]?.status === 'fulfilled') {
+    const j = jp(ipChecks[5].value);
+    if (j && j.threat) {
+      const isT = j.threat.is_threat || j.threat.is_proxy || j.threat.is_tor;
+      const isVpn = j.threat.is_vpn;
+      riskIpdTxt = isT ? "威胁" : isVpn ? "VPN" : "正常";
+      riskIpdCol = isT ? C_RED : isVpn ? C_YELLOW : C_GREEN;
+      ipdSev = isT ? 4 : isVpn ? 2 : 0;
+    }
+  }
+
   // ── 流媒体检测 ──
   const [gptStatus, geminiStatus, youtubeStatus, netflixStatus, tiktokStatus] = await Promise.all([
     checkChatGPT(), checkGemini(), checkYouTube(), checkNetflix(), checkTikTok()
@@ -285,6 +298,7 @@ export default async function(ctx) {
     riskGrades.push({ sev: dbipSev, t: `DB-IP`, v: riskDBIPTxt, col: riskDBIPCol });
     riskGrades.push({ sev: ipregSev, t: `ipregistry`, v: riskIPRegTxt, col: riskIPRegCol });
     riskGrades.push({ sev: ipqsSev, t: `IPQualityScore`, v: riskIPQSTxt, col: riskIPQSCol });
+    riskGrades.push({ sev: ipdSev, t: `ipdata`, v: riskIpdTxt, col: riskIpdCol });
   } else {
     riskGrades.push({ sev: 4, t: '获取失败', v: '', col: C_RED });
   }
@@ -369,9 +383,22 @@ export default async function(ctx) {
     children: riskGrades.slice(0, 4).map(g => RiskRow(g))
   };
   const riskRight = { type: 'stack', direction: 'column', gap: GAP, flex: 1,
-    children: riskGrades.slice(4, 8).map(g => RiskRow(g))
+    children: riskGrades.slice(4, 7).map(g => RiskRow(g))
   };
   const riskSection = { type: 'stack', direction: 'row', gap: COL_GAP, children: [riskLeft, riskRight] };
+
+  const riskAlerts = riskGrades.filter(g => g.sev >= 1);
+  const dynamicRiskLeft = { type: 'stack', direction: 'column', gap: GAP, flex: 1,
+    children: riskAlerts.length > 0
+      ? riskAlerts.slice(0, 4).map(g => RiskRow(g))
+      : [{ type: 'text', text: '✅ 全部低危', font: { size: FONT }, textColor: C_GREEN }]
+  };
+  const dynamicRiskRight = { type: 'stack', direction: 'column', gap: GAP, flex: 1,
+    children: riskAlerts.length > 4
+      ? riskAlerts.slice(4).map(g => RiskRow(g))
+      : [{ type: 'text', text: '无其他风险', font: { size: FONT }, textColor: C_SUB }]
+  };
+  const dynamicRiskSection = { type: 'stack', direction: 'row', gap: COL_GAP, children: [dynamicRiskLeft, dynamicRiskRight] };
 
   const unlockLeftCol = { type: 'stack', direction: 'column', gap: GAP, flex: 1, children: [
     UnlockRow("GPT", gptStatus), UnlockRow("Gemini", geminiStatus), UnlockRow("YouTube", youtubeStatus)
@@ -383,20 +410,19 @@ export default async function(ctx) {
 
   const divider = { type: 'stack', height: 0.5, backgroundColor: { light: 'rgba(0,0,0,0.08)', dark: 'rgba(255,255,255,0.12)' } };
 
-  const bottomLeft = { type: 'stack', direction: 'column', gap: GAP, flex: 1, children: [
-    UnlockRow("GPT", gptStatus), UnlockRow("Gemini", geminiStatus), UnlockRow("YouTube", youtubeStatus),
-    UnlockRow("奈飞", netflixStatus), UnlockRow("TikTok", tiktokStatus)
+  const mediumBottom = { type: 'stack', direction: 'row', gap: COL_GAP, children: [
+    { type: 'stack', direction: 'column', gap: GAP, flex: 1, children: [
+      UnlockRow("GPT", gptStatus), UnlockRow("Gemini", geminiStatus), UnlockRow("YouTube", youtubeStatus),
+      UnlockRow("奈飞", netflixStatus), UnlockRow("TikTok", tiktokStatus)
+    ]},
+    dynamicRiskSection
   ]};
-  const bottomRight = { type: 'stack', direction: 'column', gap: GAP, flex: 1,
-    children: riskGrades.map(g => RiskRow(g))
-  };
-  const bottomSection = { type: 'stack', direction: 'row', gap: COL_GAP, children: [bottomLeft, bottomRight] };
 
   let children;
   if (isLarge) {
     children = [header, ipInfo, divider, unlockSection, divider, riskSection];
   } else {
-    children = [header, ipInfo, divider, bottomSection];
+    children = [header, ipInfo, divider, mediumBottom];
   }
 
   return { type: 'widget', padding: PAD, gap: 3, backgroundColor: BG_COLOR, children };
