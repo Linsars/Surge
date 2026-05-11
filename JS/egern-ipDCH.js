@@ -205,13 +205,11 @@ export default async function(ctx) {
   // ── 风险检测 ──
   let riskIpapiTxt = "—", riskIpapiCol = C_SUB, apiSev = 0;
   let riskRegTxt = "—", riskRegCol = C_SUB, regSev = 0;
-  let riskWhoisTxt = "—", riskWhoisCol = C_SUB, whoisSev = 0;
   let riskIpdTxt = "—", riskIpdCol = C_SUB, ipdSev = 0;
 
   const riskChecks = nIp !== "获取失败" ? await Promise.allSettled([
     ctx.http.get(`https://api.ipapi.is/?q=${nIp}`, { timeout: 8000 }).then(r => r.text()),
     ctx.http.get(`https://api.ipregistry.co/${nIp}?key=${ctx.env.IPREGISTRY_KEY || 'tryout'}`, { timeout: 8000 }).then(r => r.text()),
-    get(`https://ipwho.is/${nIp}`, { 'User-Agent': BASE_UA }),
     get(`https://ipdata.co/${nIp}`, { 'User-Agent': BASE_UA }),
   ]) : [];
 
@@ -242,20 +240,8 @@ export default async function(ctx) {
     }
   }
 
-  // ipwho.is
-  if (riskChecks[2]?.status === 'fulfilled') {
-    const j = jp(riskChecks[2].value);
-    if (j?.success !== false && j?.security) {
-      const sec = j.security;
-      const hits = ['vpn','proxy','tor','anonymous','crawler','bot'].filter(k => sec[k]).length;
-      riskWhoisTxt = `${hits}`;
-      riskWhoisCol = hits >= 3 ? C_RED : hits >= 2 ? C_ORANGE : hits >= 1 ? C_YELLOW : C_GREEN;
-      whoisSev = hits >= 3 ? 4 : hits >= 2 ? 3 : hits >= 1 ? 2 : 0;
-    }
-  }
-
   // ipdata.co (HTML trust score)
-  if (riskChecks[3]?.status === 'fulfilled') {
+  if (riskChecks[2]?.status === 'fulfilled') {
     const html = riskChecks[3].value || '';
     const tm = html.match(/sidebar-trust-score-value[^>]*>\s*(\d+)/);
     if (tm) {
@@ -287,7 +273,6 @@ export default async function(ctx) {
     riskGrades.push({ sev: ippSev, t: 'IPPure', v: riskIPPureTxt, col: riskIPPureCol });
     riskGrades.push({ sev: apiSev, t: 'ipapi', v: riskIpapiTxt, col: riskIpapiCol });
     riskGrades.push({ sev: regSev, t: 'ipregistry', v: riskRegTxt, col: riskRegCol });
-    riskGrades.push({ sev: whoisSev, t: 'ipwhois', v: riskWhoisTxt, col: riskWhoisCol });
     riskGrades.push({ sev: ipdSev, t: 'ipdata', v: riskIpdTxt, col: riskIpdCol });
   } else {
     riskGrades.push({ sev: 4, t: '落地IP', v: '获取失败', col: C_RED });
@@ -399,10 +384,10 @@ export default async function(ctx) {
   };
 
   const riskLeft = { type: 'stack', direction: 'column', gap: BOTTOM_GAP_LEFT, flex: 1,
-    children: riskGrades.slice(0, 3).map(g => RiskRow(g))
+    children: riskGrades.slice(0, 2).map(g => RiskRow(g))
   };
   const riskRight = { type: 'stack', direction: 'column', gap: BOTTOM_GAP_RIGHT, flex: 1,
-    children: riskGrades.slice(3, 5).map(g => RiskRow(g))
+    children: riskGrades.slice(2, 4).map(g => RiskRow(g))
   };
   const riskSection = { type: 'stack', direction: 'row', gap: COL_GAP, children: [riskLeft, riskRight] };
 
