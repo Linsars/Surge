@@ -408,11 +408,20 @@ export default async function(ctx) {
 
   const divider = { type: 'stack', height: 0.5, backgroundColor: { light: 'rgba(0,0,0,0.08)', dark: 'rgba(255,255,255,0.12)' } };
 
+  const bottomLeft = { type: 'stack', direction: 'column', gap: GAP, flex: 1, children: [
+    UnlockRow("GPT", gptStatus), UnlockRow("Gemini", geminiStatus), UnlockRow("YouTube", youtubeStatus),
+    UnlockRow("奈飞", netflixStatus), UnlockRow("TikTok", tiktokStatus)
+  ]};
+  const bottomRight = { type: 'stack', direction: 'column', gap: GAP, flex: 1,
+    children: riskGrades.map(g => RiskRow(g))
+  };
+  const bottomSection = { type: 'stack', direction: 'row', gap: COL_GAP, children: [bottomLeft, bottomRight] };
+
   let children;
   if (isLarge) {
     children = [header, ipInfo, divider, unlockSection, divider, riskSection];
   } else {
-    children = [header, ipInfo, divider, riskSection];
+    children = [header, ipInfo, divider, bottomSection];
   }
 
   return { type: 'widget', padding: PAD, gap: 3, backgroundColor: BG_COLOR, children };
