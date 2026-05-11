@@ -279,7 +279,7 @@ export default async function(ctx) {
       riskIPQSCol = s >= 85 ? C_RED : s >= 70 ? C_ORANGE : s >= 40 ? C_YELLOW : C_GREEN;
       ipqsSev = s >= 85 ? 4 : s >= 70 ? 3 : s >= 40 ? 2 : 0;
     } else if (j && j.success === false) {
-      riskIPQSTxt = "Key无效";
+      riskIPQSTxt = j.message && j.message.includes('quota') ? '额度耗尽' : '查询失败';
       riskIPQSCol = C_SUB;
     }
   }
