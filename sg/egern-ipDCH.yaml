@@ -1,18 +1,21 @@
 name: "数据中心DCH"
-description: "检测当前节点是否支持流媒体、AI、本地IP、落地IP、IP纯净度（5源）"
+description: "检测当前节点是否支持流媒体、AI、本地IP、落地IP、IP纯净度"
 author: "Linsar"
 icon: "globe.asia.australia.fill"
 
 compat_arguments:
   POLICY: "DIRECT"
   IPREGISTRY_KEY: "tryout"
-  IPDATA_KEY: ""
 
 compat_arguments_desc: |
-  POLICY: 流媒体/IP检测请求走的策略组名称。DIRECT=直连（默认），或填策略组名。
-  IPREGISTRY_KEY: ipregistry API Key（100,000积分免费）。注册：https://www.ipregistry.co
-  IPDATA_KEY: ipdata API Key（1500次/天免费）。注册：https://ipdata.co
-  不填则使用默认试用 key。
+  POLICY: 流媒体/IP检测请求走的策略组名称。
+  DIRECT = 直连（默认），PROXY = 代理，或填你自定义的节点组名。
+  修改方式：在 Egern 的模块编辑页面 → 参数(compat_arguments) → POLICY 填入你的策略组名。
+  小组件会自动显示此名称。
+
+  IPREGISTRY_KEY: ipregistry API Key（用于 IP 纯净度检测）。
+  注册免费获取：https://www.ipregistry.co （100,000 积分）
+  不填则使用试用 key（限额极低）。
 
 rules:
   - domain_suffix:
@@ -47,9 +50,6 @@ rules:
       policy: "{{{POLICY}}}"
   - domain_suffix:
       match: ipregistry.co
-      policy: "{{{POLICY}}}"
-  - domain_suffix:
-      match: ipdata.co
       policy: "{{{POLICY}}}"
   - domain_suffix:
       match: chatgpt.com
@@ -88,4 +88,3 @@ widgets:
     env:
       POLICY: "{{{POLICY}}}"
       IPREGISTRY_KEY: "{{{IPREGISTRY_KEY}}}"
-      IPDATA_KEY: "{{{IPDATA_KEY}}}"
