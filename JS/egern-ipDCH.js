@@ -18,15 +18,14 @@ export default async function(ctx) {
   const policy = (ctx.env && ctx.env.POLICY) ? ctx.env.POLICY : "";
   const BASE_UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1";
 
-  async function safe(fn) { try { return await fn(); } catch (e) { return null; } }
-  async function get(url, headers, timeout) {
-    const opts = { timeout: timeout || 8000 };
+  async function get(url, headers) {
+    const opts = { timeout: 8000 };
     if (headers) opts.headers = headers;
     const res = await ctx.http.get(url, opts);
     return await res.text();
   }
-  async function post(url, body, headers, timeout) {
-    const opts = { timeout: timeout || 8000, body: body };
+  async function post(url, body, headers) {
+    const opts = { timeout: 8000, body: body };
     if (headers) opts.headers = headers;
     const res = await ctx.http.post(url, opts);
     return await res.text();
@@ -40,17 +39,30 @@ export default async function(ctx) {
   function jp(s) { try { return JSON.parse(s); } catch (e) { return null; } }
   function ti(v) { const n = Number(v); return Number.isFinite(n) ? Math.round(n) : null; }
 
+  const fmtFlag = (code) => {
+    if (!code || code.length !== 2 || code.toUpperCase() === 'XX') return "🌍";
+    return String.fromCodePoint(...code.toUpperCase().split('').map(c => 127397 + c.charCodeAt(0)));
+  };
+  const fmtISP = (isp) => {
+    if (!isp) return "未知";
+    const s = String(isp).toLowerCase();
+    if (/移动|mobile|cmcc/i.test(s)) return "中国移动";
+    if (/电信|telecom|chinanet/i.test(s)) return "中国电信";
+    if (/联通|unicom/i.test(s)) return "中国联通";
+    if (/广电|broadcast|cbn/i.test(s)) return "中国广电";
+    return isp;
+  };
+
   async function checkChatGPT() {
     try {
       const traceTxt = await get("https://chatgpt.com/cdn-cgi/trace", null, 5000);
       const tm = traceTxt ? traceTxt.match(/loc=([A-Z]{2})/) : null;
-      if (tm && tm[1]) {
-        try {
-          const apiRes = await getRaw("https://chatgpt.com/backend-api/models", { "User-Agent": BASE_UA, "Authorization": "Bearer " });
-          if (apiRes && apiRes.status && apiRes.status !== 403) return tm[1];
-        } catch (e) {}
-        return tm[1];
-      }
+      const loc = tm && tm[1] ? tm[1] : null;
+      try {
+        const apiRes = await getRaw("https://chatgpt.com/backend-api/models", { "User-Agent": BASE_UA, "Authorization": "Bearer " });
+        if (apiRes && apiRes.status && apiRes.status !== 403) return loc || "OK";
+      } catch (e) {}
+      if (loc) return loc;
     } catch (e) {}
     try {
       const iosRes = await getRaw("https://ios.chat.openai.com", { "User-Agent": BASE_UA });
@@ -106,8 +118,7 @@ export default async function(ctx) {
       const blocked1 = /oh no!/i.test(t1 || "") || /not available/i.test(t1 || "") || /Sorry/i.test(t1 || "");
       const blocked2 = /oh no!/i.test(t2 || "") || /not available/i.test(t2 || "") || /Sorry/i.test(t2 || "");
       if (blocked1 && blocked2) return "Popcorn";
-      const allBodies = [t1, t2];
-      for (let b of allBodies) {
+      for (const b of [t1, t2]) {
         if (!b) continue;
         const rm = b.match(/"countryCode"\s*:\s*"?([A-Z]{2})"?/);
         if (rm && rm[1]) return rm[1];
@@ -132,21 +143,7 @@ export default async function(ctx) {
     } catch (e) { return "Cross"; }
   }
 
-  const fmtISP = (isp) => {
-    if (!isp) return "未知";
-    const s = String(isp).toLowerCase();
-    if (/移动|mobile|cmcc/i.test(s)) return "中国移动";
-    if (/电信|telecom|chinanet/i.test(s)) return "中国电信";
-    if (/联通|unicom/i.test(s)) return "中国联通";
-    if (/广电|broadcast|cbn/i.test(s)) return "中国广电";
-    return isp;
-  };
-
-  const fmtFlag = (code) => {
-    if (!code || code.length !== 2 || code.toUpperCase() === 'XX') return "🌍";
-    return String.fromCodePoint(...code.toUpperCase().split('').map(c => 127397 + c.charCodeAt(0)));
-  };
-
+  // ── 本地 IP ──
   let lIp = "获取失败", lLoc = "未知位置", lIsp = "未知运营商";
   try {
     const lRes = await ctx.http.get('https://myip.ipip.net/json', { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 8000 });
@@ -170,8 +167,9 @@ export default async function(ctx) {
     } catch (e) {}
   }
 
+  // ── 落地 IP ──
   let nIp = "获取失败", nLoc = "未知位置", nativeText = "未知";
-  let riskIPPureTxt = "低危 (0)", riskIPPureCol = C_GREEN, ippSev = 0;
+  let riskIPPureTxt = "—", riskIPPureCol = C_SUB, ippSev = 0;
 
   try {
     const res = await ctx.http.get('https://my.ippure.com/v1/info', { timeout: 8000 });
@@ -184,10 +182,9 @@ export default async function(ctx) {
     nativeText = d.isResidential === true ? "🏠 原生住宅" : (d.isResidential === false ? "🏢 商业机房" : "未知");
     const risk = ti(d.fraudScore);
     if (risk !== null) {
-      if (risk >= 80) { riskIPPureTxt = `极高 (${risk})`; riskIPPureCol = C_RED; ippSev = 4; }
-      else if (risk >= 70) { riskIPPureTxt = `高危 (${risk})`; riskIPPureCol = C_ORANGE; ippSev = 3; }
-      else if (risk >= 40) { riskIPPureTxt = `中等 (${risk})`; riskIPPureCol = C_YELLOW; ippSev = 1; }
-      else { riskIPPureTxt = `低危 (${risk})`; ippSev = 0; }
+      riskIPPureTxt = `${risk}`;
+      riskIPPureCol = risk >= 80 ? C_RED : risk >= 60 ? C_ORANGE : risk >= 30 ? C_YELLOW : C_GREEN;
+      ippSev = risk >= 80 ? 4 : risk >= 60 ? 3 : risk >= 30 ? 2 : 0;
     }
   } catch (e) {}
 
@@ -205,32 +202,76 @@ export default async function(ctx) {
     } catch (e) {}
   }
 
-  let riskIpapiTxt = "低危 (0%)", riskIpapiCol = C_GREEN, apiSev = 0;
-  if (nIp !== "获取失败") {
-    try {
-      const apiRes = await ctx.http.get(`https://api.ipapi.is/?q=${nIp}`, { timeout: 8000 });
-      const j = JSON.parse(await apiRes.text());
-      if (j && j.company && j.company.abuser_score) {
-        const m = String(j.company.abuser_score).match(/([0-9.]+)\s*\(([^)]+)\)/);
-        if (m) {
-          const pct = Math.round(Number(m[1]) * 10000) / 100 + '%';
-          const lv = m[2].trim();
-          riskIpapiTxt = `${lv} (${pct}) Abuser`;
-          riskIpapiCol = lv.includes('High') || lv.includes('Very High') ? C_ORANGE : (lv.includes('Elevated') ? C_YELLOW : C_GREEN);
-          apiSev = lv.includes('High') || lv.includes('Very High') ? 3 : (lv.includes('Elevated') ? 2 : 0);
-        }
+  // ── 风险检测 ──
+  let riskIpapiTxt = "—", riskIpapiCol = C_SUB, apiSev = 0;
+  let riskRegTxt = "—", riskRegCol = C_SUB, regSev = 0;
+  let riskWhoisTxt = "—", riskWhoisCol = C_SUB, whoisSev = 0;
+  let riskIpdTxt = "—", riskIpdCol = C_SUB, ipdSev = 0;
+
+  const riskChecks = nIp !== "获取失败" ? await Promise.allSettled([
+    ctx.http.get(`https://api.ipapi.is/?q=${nIp}`, { timeout: 8000 }).then(r => r.text()),
+    ctx.http.get(`https://api.ipregistry.co/${nIp}?key=${ctx.env.IPREGISTRY_KEY || 'tryout'}`, { timeout: 8000 }).then(r => r.text()),
+    get(`https://ipwho.is/${nIp}`, { 'User-Agent': BASE_UA }),
+    get(`https://ipdata.co/${nIp}`, { 'User-Agent': BASE_UA }),
+  ]) : [];
+
+  // ipapi.is
+  if (riskChecks[0]?.status === 'fulfilled') {
+    const j = jp(riskChecks[0].value);
+    if (j?.company?.abuser_score) {
+      const m = String(j.company.abuser_score).match(/([0-9.]+)\s*\(([^)]+)\)/);
+      if (m) {
+        const pct = Math.round(Number(m[1]) * 10000) / 100;
+        const lv = m[2].trim();
+        riskIpapiTxt = `${pct}`;
+        riskIpapiCol = pct >= 75 ? C_RED : pct >= 50 ? C_ORANGE : pct >= 25 ? C_YELLOW : C_GREEN;
+        apiSev = pct >= 75 ? 4 : pct >= 50 ? 3 : pct >= 25 ? 2 : 0;
       }
-    } catch (e) {}
+    }
   }
 
+  // ipregistry
+  if (riskChecks[1]?.status === 'fulfilled') {
+    const j = jp(riskChecks[1].value);
+    if (j?.security) {
+      const sec = j.security;
+      const hits = ['is_proxy','is_vpn','is_tor','is_tor_exit','is_abuser','is_attacker','is_threat','is_bogon'].filter(k => sec[k]).length;
+      riskRegTxt = `${hits}`;
+      riskRegCol = hits >= 3 ? C_RED : hits >= 2 ? C_ORANGE : hits >= 1 ? C_YELLOW : C_GREEN;
+      regSev = hits >= 3 ? 4 : hits >= 2 ? 3 : hits >= 1 ? 2 : 0;
+    }
+  }
+
+  // ipwho.is
+  if (riskChecks[2]?.status === 'fulfilled') {
+    const j = jp(riskChecks[2].value);
+    if (j?.success !== false && j?.security) {
+      const sec = j.security;
+      const hits = ['vpn','proxy','tor','anonymous','crawler','bot'].filter(k => sec[k]).length;
+      riskWhoisTxt = `${hits}`;
+      riskWhoisCol = hits >= 3 ? C_RED : hits >= 2 ? C_ORANGE : hits >= 1 ? C_YELLOW : C_GREEN;
+      whoisSev = hits >= 3 ? 4 : hits >= 2 ? 3 : hits >= 1 ? 2 : 0;
+    }
+  }
+
+  // ipdata.co (HTML trust score)
+  if (riskChecks[3]?.status === 'fulfilled') {
+    const html = riskChecks[3].value || '';
+    const tm = html.match(/sidebar-trust-score-value[^>]*>\s*(\d+)/);
+    if (tm) {
+      const s = parseInt(tm[1]);
+      riskIpdTxt = `${s}`;
+      riskIpdCol = s >= 75 ? C_RED : s >= 50 ? C_ORANGE : s >= 25 ? C_YELLOW : C_GREEN;
+      ipdSev = s >= 75 ? 4 : s >= 50 ? 3 : s >= 25 ? 2 : 0;
+    }
+  }
+
+  // ── 流媒体检测 ──
   const [gptStatus, geminiStatus, youtubeStatus, netflixStatus, tiktokStatus] = await Promise.all([
-    checkChatGPT(),
-    checkGemini(),
-    checkYouTube(),
-    checkNetflix(),
-    checkTikTok()
+    checkChatGPT(), checkGemini(), checkYouTube(), checkNetflix(), checkTikTok()
   ]);
 
+  // ── 汇总 ──
   const proxySuccess = nIp !== "获取失败";
   const policyOk = policy && policy !== "DIRECT" && proxySuccess && nIp !== lIp;
   const policyWarn = policy && policy !== "DIRECT" && (!proxySuccess || nIp === lIp);
@@ -243,34 +284,21 @@ export default async function(ctx) {
 
   let riskGrades = [];
   if (proxySuccess) {
-    riskGrades.push({ sev: ippSev, t: `IPPure: ${riskIPPureTxt}` });
-    riskGrades.push({ sev: apiSev, t: `ipapi: ${riskIpapiTxt}` });
+    riskGrades.push({ sev: ippSev, t: 'IPPure', v: riskIPPureTxt, col: riskIPPureCol });
+    riskGrades.push({ sev: apiSev, t: 'ipapi', v: riskIpapiTxt, col: riskIpapiCol });
+    riskGrades.push({ sev: regSev, t: 'ipregistry', v: riskRegTxt, col: riskRegCol });
+    riskGrades.push({ sev: whoisSev, t: 'ipwhois', v: riskWhoisTxt, col: riskWhoisCol });
+    riskGrades.push({ sev: ipdSev, t: 'ipdata', v: riskIpdTxt, col: riskIpdCol });
   } else {
-    riskGrades.push({ sev: 4, t: '获取失败' });
+    riskGrades.push({ sev: 4, t: '落地IP', v: '获取失败', col: C_RED });
   }
 
   let maxSev = 0;
   riskGrades.forEach(g => { if (g.sev > maxSev) maxSev = g.sev; });
 
-  function sevIcon(sev) {
-    if (sev >= 4) return 'xmark.shield.fill';
-    if (sev >= 3) return 'exclamationmark.shield.fill';
-    if (sev >= 1) return 'exclamationmark.shield.fill';
-    return 'checkmark.shield.fill';
-  }
-  function sevText(sev) {
-    if (sev >= 4) return '极高风险';
-    if (sev >= 3) return '高风险';
-    if (sev >= 2) return '中等风险';
-    if (sev >= 1) return '中低风险';
-    return '纯净低危';
-  }
-  function sevColor(sev) {
-    if (sev >= 4) return C_RED;
-    if (sev >= 3) return C_ORANGE;
-    if (sev >= 1) return C_YELLOW;
-    return C_GREEN;
-  }
+  const sevIcon = (s) => s >= 4 ? 'xmark.shield.fill' : s >= 3 ? 'exclamationmark.shield.fill' : s >= 1 ? 'exclamationmark.shield.fill' : 'checkmark.shield.fill';
+  const sevText = (s) => s >= 4 ? '极高风险' : s >= 3 ? '高风险' : s >= 2 ? '中等风险' : s >= 1 ? '中低风险' : '纯净低危';
+  const sevColor = (s) => s >= 4 ? C_RED : s >= 3 ? C_ORANGE : s >= 1 ? C_YELLOW : C_GREEN;
 
   const summaryIcon = sevIcon(maxSev);
   const summaryTxt = sevText(maxSev);
@@ -305,26 +333,21 @@ export default async function(ctx) {
     };
   }
 
-  function ScoreRow(grade) {
-    const col = sevColor(grade.sev);
-    const parts = grade.t.split(': ');
-    const src = parts[0] || grade.t;
-    const val = parts[1] || '';
+  function RiskRow(grade) {
     return {
       type: 'stack', direction: 'row', alignItems: 'center', gap: 4,
       children: [
-        { type: 'image', src: `sf-symbol:${sevIcon(grade.sev)}`, color: col, width: SMALL_ICON, height: SMALL_ICON },
-        { type: 'text', text: src, font: { size: SMALL_FONT }, textColor: C_SUB },
+        { type: 'image', src: `sf-symbol:${sevIcon(grade.sev)}`, color: grade.col, width: SMALL_ICON, height: SMALL_ICON },
+        { type: 'text', text: grade.t, font: { size: SMALL_FONT, weight: 'medium' }, textColor: C_MAIN, flex: 1 },
         { type: 'spacer' },
-        { type: 'text', text: val, font: { size: SMALL_FONT, weight: 'bold', family: 'Menlo' }, textColor: col, maxLines: 1, minScale: 0.5, lineBreakMode: 'tail' }
+        { type: 'text', text: grade.v, font: { size: SMALL_FONT, weight: 'bold' }, textColor: grade.col, maxLines: 1 }
       ]
     };
   }
 
   const now = new Date();
   const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-  const isLarge = widgetFamily === 'systemLarge';
-  const WIDGET_PADDING = isLarge ? [10, 12] : [8, 10];
+  const WIDGET_PADDING = [8, 10];
   const HEADER_FONT = 13;
   const HEADER_ICON = 11;
   const HEADER_TIME_FONT = 10;
@@ -359,20 +382,31 @@ export default async function(ctx) {
       UnlockRow("GPT", gptStatus),
       UnlockRow("Gemini", geminiStatus),
       UnlockRow("YouTube", youtubeStatus),
-      UnlockRow("奈飞", netflixStatus),
-      UnlockRow("TikTok", tiktokStatus)
     ]
   };
 
   const unlockRight = {
     type: 'stack', direction: 'column', gap: BOTTOM_GAP_RIGHT,
-    children: riskGrades.map(g => ScoreRow(g))
+    children: [
+      UnlockRow("奈飞", netflixStatus),
+      UnlockRow("TikTok", tiktokStatus),
+    ]
   };
 
   const unlockSection = {
     type: 'stack', direction: 'row', gap: COL_GAP,
     children: [unlockLeft, unlockRight]
   };
+
+  const riskLeft = { type: 'stack', direction: 'column', gap: BOTTOM_GAP_LEFT, flex: 1,
+    children: riskGrades.slice(0, 3).map(g => RiskRow(g))
+  };
+  const riskRight = { type: 'stack', direction: 'column', gap: BOTTOM_GAP_RIGHT, flex: 1,
+    children: riskGrades.slice(3, 5).map(g => RiskRow(g))
+  };
+  const riskSection = { type: 'stack', direction: 'row', gap: COL_GAP, children: [riskLeft, riskRight] };
+
+  const divider = { type: 'stack', height: 0.5, backgroundColor: { light: 'rgba(0,0,0,0.08)', dark: 'rgba(255,255,255,0.12)' } };
 
   return {
     type: 'widget',
@@ -400,12 +434,11 @@ export default async function(ctx) {
           }
         ]
       },
-      {
-        type: 'stack', direction: 'row', gap: COL_GAP,
-        children: [leftColumn, rightColumn]
-      },
-      { type: 'stack', height: 0.5, backgroundColor: { light: 'rgba(0,0,0,0.08)', dark: 'rgba(255,255,255,0.12)' } },
-      unlockSection
+      { type: 'stack', direction: 'row', gap: COL_GAP, children: [leftColumn, rightColumn] },
+      divider,
+      unlockSection,
+      divider,
+      riskSection
     ]
   };
 }
