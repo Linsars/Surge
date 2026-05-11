@@ -18,7 +18,6 @@ export default async function(ctx) {
   const policy = (ctx.env && ctx.env.POLICY) ? ctx.env.POLICY : "";
   const BASE_UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1";
 
-  async function safe(fn) { try { return await fn(); } catch (e) { return null; } }
   async function get(url, headers, timeout) {
     const opts = { timeout: timeout || 8000 };
     if (headers) opts.headers = headers;
@@ -39,6 +38,20 @@ export default async function(ctx) {
   }
   function jp(s) { try { return JSON.parse(s); } catch (e) { return null; } }
   function ti(v) { const n = Number(v); return Number.isFinite(n) ? Math.round(n) : null; }
+
+  const fmtFlag = (code) => {
+    if (!code || code.length !== 2 || code.toUpperCase() === 'XX') return "🌍";
+    return String.fromCodePoint(...code.toUpperCase().split('').map(c => 127397 + c.charCodeAt(0)));
+  };
+  const fmtISP = (isp) => {
+    if (!isp) return "未知";
+    const s = String(isp).toLowerCase();
+    if (/移动|mobile|cmcc/i.test(s)) return "中国移动";
+    if (/电信|telecom|chinanet/i.test(s)) return "中国电信";
+    if (/联通|unicom/i.test(s)) return "中国联通";
+    if (/广电|broadcast|cbn/i.test(s)) return "中国广电";
+    return isp;
+  };
 
   async function checkChatGPT() {
     try {
@@ -105,8 +118,7 @@ export default async function(ctx) {
       const blocked1 = /oh no!/i.test(t1 || "") || /not available/i.test(t1 || "") || /Sorry/i.test(t1 || "");
       const blocked2 = /oh no!/i.test(t2 || "") || /not available/i.test(t2 || "") || /Sorry/i.test(t2 || "");
       if (blocked1 && blocked2) return "Popcorn";
-      const allBodies = [t1, t2];
-      for (let b of allBodies) {
+      for (const b of [t1, t2]) {
         if (!b) continue;
         const rm = b.match(/"countryCode"\s*:\s*"?([A-Z]{2})"?/);
         if (rm && rm[1]) return rm[1];
@@ -131,21 +143,7 @@ export default async function(ctx) {
     } catch (e) { return "Cross"; }
   }
 
-  const fmtISP = (isp) => {
-    if (!isp) return "未知";
-    const s = String(isp).toLowerCase();
-    if (/移动|mobile|cmcc/i.test(s)) return "中国移动";
-    if (/电信|telecom|chinanet/i.test(s)) return "中国电信";
-    if (/联通|unicom/i.test(s)) return "中国联通";
-    if (/广电|broadcast|cbn/i.test(s)) return "中国广电";
-    return isp;
-  };
-
-  const fmtFlag = (code) => {
-    if (!code || code.length !== 2 || code.toUpperCase() === 'XX') return "🌍";
-    return String.fromCodePoint(...code.toUpperCase().split('').map(c => 127397 + c.charCodeAt(0)));
-  };
-
+  // ── 本地 IP ──
   let lIp = "获取失败", lLoc = "未知位置", lIsp = "未知运营商";
   try {
     const lRes = await ctx.http.get('https://myip.ipip.net/json', { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 8000 });
@@ -169,17 +167,16 @@ export default async function(ctx) {
     } catch (e) {}
   }
 
+  // ── 落地 IP ──
   let nIp = "获取失败", nLoc = "未知位置", nativeText = "未知";
   let riskIPPureTxt = "低危 (0)", riskIPPureCol = C_GREEN, ippSev = 0;
-
   try {
     const res = await ctx.http.get('https://my.ippure.com/v1/info', { timeout: 8000 });
     const d = JSON.parse(await res.text());
     nIp = d.ip || "获取失败";
     let code = d.countryCode || "";
     if (code.toUpperCase() === 'TW') code = 'CN';
-    const flag = fmtFlag(code);
-    nLoc = `${flag} ${d.country || ""} ${d.city || ""}`.trim() || "未知位置";
+    nLoc = `${fmtFlag(code)} ${d.country || ""} ${d.city || ""}`.trim() || "未知位置";
     nativeText = d.isResidential === true ? "🏠 原生住宅" : (d.isResidential === false ? "🏢 商业机房" : "未知");
     const risk = ti(d.fraudScore);
     if (risk !== null) {
@@ -189,7 +186,6 @@ export default async function(ctx) {
       else { riskIPPureTxt = `低危 (${risk})`; ippSev = 0; }
     }
   } catch (e) {}
-
   if (nIp === "获取失败") {
     try {
       const res2 = await ctx.http.get('https://api.ip.sb/geoip', { timeout: 8000 });
@@ -204,16 +200,23 @@ export default async function(ctx) {
     } catch (e) {}
   }
 
+  // ── 8 源风险检测 ──
   let riskIpapiTxt = "低危 (0%)", riskIpapiCol = C_GREEN, apiSev = 0;
   let riskIP2LTxt = "低危", riskIP2LCol = C_GREEN, ip2lSev = 0;
   let riskDBIPTxt = "低危", riskDBIPCol = C_GREEN, dbipSev = 0;
   let riskIPRegTxt = "未查询", riskIPRegCol = C_SUB, ipregSev = 0;
+  let riskScamTxt = "未查询", riskScamCol = C_SUB, scamSev = 0;
+  let riskWhoisTxt = "未查询", riskWhoisCol = C_SUB, whoisSev = 0;
+  let riskIpdTxt = "未查询", riskIpdCol = C_SUB, ipdSev = 0;
 
   const ipChecks = nIp !== "获取失败" ? await Promise.allSettled([
     ctx.http.get(`https://api.ipapi.is/?q=${nIp}`, { timeout: 8000 }).then(r => r.text()),
     ctx.http.get(`https://api.ip2location.io/?ip=${nIp}&key=free`, { timeout: 8000 }).then(r => r.text()),
     ctx.http.get(`https://api.db-ip.com/v2/free/${nIp}`, { timeout: 8000 }).then(r => r.text()),
     ctx.http.get(`https://api.ipregistry.co/${nIp}?key=${ctx.env.IPREGISTRY_KEY || 'tryout'}`, { timeout: 8000 }).then(r => r.text()),
+    ctx.http.get(`https://api11.scamalytics.com/v3/${ctx.env.SCAMALYTICS_KEY || 'trial'}/?ip=${nIp}`, { timeout: 8000 }).then(r => r.text()),
+    ctx.http.get(`https://ipwho.is/${nIp}`, { timeout: 8000 }).then(r => r.text()),
+    ctx.http.get(`https://api.ipdata.is/v1/${nIp}?api-key=${ctx.env.IPDATA_KEY || 'free'}`, { timeout: 8000 }).then(r => r.text()),
   ]) : [];
 
   if (ipChecks[0]?.status === 'fulfilled') {
@@ -223,229 +226,194 @@ export default async function(ctx) {
       if (m) {
         const pct = Math.round(Number(m[1]) * 10000) / 100 + '%';
         const lv = m[2].trim();
-        riskIpapiTxt = `${lv} (${pct}) Abuser`;
+        riskIpapiTxt = `${lv} (${pct})`;
         riskIpapiCol = lv.includes('High') || lv.includes('Very High') ? C_ORANGE : (lv.includes('Elevated') ? C_YELLOW : C_GREEN);
         apiSev = lv.includes('High') || lv.includes('Very High') ? 3 : (lv.includes('Elevated') ? 2 : 0);
       }
     }
   }
-
   if (ipChecks[1]?.status === 'fulfilled') {
     const j = jp(ipChecks[1].value);
     if (j?.is_proxy !== undefined) {
-      const isProxy = j.is_proxy;
-      riskIP2LTxt = isProxy ? "代理 (高危)" : "非代理 (低危)";
-      riskIP2LCol = isProxy ? C_ORANGE : C_GREEN;
-      ip2lSev = isProxy ? 3 : 0;
+      riskIP2LTxt = j.is_proxy ? "代理" : "正常";
+      riskIP2LCol = j.is_proxy ? C_ORANGE : C_GREEN;
+      ip2lSev = j.is_proxy ? 3 : 0;
     }
   }
-
   if (ipChecks[2]?.status === 'fulfilled') {
     const j = jp(ipChecks[2].value);
     if (j?.threatLevel) {
       const lv = j.threatLevel;
-      riskDBIPTxt = lv === 'high' ? `高危` : lv === 'medium' ? `中等` : `低危`;
+      riskDBIPTxt = lv === 'high' ? '高危' : lv === 'medium' ? '中等' : '低危';
       riskDBIPCol = lv === 'high' ? C_ORANGE : lv === 'medium' ? C_YELLOW : C_GREEN;
       dbipSev = lv === 'high' ? 3 : lv === 'medium' ? 2 : 0;
     }
   }
-
   if (ipChecks[3]?.status === 'fulfilled') {
     const j = jp(ipChecks[3].value);
     if (j?.security) {
-      const isProxy = j.security.is_proxy || j.security.is_webproxy || j.security.is_tor;
-      riskIPRegTxt = isProxy ? "代理 (高危)" : "非代理 (低危)";
-      riskIPRegCol = isProxy ? C_ORANGE : C_GREEN;
-      ipregSev = isProxy ? 3 : 0;
+      const isP = j.security.is_proxy || j.security.is_webproxy || j.security.is_tor;
+      riskIPRegTxt = isP ? "代理" : "正常";
+      riskIPRegCol = isP ? C_ORANGE : C_GREEN;
+      ipregSev = isP ? 3 : 0;
+    }
+  }
+  if (ipChecks[4]?.status === 'fulfilled') {
+    const j = jp(ipChecks[4].value);
+    if (j?.risk_score !== undefined) {
+      const s = ti(j.risk_score);
+      riskScamTxt = s !== null ? `${s}/100` : '未知';
+      if (s !== null) {
+        riskScamCol = s >= 70 ? C_ORANGE : s >= 40 ? C_YELLOW : C_GREEN;
+        scamSev = s >= 70 ? 3 : s >= 40 ? 2 : 0;
+      }
+    }
+  }
+  if (ipChecks[5]?.status === 'fulfilled') {
+    const j = jp(ipChecks[5].value);
+    if (j?.security) {
+      const isP = j.security.is_proxy || j.security.is_vpn || j.security.is_tor;
+      riskWhoisTxt = isP ? "代理/VPN" : "正常";
+      riskWhoisCol = isP ? C_ORANGE : C_GREEN;
+      whoisSev = isP ? 3 : 0;
+    }
+  }
+  if (ipChecks[6]?.status === 'fulfilled') {
+    const j = jp(ipChecks[6].value);
+    if (j?.threat?.is_threat !== undefined) {
+      const isT = j.threat.is_threat;
+      riskIpdTxt = isT ? "威胁" : "正常";
+      riskIpdCol = isT ? C_RED : C_GREEN;
+      ipdSev = isT ? 4 : 0;
     }
   }
 
+  // ── 流媒体检测 ──
   const [gptStatus, geminiStatus, youtubeStatus, netflixStatus, tiktokStatus] = await Promise.all([
-    checkChatGPT(),
-    checkGemini(),
-    checkYouTube(),
-    checkNetflix(),
-    checkTikTok()
+    checkChatGPT(), checkGemini(), checkYouTube(), checkNetflix(), checkTikTok()
   ]);
 
+  // ── 汇总 ──
   const proxySuccess = nIp !== "获取失败";
   const policyOk = policy && policy !== "DIRECT" && proxySuccess && nIp !== lIp;
   const policyWarn = policy && policy !== "DIRECT" && (!proxySuccess || nIp === lIp);
-  const getUnlockColor = (status) => (status === "Cross" || status === "CN") ? C_RED : C_GREEN;
-  const getUnlockResult = (status) => {
-    if (status === "Cross") return "不可用";
-    if (status === "CN") return "CN";
-    return status;
-  };
+  const getUnlockColor = (s) => (s === "Cross" || s === "CN") ? C_RED : C_GREEN;
+  const getUnlockResult = (s) => s === "Cross" ? "不可用" : s === "CN" ? "CN" : s;
 
   let riskGrades = [];
   if (proxySuccess) {
-    riskGrades.push({ sev: ippSev, t: `IPPure: ${riskIPPureTxt}` });
-    riskGrades.push({ sev: apiSev, t: `ipapi: ${riskIpapiTxt}` });
-    riskGrades.push({ sev: ip2lSev, t: `IP2Location: ${riskIP2LTxt}` });
-    riskGrades.push({ sev: dbipSev, t: `DB-IP: ${riskDBIPTxt}` });
-    riskGrades.push({ sev: ipregSev, t: `ipregistry: ${riskIPRegTxt}` });
+    riskGrades.push({ sev: ippSev, t: `IPPure`, v: riskIPPureTxt, col: riskIPPureCol });
+    riskGrades.push({ sev: apiSev, t: `ipapi`, v: riskIpapiTxt, col: riskIpapiCol });
+    riskGrades.push({ sev: ip2lSev, t: `IP2Location`, v: riskIP2LTxt, col: riskIP2LCol });
+    riskGrades.push({ sev: dbipSev, t: `DB-IP`, v: riskDBIPTxt, col: riskDBIPCol });
+    riskGrades.push({ sev: ipregSev, t: `ipregistry`, v: riskIPRegTxt, col: riskIPRegCol });
+    riskGrades.push({ sev: scamSev, t: `Scamalytics`, v: riskScamTxt, col: riskScamCol });
+    riskGrades.push({ sev: whoisSev, t: `IPWhois`, v: riskWhoisTxt, col: riskWhoisCol });
+    riskGrades.push({ sev: ipdSev, t: `ipdata`, v: riskIpdTxt, col: riskIpdCol });
   } else {
-    riskGrades.push({ sev: 4, t: '获取失败' });
+    riskGrades.push({ sev: 4, t: '获取失败', v: '', col: C_RED });
   }
 
   let maxSev = 0;
   riskGrades.forEach(g => { if (g.sev > maxSev) maxSev = g.sev; });
 
-  function sevIcon(sev) {
-    if (sev >= 4) return 'xmark.shield.fill';
-    if (sev >= 3) return 'exclamationmark.shield.fill';
-    if (sev >= 1) return 'exclamationmark.shield.fill';
-    return 'checkmark.shield.fill';
-  }
-  function sevText(sev) {
-    if (sev >= 4) return '极高风险';
-    if (sev >= 3) return '高风险';
-    if (sev >= 2) return '中等风险';
-    if (sev >= 1) return '中低风险';
-    return '纯净低危';
-  }
-  function sevColor(sev) {
-    if (sev >= 4) return C_RED;
-    if (sev >= 3) return C_ORANGE;
-    if (sev >= 1) return C_YELLOW;
-    return C_GREEN;
-  }
+  const sevIcon = (s) => s >= 4 ? 'xmark.shield.fill' : s >= 3 ? 'exclamationmark.shield.fill' : s >= 1 ? 'exclamationmark.shield.fill' : 'checkmark.shield.fill';
+  const sevText = (s) => s >= 4 ? '极高风险' : s >= 3 ? '高风险' : s >= 2 ? '中等风险' : s >= 1 ? '中低风险' : '纯净低危';
+  const sevColor = (s) => s >= 4 ? C_RED : s >= 3 ? C_ORANGE : s >= 1 ? C_YELLOW : C_GREEN;
 
   const summaryIcon = sevIcon(maxSev);
   const summaryTxt = sevText(maxSev);
   const summaryCol = sevColor(maxSev);
-  const SMALL_FONT = 10;
-  const SMALL_ICON = 12;
+  const FONT = 10;
+  const ICON = 12;
 
-  function smallInfoRow(iconName, label, value, valueCol = C_MAIN) {
+  function Row(iconName, label, value, valueCol) {
     return {
-      type: 'stack', direction: 'row', alignItems: 'center', gap: 5,
+      type: 'stack', direction: 'row', alignItems: 'center', gap: 4,
       children: [
-        { type: 'image', src: `sf-symbol:${iconName}`, color: C_ICON, width: SMALL_ICON, height: SMALL_ICON },
-        { type: 'text', text: label, font: { size: SMALL_FONT }, textColor: C_SUB },
+        { type: 'image', src: `sf-symbol:${iconName}`, color: C_ICON, width: ICON, height: ICON },
+        { type: 'text', text: label, font: { size: FONT, weight: 'medium' }, textColor: C_MAIN, flex: 1 },
         { type: 'spacer' },
-        { type: 'text', text: value, font: { size: SMALL_FONT, weight: 'bold', family: 'Menlo' }, textColor: valueCol, maxLines: 1, minScale: 0.5, lineBreakMode: 'tail' }
+        { type: 'text', text: value, font: { size: FONT, weight: 'bold' }, textColor: valueCol || C_MAIN, maxLines: 1, minScale: 0.5, lineBreakMode: 'tail' }
       ]
     };
   }
 
   function UnlockRow(name, status) {
-    const iconName = (status === "Cross" || status === "CN") ? "xmark.circle.fill" : "checkmark.circle.fill";
-    const iconCol = getUnlockColor(status);
-    const result = getUnlockResult(status);
-    return {
-      type: 'stack', direction: 'row', alignItems: 'center', gap: 4,
-      children: [
-        { type: 'image', src: `sf-symbol:${iconName}`, color: iconCol, width: SMALL_ICON, height: SMALL_ICON },
-        { type: 'text', text: name, font: { size: SMALL_FONT, weight: 'medium' }, textColor: C_MAIN, flex: 1 },
-        { type: 'spacer' },
-        { type: 'text', text: result, font: { size: SMALL_FONT, weight: 'bold' }, textColor: iconCol, maxLines: 1 }
-      ]
-    };
+    const icon = (status === "Cross" || status === "CN") ? "xmark.circle.fill" : "checkmark.circle.fill";
+    const col = getUnlockColor(status);
+    return Row(icon, name, getUnlockResult(status), col);
   }
 
-  function ScoreRow(grade) {
-    const col = sevColor(grade.sev);
-    const parts = grade.t.split(': ');
-    const src = parts[0] || grade.t;
-    const val = parts[1] || '';
-    return {
-      type: 'stack', direction: 'row', alignItems: 'center', gap: 4,
-      children: [
-        { type: 'image', src: `sf-symbol:${sevIcon(grade.sev)}`, color: col, width: SMALL_ICON, height: SMALL_ICON },
-        { type: 'text', text: src, font: { size: SMALL_FONT, weight: 'medium' }, textColor: C_SUB },
-        { type: 'spacer' },
-        { type: 'text', text: val, font: { size: SMALL_FONT, weight: 'bold' }, textColor: col, maxLines: 1, minScale: 0.5, lineBreakMode: 'tail' }
-      ]
-    };
+  function RiskRow(grade) {
+    return Row(sevIcon(grade.sev), grade.t, grade.v, grade.col);
   }
 
   const now = new Date();
   const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
   const isLarge = widgetFamily === 'systemLarge';
-  const WIDGET_PADDING = isLarge ? [10, 12] : [8, 10];
-  const HEADER_FONT = 13;
-  const HEADER_ICON = 11;
-  const HEADER_TIME_FONT = 10;
-  const HEADER_GAP = 4;
-  const TOP_GAP = 3;
-  const INFO_GAP = 2.5;
-  const BOTTOM_GAP_LEFT = 3;
-  const BOTTOM_GAP_RIGHT = 2;
+  const PAD = isLarge ? [10, 12] : [8, 10];
+  const GAP = 2.5;
   const COL_GAP = 12;
 
-  const leftColumn = {
-    type: 'stack', direction: 'column', gap: INFO_GAP, flex: 1,
+  const header = {
+    type: 'stack', direction: 'row', alignItems: 'center', gap: 4,
     children: [
-      smallInfoRow("house.fill", "本地IP：", lIp, C_GREEN),
-      smallInfoRow("mappin.and.ellipse", "本地位置：", lLoc),
-      smallInfoRow("simcard.fill", "本地运营商：", lIsp)
+      { type: 'text', text: '数据中心(DCH)', font: { size: 13, weight: 'heavy' }, textColor: C_TITLE, flex: 1, maxLines: 1, minScale: 0.7 },
+      { type: 'image', src: `sf-symbol:${summaryIcon}`, color: summaryCol, width: 12, height: 12 },
+      { type: 'text', text: summaryTxt, font: { size: 10, weight: 'bold' }, textColor: summaryCol },
+      { type: 'spacer' },
+      ...(policy && policy !== "DIRECT" ? [
+        { type: 'image', src: `sf-symbol:${policyOk ? 'checkmark.circle.fill' : (policyWarn ? 'exclamationmark.circle.fill' : 'questionmark.circle.fill')}`, color: policyOk ? C_GREEN : (policyWarn ? C_ORANGE : C_SUB), width: 10, height: 10 },
+        { type: 'text', text: policy, font: { size: 10, weight: 'bold' }, textColor: policyOk ? C_GREEN : (policyWarn ? C_ORANGE : C_SUB) },
+      ] : []),
+      { type: 'stack', direction: 'row', alignItems: 'center', gap: 3, children: [
+        { type: 'image', src: 'sf-symbol:arrow.clockwise', color: C_SUB, width: 11, height: 11 },
+        { type: 'text', text: timeStr, font: { size: 10 }, textColor: C_SUB }
+      ]}
     ]
   };
 
-  const rightColumn = {
-    type: 'stack', direction: 'column', gap: INFO_GAP, flex: 1,
-    children: [
-      smallInfoRow("network", "落地IP：", nIp, proxySuccess ? C_GREEN : C_RED),
-      smallInfoRow("map.fill", "落地位置：", nLoc, proxySuccess ? C_MAIN : C_RED),
-      smallInfoRow("building.2.fill", "原生属性：", nativeText, proxySuccess ? C_MAIN : C_RED)
-    ]
-  };
-
-  const unlockLeft = {
-    type: 'stack', direction: 'column', gap: BOTTOM_GAP_LEFT,
-    children: [
-      UnlockRow("GPT", gptStatus),
-      UnlockRow("Gemini", geminiStatus),
-      UnlockRow("YouTube", youtubeStatus),
-      UnlockRow("奈飞", netflixStatus),
-      UnlockRow("TikTok", tiktokStatus)
-    ]
-  };
-
-  const unlockRight = {
-    type: 'stack', direction: 'column', gap: BOTTOM_GAP_RIGHT,
-    children: riskGrades.map(g => ScoreRow(g))
-  };
-
-  const unlockSection = {
+  const ipInfo = {
     type: 'stack', direction: 'row', gap: COL_GAP,
-    children: [unlockLeft, unlockRight]
-  };
-
-  return {
-    type: 'widget',
-    padding: WIDGET_PADDING,
-    gap: TOP_GAP,
-    backgroundColor: BG_COLOR,
     children: [
-      {
-        type: 'stack', direction: 'row', alignItems: 'center', gap: HEADER_GAP,
-        children: [
-          { type: 'text', text: '数据中心(DCH)', font: { size: HEADER_FONT, weight: 'heavy' }, textColor: C_TITLE, flex: 1, maxLines: 1, minScale: 0.7 },
-          { type: 'image', src: `sf-symbol:${summaryIcon}`, color: summaryCol, width: 12, height: 12 },
-          { type: 'text', text: summaryTxt, font: { size: 10, weight: 'bold' }, textColor: summaryCol },
-          { type: 'spacer' },
-          ...(policy && policy !== "DIRECT" ? [
-            { type: 'image', src: `sf-symbol:${policyOk ? 'checkmark.circle.fill' : (policyWarn ? 'exclamationmark.circle.fill' : 'questionmark.circle.fill')}`, color: policyOk ? C_GREEN : (policyWarn ? C_ORANGE : C_SUB), width: 10, height: 10 },
-            { type: 'text', text: policy, font: { size: 10, weight: 'bold' }, textColor: policyOk ? C_GREEN : (policyWarn ? C_ORANGE : C_SUB) },
-          ] : []),
-          {
-            type: 'stack', direction: 'row', alignItems: 'center', gap: 3,
-            children: [
-              { type: 'image', src: 'sf-symbol:arrow.clockwise', color: C_SUB, width: HEADER_ICON, height: HEADER_ICON },
-              { type: 'text', text: timeStr, font: { size: HEADER_TIME_FONT }, textColor: C_SUB }
-            ]
-          }
-        ]
-      },
-      {
-        type: 'stack', direction: 'row', gap: COL_GAP,
-        children: [leftColumn, rightColumn]
-      },
-      { type: 'stack', height: 0.5, backgroundColor: { light: 'rgba(0,0,0,0.08)', dark: 'rgba(255,255,255,0.12)' } },
-      unlockSection
+      { type: 'stack', direction: 'column', gap: GAP, flex: 1, children: [
+        Row("house.fill", "本地IP", lIp, C_GREEN),
+        Row("mappin.and.ellipse", "本地位置", lLoc),
+        Row("simcard.fill", "本地运营商", lIsp),
+      ]},
+      { type: 'stack', direction: 'column', gap: GAP, flex: 1, children: [
+        Row("network", "落地IP", nIp, proxySuccess ? C_GREEN : C_RED),
+        Row("map.fill", "落地位置", nLoc, proxySuccess ? C_MAIN : C_RED),
+        Row("building.2.fill", "原生属性", nativeText, proxySuccess ? C_MAIN : C_RED),
+      ]}
     ]
   };
+
+  const riskLeft = { type: 'stack', direction: 'column', gap: GAP, flex: 1,
+    children: riskGrades.slice(0, 4).map(g => RiskRow(g))
+  };
+  const riskRight = { type: 'stack', direction: 'column', gap: GAP, flex: 1,
+    children: riskGrades.slice(4, 8).map(g => RiskRow(g))
+  };
+  const riskSection = { type: 'stack', direction: 'row', gap: COL_GAP, children: [riskLeft, riskRight] };
+
+  const unlockLeftCol = { type: 'stack', direction: 'column', gap: GAP, flex: 1, children: [
+    UnlockRow("GPT", gptStatus), UnlockRow("Gemini", geminiStatus), UnlockRow("YouTube", youtubeStatus)
+  ]};
+  const unlockRightCol = { type: 'stack', direction: 'column', gap: GAP, flex: 1, children: [
+    UnlockRow("奈飞", netflixStatus), UnlockRow("TikTok", tiktokStatus)
+  ]};
+  const unlockSection = { type: 'stack', direction: 'row', gap: COL_GAP, children: [unlockLeftCol, unlockRightCol] };
+
+  const divider = { type: 'stack', height: 0.5, backgroundColor: { light: 'rgba(0,0,0,0.08)', dark: 'rgba(255,255,255,0.12)' } };
+
+  let children;
+  if (isLarge) {
+    children = [header, ipInfo, divider, unlockSection, divider, riskSection];
+  } else {
+    children = [header, ipInfo, divider, riskSection];
+  }
+
+  return { type: 'widget', padding: PAD, gap: 3, backgroundColor: BG_COLOR, children };
 }
