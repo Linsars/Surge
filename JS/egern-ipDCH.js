@@ -422,10 +422,10 @@ export default async function(ctx) {
   const unlockSection = { type: 'stack', direction: 'row', gap: COL_GAP, children: [unlockLeftCol, unlockRightCol] };
 
   const riskLeft = { type: 'stack', direction: 'column', gap: GAP, flex: 1,
-    children: riskGrades.slice(0, 4).map(g => RiskRow(g))
+    children: riskGrades.slice(0, 3).map(g => RiskRow(g))
   };
   const riskRight = { type: 'stack', direction: 'column', gap: GAP, flex: 1,
-    children: riskGrades.slice(4, 7).map(g => RiskRow(g))
+    children: riskGrades.slice(3, 6).map(g => RiskRow(g))
   };
   const riskSection = { type: 'stack', direction: 'row', gap: COL_GAP, children: [riskLeft, riskRight] };
 
