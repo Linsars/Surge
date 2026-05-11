@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         智慧重命名 - GeoIP + 创意命名
-// @version      5.3
+// @version      5.4
 // @description  SubStore 节点重命名：GeoIP 真实出口检测 + GPT 支持判断 + 多种创意循环命名
 // @author       Linsar
 // @example      #gm=诡秘&qz=机场&hz=GPT
@@ -214,30 +214,22 @@ async function operator(proxies = [], targetPlatform, env) {
   }
 
   async function geoQuery(host) {
-    // ip-api.com: 支持域名，CN 返回中文城市名
-    try {
-      const resp = await $.http.get({ url: 'http://ip-api.com/json/' + host + '?fields=countryCode,city&lang=zh-CN', timeout: 5000 })
-      let d
-      try { d = typeof resp.body === 'string' ? JSON.parse(resp.body) : resp.body } catch (e) { d = null }
-      if (d && d.countryCode) {
-        return { cc: d.countryCode.toUpperCase(), city: d.city || '' }
-      }
-    } catch (e) {}
-
-    // 以下需要 IP，先解析域名
     var ip = host
-    if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(host) && host.indexOf(':') === -1) {
-      const dnsServers = [
+    var isIP = /^\d{1,3}(\.\d{1,3}){3}$/.test(host) || host.indexOf(':') !== -1
+
+    if (!isIP) {
+      var dnsList = [
         'https://cloudflare-dns.com/dns-query?name=' + encodeURIComponent(host) + '&type=A',
         'https://dns.alidns.com/resolve?name=' + encodeURIComponent(host) + '&type=A',
+        'https://doh.pub/dns-query?name=' + encodeURIComponent(host) + '&type=A',
       ]
-      for (const dnsUrl of dnsServers) {
+      for (var di = 0; di < dnsList.length; di++) {
         try {
-          const dnsResp = await $.http.get({ url: dnsUrl, timeout: 5000, headers: { 'Accept': 'application/dns-json' } })
-          const dnsData = typeof dnsResp.body === 'string' ? JSON.parse(dnsResp.body) : dnsResp.body
-          if (dnsData && dnsData.Answer) {
-            for (let i = 0; i < dnsData.Answer.length; i++) {
-              if (dnsData.Answer[i].type === 1) { ip = dnsData.Answer[i].data; break }
+          var r = await $.http.get({ url: dnsList[di], timeout: 5000, headers: { 'Accept': 'application/dns-json' } })
+          var j = typeof r.body === 'string' ? JSON.parse(r.body) : r.body
+          if (j && j.Answer) {
+            for (var ai = 0; ai < j.Answer.length; ai++) {
+              if (j.Answer[ai].type === 1) { ip = j.Answer[ai].data; break }
             }
           }
           if (ip !== host) break
@@ -245,35 +237,25 @@ async function operator(proxies = [], targetPlatform, env) {
       }
     }
 
-    // ipwho.is: 需要 IP
-    if (ip !== host || /^\d{1,3}(\.\d{1,3}){3}$/.test(host)) {
-      try {
-        const resp = await $.http.get({ url: 'https://ipwho.is/' + ip, timeout: 5000 })
-        let d
-        try { d = typeof resp.body === 'string' ? JSON.parse(resp.body) : resp.body } catch (e) { d = null }
-        if (d && d.success && d.country_code) {
-          return { cc: d.country_code.toUpperCase(), city: d.city || '' }
-        }
-      } catch (e) {}
-
-      // ipinfo.io: 需要 IP
-      try {
-        const resp = await $.http.get({ url: 'https://ipinfo.io/' + ip + '/json', timeout: 5000 })
-        let d
-        try { d = typeof resp.body === 'string' ? JSON.parse(resp.body) : resp.body } catch (e) { d = null }
-        if (d && d.country) {
-        return { cc: d.country.toUpperCase(), city: d.city || '' };
-      }
-    } catch (e) {}
     try {
-      const resp = await $.http.get({ url: 'https://api.ip.sb/geoip/' + target, timeout: 5000 });
-      let d;
-      try { d = typeof resp.body === 'string' ? JSON.parse(resp.body) : resp.body; } catch (e) { d = null; }
-      if (d && d.country_code) {
-        return { cc: d.country_code.toUpperCase(), city: d.city || '' };
-      }
+      var r1 = await $.http.get({ url: 'https://ipwho.is/' + ip, timeout: 5000 })
+      var d1 = typeof r1.body === 'string' ? JSON.parse(r1.body) : r1.body
+      if (d1 && d1.success && d1.country_code) return { cc: d1.country_code.toUpperCase(), city: d1.city || '' }
     } catch (e) {}
-    return null;
+
+    try {
+      var r2 = await $.http.get({ url: 'http://ip-api.com/json/' + host + '?fields=countryCode,city&lang=zh-CN', timeout: 5000 })
+      var d2 = typeof r2.body === 'string' ? JSON.parse(r2.body) : r2.body
+      if (d2 && d2.countryCode) return { cc: d2.countryCode.toUpperCase(), city: d2.city || '' }
+    } catch (e) {}
+
+    try {
+      var r3 = await $.http.get({ url: 'https://ipinfo.io/' + ip + '/json', timeout: 5000 })
+      var d3 = typeof r3.body === 'string' ? JSON.parse(r3.body) : r3.body
+      if (d3 && d3.country) return { cc: d3.country.toUpperCase(), city: d3.city || '' }
+    } catch (e) {}
+
+    return null
   }
 
   const start = Date.now();
@@ -369,8 +351,8 @@ async function operator(proxies = [], targetPlatform, env) {
     if (geo && geo.cc && geo.cc !== 'XX') namedOK++;
   }
   const msg = geoFail > 0
-    ? 'v5.3 地区码 ' + namedOK + '/' + result.length + ' 服务器 ' + geoOK + '/' + servers.length + ' 失败 ' + geoFail
-    : 'v5.3 地区码 ' + namedOK + '/' + result.length;
+    ? 'v5.4 地区码 ' + namedOK + '/' + result.length + ' 服务器 ' + geoOK + '/' + servers.length + ' 失败 ' + geoFail
+    : 'v5.4 地区码 ' + namedOK + '/' + result.length;
   $.notify('命名', '', msg);
   return result;
 }
