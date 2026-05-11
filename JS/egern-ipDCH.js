@@ -205,7 +205,6 @@ export default async function(ctx) {
   let riskIP2LTxt = "低危", riskIP2LCol = C_GREEN, ip2lSev = 0;
   let riskDBIPTxt = "低危", riskDBIPCol = C_GREEN, dbipSev = 0;
   let riskIPRegTxt = "未查询", riskIPRegCol = C_SUB, ipregSev = 0;
-  let riskIPQSTxt = "未查询", riskIPQSCol = C_SUB, ipqsSev = 0;
   let riskIpdTxt = "未查询", riskIpdCol = C_SUB, ipdSev = 0;
 
   const riskCacheKey = `risk_${nIp}`;
@@ -225,7 +224,6 @@ export default async function(ctx) {
       ctx.http.get(`https://api.ip2location.io/?ip=${nIp}&key=free`, { timeout: 8000 }).then(r => r.text()),
       ctx.http.get(`https://api.db-ip.com/v2/free/${nIp}`, { timeout: 8000 }).then(r => r.text()),
       ctx.http.get(`https://api.ipregistry.co/${nIp}?key=${ctx.env.IPREGISTRY_KEY || 'tryout'}`, { timeout: 8000 }).then(r => r.text()),
-      ctx.env.IPQS_KEY ? ctx.http.get(`https://www.ipqualityscore.com/api/json/ip/${ctx.env.IPQS_KEY}/${nIp}`, { timeout: 8000 }).then(r => r.text()) : Promise.reject(new Error('no key')),
       ctx.env.IPDATA_KEY ? ctx.http.get(`https://api.ipdata.co/${nIp}?api-key=${ctx.env.IPDATA_KEY}`, { timeout: 8000 }).then(r => r.text()) : Promise.reject(new Error('no key')),
     ]);
   }
@@ -275,36 +273,25 @@ export default async function(ctx) {
   if (ipChecks[3]?.status === 'fulfilled') {
     const j = jp(ipChecks[3].value);
     if (j?.security) {
+      const s = ti(j.security.threat_score ?? j.security.abuse_score ?? 0);
       const isP = j.security.is_proxy || j.security.is_webproxy || j.security.is_tor;
-      const abuse = ti(j.security?.abuse_score || 0);
-      riskIPRegTxt = isP ? `代理 (${abuse})` : `${abuse}`;
-      riskIPRegCol = abuse >= 75 ? C_ORANGE : abuse >= 25 ? C_YELLOW : C_GREEN;
-      ipregSev = abuse >= 75 ? 3 : abuse >= 25 ? 2 : 0;
+      riskIPRegTxt = isP ? `代理 (${s})` : `${s}`;
+      riskIPRegCol = s >= 75 ? C_RED : s >= 50 ? C_ORANGE : s >= 25 ? C_YELLOW : C_GREEN;
+      ipregSev = s >= 75 ? 4 : s >= 50 ? 3 : s >= 25 ? 2 : 0;
     }
   }
 
   if (ipChecks[4]?.status === 'fulfilled') {
     const j = jp(ipChecks[4].value);
-    if (j && j.success !== false && j.fraud_score !== undefined) {
-      const s = ti(j.fraud_score);
-      const isP = j.proxy || j.vpn || j.tor;
-      riskIPQSTxt = isP ? `代理 (${s})` : `${s}`;
-      riskIPQSCol = s >= 85 ? C_RED : s >= 70 ? C_ORANGE : s >= 40 ? C_YELLOW : C_GREEN;
-      ipqsSev = s >= 85 ? 4 : s >= 70 ? 3 : s >= 40 ? 2 : 0;
-    } else if (j && j.success === false) {
-      riskIPQSTxt = j.message && j.message.includes('quota') ? '额度耗尽' : '查询失败';
-      riskIPQSCol = C_SUB;
-    }
-  }
-
-  if (ipChecks[5]?.status === 'fulfilled') {
-    const j = jp(ipChecks[5].value);
-    if (j && j.threat) {
-      const isT = j.threat.is_threat || j.threat.is_proxy || j.threat.is_tor;
-      const isVpn = j.threat.is_vpn;
-      riskIpdTxt = isT ? "威胁" : isVpn ? "VPN" : "正常";
-      riskIpdCol = isT ? C_RED : isVpn ? C_YELLOW : C_GREEN;
-      ipdSev = isT ? 4 : isVpn ? 2 : 0;
+    if (j) {
+      const isP = j.is_proxy || j.is_vpn || j.is_tor;
+      const threat = j.threat || {};
+      const isT = threat.is_threat || threat.is_tor;
+      const isVpn = threat.is_vpn;
+      const s = isT ? 100 : isP ? 75 : isVpn ? 50 : 0;
+      riskIpdTxt = isT ? `威胁 (${s})` : isP ? `代理 (${s})` : isVpn ? `VPN (${s})` : `${s}`;
+      riskIpdCol = s >= 80 ? C_RED : s >= 50 ? C_ORANGE : s >= 25 ? C_YELLOW : C_GREEN;
+      ipdSev = s >= 80 ? 4 : s >= 50 ? 3 : s >= 25 ? 2 : 0;
     }
   }
 
@@ -313,7 +300,7 @@ export default async function(ctx) {
       $persistentStore.write(JSON.stringify({
         ts: Date.now(),
         ipp: riskIPPureTxt, api: riskIpapiTxt, ip2l: riskIP2LTxt,
-        dbip: riskDBIPTxt, ipreg: riskIPRegTxt, ipqs: riskIPQSTxt, ipd: riskIpdTxt
+        dbip: riskDBIPTxt, ipreg: riskIPRegTxt, ipd: riskIpdTxt
       }), riskCacheKey);
     } catch (e) {}
   }
@@ -324,7 +311,7 @@ export default async function(ctx) {
     riskIP2LTxt = cachedRisk.ip2l || riskIP2LTxt;
     riskDBIPTxt = cachedRisk.dbip || riskDBIPTxt;
     riskIPRegTxt = cachedRisk.ipreg || riskIPRegTxt;
-    riskIPQSTxt = cachedRisk.ipqs || riskIPQSTxt;
+
     riskIpdTxt = cachedRisk.ipd || riskIpdTxt;
   }
 
@@ -347,7 +334,7 @@ export default async function(ctx) {
     riskGrades.push({ sev: ip2lSev, t: `IP2Location`, v: riskIP2LTxt, col: riskIP2LCol });
     riskGrades.push({ sev: dbipSev, t: `DB-IP`, v: riskDBIPTxt, col: riskDBIPCol });
     riskGrades.push({ sev: ipregSev, t: `ipregistry`, v: riskIPRegTxt, col: riskIPRegCol });
-    riskGrades.push({ sev: ipqsSev, t: `IPQualityScore`, v: riskIPQSTxt, col: riskIPQSCol });
+
     riskGrades.push({ sev: ipdSev, t: `ipdata`, v: riskIpdTxt, col: riskIpdCol });
   } else {
     riskGrades.push({ sev: 4, t: '获取失败', v: '', col: C_RED });
