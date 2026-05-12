@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         智慧重命名 - GeoIP + 创意命名
-// @version      5.5
+// @version      5.6
 // @description  SubStore 节点重命名：GeoIP 真实出口检测 + GPT 支持判断 + 多种创意循环命名
 // @author       Linsar
 // @example      #gm=诡秘&qz=机场&hz=GPT
@@ -12,6 +12,7 @@
 //         hz=GPT  → 仅对支持 GPT 的地区追加，已含 GPT 的跳过
 //         hz=其他  → 对所有节点追加
 // FGF=  分隔符（默认｜）
+// RV=   设为1时屏蔽所有VLESS节点，优先级最高   示例：rv=1
 // GM=   命名模式（不传 → 节点名改为 地区-序号，CN 用城市名）
 //
 // ── GM 命名模式列表（含可用数量） ─────────────────────────
@@ -182,6 +183,11 @@ async function operator(proxies = [], targetPlatform, env) {
   const cacheEnabled = !!$arguments.cache;
   const ccMap = {};
   const geoCache = {};
+
+  if ($arguments.rv === '1' || $arguments.rv === 1) {
+    proxies = proxies.filter(p => p.type !== 'vless')
+  }
+  if (!proxies.length) return proxies
 
   const servers = [];
   const seen = {};
@@ -361,8 +367,8 @@ async function operator(proxies = [], targetPlatform, env) {
     if (geo && geo.cc && geo.cc !== 'XX') namedOK++;
   }
   const msg = geoFail > 0
-    ? 'v5.5 地区码 ' + namedOK + '/' + result.length + ' 服务器 ' + geoOK + '/' + servers.length + ' 失败 ' + geoFail
-    : 'v5.5 地区码 ' + namedOK + '/' + result.length;
+    ? 'v5.6 地区码 ' + namedOK + '/' + result.length + ' 服务器 ' + geoOK + '/' + servers.length + ' 失败 ' + geoFail
+    : 'v5.6 地区码 ' + namedOK + '/' + result.length;
   $.notify('命名', '', msg);
   return result;
 }
