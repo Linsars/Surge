@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         智慧重命名 - GeoIP + 创意命名
-// @version      5.8
+// @version      5.9
 // @description  SubStore 节点重命名：GeoIP 真实出口检测 + GPT 支持判断 + 多种创意循环命名
 // @author       Linsar
 // @example      #gm=诡秘&qz=机场&hz=GPT
@@ -284,6 +284,66 @@ async function operator(proxies = [], targetPlatform, env) {
     if (i + 5 < servers.length) await new Promise(r => setTimeout(r, 200));
   }
 
+  // GeoIP 全失败的节点：从原节点名提取国家
+  const nameCC = {
+    '🇭🇰': 'HK', '🇭🇰': 'HK', '香港': 'HK', '港': 'HK', 'HK': 'HK', 'hong kong': 'HK',
+    '🇹🇼': 'TW', '台湾': 'TW', '台': 'TW', 'TW': 'TW', 'taiwan': 'TW',
+    '🇲🇴': 'MO', '澳门': 'MO', 'MO': 'MO',
+    '🇺🇸': 'US', '美国': 'US', 'US': 'US', 'usa': 'US', 'america': 'US',
+    '🇯🇵': 'JP', '日本': 'JP', 'JP': 'JP', 'japan': 'JP',
+    '🇰🇷': 'KR', '韩国': 'KR', 'KR': 'KR', 'korea': 'KR',
+    '🇸🇬': 'SG', '新加坡': 'SG', 'SG': 'SG', 'singapore': 'SG',
+    '🇬🇧': 'GB', '英国': 'GB', 'UK': 'GB', 'GB': 'GB', 'britain': 'GB',
+    '🇩🇪': 'DE', '德国': 'DE', 'DE': 'DE', 'germany': 'DE',
+    '🇫🇷': 'FR', '法国': 'FR', 'FR': 'FR', 'france': 'FR',
+    '🇷🇺': 'RU', '俄罗斯': 'RU', 'RU': 'RU', 'russia': 'RU',
+    '🇦🇺': 'AU', '澳大利亚': 'AU', 'AU': 'AU', 'australia': 'AU',
+    '🇨🇦': 'CA', '加拿大': 'CA', 'CA': 'CA', 'canada': 'CA',
+    '🇮🇳': 'IN', '印度': 'IN', 'IN': 'IN', 'india': 'IN',
+    '🇳🇱': 'NL', '荷兰': 'NL', 'NL': 'NL', 'netherlands': 'NL',
+    '🇹🇭': 'TH', '泰国': 'TH', 'TH': 'TH', 'thailand': 'TH',
+    '🇲🇾': 'MY', '马来西亚': 'MY', 'MY': 'MY', 'malaysia': 'MY',
+    '🇵🇭': 'PH', '菲律宾': 'PH', 'PH': 'PH', 'philippines': 'PH',
+    '🇻🇳': 'VN', '越南': 'VN', 'VN': 'VN', 'vietnam': 'VN',
+    '🇮🇩': 'ID', '印尼': 'ID', 'ID': 'ID', 'indonesia': 'ID',
+    '🇹🇷': 'TR', '土耳其': 'TR', 'TR': 'TR', 'turkey': 'TR',
+    '🇧🇷': 'BR', '巴西': 'BR', 'BR': 'BR', 'brazil': 'BR',
+    '🇦🇷': 'AR', '阿根廷': 'AR', 'AR': 'AR',
+    '🇨🇳': 'CN', '中国': 'CN', 'CN': 'CN', 'china': 'CN',
+    '🇮🇪': 'IE', '爱尔兰': 'IE', 'IE': 'IE', 'ireland': 'IE',
+    '🇮🇱': 'IL', '以色列': 'IL', 'IL': 'IL', 'israel': 'IL',
+    '🇸🇦': 'SA', '沙特': 'SA', 'SA': 'SA',
+    '🇦🇪': 'AE', '阿联酋': 'AE', 'AE': 'AE',
+    '🇪🇬': 'EG', '埃及': 'EG', 'EG': 'EG',
+    '🇿🇦': 'ZA', '南非': 'ZA', 'ZA': 'ZA',
+    '🇵🇱': 'PL', '波兰': 'PL', 'PL': 'PL',
+    '🇮🇹': 'IT', '意大利': 'IT', 'IT': 'IT', 'italy': 'IT',
+    '🇪🇸': 'ES', '西班牙': 'ES', 'ES': 'ES', 'spain': 'ES',
+    '🇫🇮': 'FI', '芬兰': 'FI', 'FI': 'FI', 'finland': 'FI',
+    '🇸🇪': 'SE', '瑞典': 'SE', 'SE': 'SE', 'sweden': 'SE',
+    '🇨🇭': 'CH', '瑞士': 'CH', 'CH': 'CH', 'switzerland': 'CH',
+  }
+
+  const missing = new Set()
+  for (var k in ccMap) { if (!ccMap[k] || !ccMap[k].cc || ccMap[k].cc === 'XX') missing.add(k) }
+
+  if (missing.size > 0) {
+    for (var i = 0; i < proxies.length; i++) {
+      var srv = proxies[i].server
+      if (!missing.has(srv)) continue
+      var name = (proxies[i].name || '').toUpperCase()
+      var found = null
+      for (var kw in nameCC) {
+        if (name.indexOf(kw.toUpperCase()) !== -1) { found = nameCC[kw]; break }
+      }
+      if (found) {
+        var geo = { cc: found, city: '' }
+        ccMap[srv] = geo
+        geoCache[srv] = geo
+      }
+    }
+  }
+
   const SUP = {'0':'⁰','1':'¹','2':'²','3':'³','4':'⁴','5':'⁵','6':'⁶','7':'⁷','8':'⁸','9':'⁹'};
   function sup(n) {
     if (n <= 0) return '';
@@ -368,7 +428,7 @@ async function operator(proxies = [], targetPlatform, env) {
     const geo = ccMap[result[i].server];
     if (geo && geo.cc && geo.cc !== 'XX') namedOK++;
   }
-  var msg = 'v5.8 改名 ' + namedOK + '/' + result.length + ' 服务器 ' + geoOK + '/' + servers.length
+  var msg = 'v5.9 改名 ' + namedOK + '/' + result.length + ' 服务器 ' + geoOK + '/' + servers.length
   if (vlessCount > 0) msg += ' 屏蔽 ' + vlessCount
   $.notify('命名', '', msg);
   return result;
