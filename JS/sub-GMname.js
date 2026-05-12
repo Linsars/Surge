@@ -140,80 +140,66 @@ function cc2flag(cc) {
   return String.fromCodePoint(...cc.toUpperCase().split('').map(c => 127397 + c.charCodeAt(0)));
 }
 
-const nameCC = {
-  '🇭🇰':'HK','香港':'HK','港':'HK','HK':'HK','hong kong':'HK',
-  '🇹🇼':'TW','台湾':'TW','台':'TW','TW':'TW','taiwan':'TW',
-  '🇲🇴':'MO','澳门':'MO','MO':'MO','macau':'MO',
-  '🇨🇳':'CN','中国':'CN','CN':'CN','china':'CN',
-  '🇺🇸':'US','美国':'US','US':'US','usa':'US','america':'US','united states':'US',
-  '🇯🇵':'JP','日本':'JP','JP':'JP','japan':'JP',
-  '🇰🇷':'KR','韩国':'KR','KR':'KR','korea':'KR','south korea':'KR',
-  '🇸🇬':'SG','新加坡':'SG','SG':'SG','singapore':'SG',
-  '🇬🇧':'GB','英国':'GB','UK':'GB','GB':'GB','britain':'GB','united kingdom':'GB',
-  '🇩🇪':'DE','德国':'DE','DE':'DE','germany':'DE',
-  '🇫🇷':'FR','法国':'FR','FR':'FR','france':'FR',
-  '🇨🇦':'CA','加拿大':'CA','CA':'CA','canada':'CA',
-  '🇦🇺':'AU','澳大利亚':'AU','AU':'AU','australia':'AU',
-  '🇳🇱':'NL','荷兰':'NL','NL':'NL','netherlands':'NL',
-  '🇸🇪':'SE','瑞典':'SE','SE':'SE','sweden':'SE',
-  '🇳🇴':'NO','挪威':'NO','NO':'NO','norway':'NO',
-  '🇫🇮':'FI','芬兰':'FI','FI':'FI','finland':'FI',
-  '🇨🇭':'CH','瑞士':'CH','CH':'CH','switzerland':'CH',
-  '🇮🇹':'IT','意大利':'IT','IT':'IT','italy':'IT',
-  '🇪🇸':'ES','西班牙':'ES','ES':'ES','spain':'ES',
-  '🇵🇹':'PT','葡萄牙':'PT','PT':'PT','portugal':'PT',
-  '🇧🇪':'BE','比利时':'BE','BE':'BE','belgium':'BE',
-  '🇦🇹':'AT','奥地利':'AT','AT':'AT','austria':'AT',
-  '🇮🇪':'IE','爱尔兰':'IE','IE':'IE','ireland':'IE',
-  '🇱🇺':'LU','卢森堡':'LU','LU':'LU','luxembourg':'LU',
-  '🇩🇰':'DK','丹麦':'DK','DK':'DK','denmark':'DK',
-  '🇵🇱':'PL','波兰':'PL','PL':'PL','poland':'PL',
-  '🇨🇿':'CZ','捷克':'CZ','CZ':'CZ','czech':'CZ','czechia':'CZ',
-  '🇭🇺':'HU','匈牙利':'HU','HU':'HU','hungary':'HU',
-  '🇷🇴':'RO','罗马尼亚':'RO','RO':'RO','romania':'RO',
-  '🇧🇬':'BG','保加利亚':'BG','BG':'BG','bulgaria':'BG',
-  '🇬🇷':'GR','希腊':'GR','GR':'GR','greece':'GR',
-  '🇹🇷':'TR','土耳其':'TR','TR':'TR','turkey':'TR',
-  '🇷🇺':'RU','俄罗斯':'RU','RU':'RU','russia':'RU',
-  '🇺🇦':'UA','乌克兰':'UA','UA':'UA','ukraine':'UA',
-  '🇮🇱':'IL','以色列':'IL','IL':'IL','israel':'IL',
-  '🇦🇪':'AE','阿联酋':'AE','AE':'AE','uae':'AE',
-  '🇸🇦':'SA','沙特':'SA','SA':'SA','saudi':'SA',
-  '🇮🇳':'IN','印度':'IN','IN':'IN','india':'IN',
-  '🇹🇭':'TH','泰国':'TH','TH':'TH','thailand':'TH',
-  '🇲🇾':'MY','马来西亚':'MY','MY':'MY','malaysia':'MY',
-  '🇵🇭':'PH','菲律宾':'PH','PH':'PH','philippines':'PH',
-  '🇻🇳':'VN','越南':'VN','VN':'VN','vietnam':'VN',
-  '🇮🇩':'ID','印尼':'ID','ID':'ID','indonesia':'ID',
-  '🇧🇷':'BR','巴西':'BR','BR':'BR','brazil':'BR',
-  '🇦🇷':'AR','阿根廷':'AR','AR':'AR','argentina':'AR',
-  '🇨🇱':'CL','智利':'CL','CL':'CL','chile':'CL',
-  '🇲🇽':'MX','墨西哥':'MX','MX':'MX','mexico':'MX',
-  '🇨🇴':'CO','哥伦比亚':'CO','CO':'CO','colombia':'CO',
-  '🇿🇦':'ZA','南非':'ZA','ZA':'ZA','south africa':'ZA',
-  '🇪🇬':'EG','埃及':'EG','EG':'EG','egypt':'EG',
-  '🇳🇬':'NG','尼日利亚':'NG','NG':'NG','nigeria':'NG',
-  '🇰🇪':'KE','肯尼亚':'KE','KE':'KE','kenya':'KE',
-  '🇵🇰':'PK','巴基斯坦':'PK','PK':'PK','pakistan':'PK',
-  '🇧🇩':'BD','孟加拉':'BD','BD':'BD','bangladesh':'BD',
-  '🇱🇰':'LK','斯里兰卡':'LK','LK':'LK',
-  '🇳🇵':'NP','尼泊尔':'NP','NP':'NP',
-  '🇲🇲':'MM','缅甸':'MM','MM':'MM',
-  '🇰🇭':'KH','柬埔寨':'KH','KH':'KH',
-  '🇱🇦':'LA','老挝':'LA','LA':'LA',
-  '🇳🇿':'NZ','新西兰':'NZ','NZ':'NZ','new zealand':'NZ',
-  '🇮🇸':'IS','冰岛':'IS','IS':'IS','iceland':'IS',
-  '🇪🇪':'EE','爱沙尼亚':'EE','EE':'EE',
-  '🇱🇻':'LV','拉脱维亚':'LV','LV':'LV',
-  '🇱🇹':'LT','立陶宛':'LT','LT':'LT',
-  '🇸🇰':'SK','斯洛伐克':'SK','SK':'SK',
-  '🇭🇷':'HR','克罗地亚':'HR','HR':'HR',
-  '🇸🇮':'SI','斯洛文尼亚':'SI','SI':'SI',
-  '🇷🇸':'RS','塞尔维亚':'RS','RS':'RS',
-  '🇺🇾':'UY','乌拉圭':'UY','UY':'UY',
-  '🇵🇪':'PE','秘鲁':'PE','PE':'PE',
-  '🇪🇨':'EC','厄瓜多尔':'EC','EC':'EC',
-};
+const FLAG_CC = {
+  '🇭🇰':'HK','🇹🇼':'TW','🇲🇴':'MO','🇨🇳':'CN','🇺🇸':'US','🇯🇵':'JP','🇰🇷':'KR',
+  '🇸🇬':'SG','🇬🇧':'GB','🇩🇪':'DE','🇫🇷':'FR','🇨🇦':'CA','🇦🇺':'AU','🇳🇱':'NL',
+  '🇸🇪':'SE','🇳🇴':'NO','🇫🇮':'FI','🇨🇭':'CH','🇮🇹':'IT','🇪🇸':'ES','🇵🇹':'PT',
+  '🇧🇪':'BE','🇦🇹':'AT','🇮🇪':'IE','🇱🇺':'LU','🇩🇰':'DK','🇵🇱':'PL','🇨🇿':'CZ',
+  '🇭🇺':'HU','🇷🇴':'RO','🇧🇬':'BG','🇬🇷':'GR','🇹🇷':'TR','🇷🇺':'RU','🇺🇦':'UA',
+  '🇮🇱':'IL','🇦🇪':'AE','🇸🇦':'SA','🇮🇳':'IN','🇹🇭':'TH','🇲🇾':'MY','🇵🇭':'PH',
+  '🇻🇳':'VN','🇮🇩':'ID','🇧🇷':'BR','🇦🇷':'AR','🇨🇱':'CL','🇲🇽':'MX','🇨🇴':'CO',
+  '🇿🇦':'ZA','🇪🇬':'EG','🇳🇬':'NG','🇰🇪':'KE','🇵🇰':'PK','🇧🇩':'BD','🇱🇰':'LK',
+  '🇳🇵':'NP','🇲🇲':'MM','🇰🇭':'KH','🇱🇦':'LA','🇳🇿':'NZ','🇮🇸':'IS',
+  '🇪🇪':'EE','🇱🇻':'LV','🇱🇹':'LT','🇸🇰':'SK','🇭🇷':'HR','🇸🇮':'SI','🇷🇸':'RS',
+  '🇺🇾':'UY','🇵🇪':'PE','🇪🇨':'EC',
+}
+const LONG_KW = {
+  '香港':'HK','hong kong':'HK','台湾':'TW','taiwan':'TW','澳门':'MO','macau':'MO',
+  '中国':'CN','china':'CN','美国':'US','america':'US','united states':'US',
+  '日本':'JP','japan':'JP','韩国':'KR','korea':'KR','south korea':'KR',
+  '新加坡':'SG','singapore':'SG','英国':'GB','britain':'GB','united kingdom':'GB',
+  '德国':'DE','germany':'DE','法国':'FR','france':'FR','加拿大':'CA','canada':'CA',
+  '澳大利亚':'AU','australia':'AU','荷兰':'NL','netherlands':'NL',
+  '瑞典':'SE','sweden':'SE','挪威':'NO','norway':'NO','芬兰':'FI','finland':'FI',
+  '瑞士':'CH','switzerland':'CH','意大利':'IT','italy':'IT',
+  '西班牙':'ES','spain':'ES','葡萄牙':'PT','portugal':'PT',
+  '比利时':'BE','belgium':'BE','奥地利':'AT','austria':'AT',
+  '爱尔兰':'IE','ireland':'IE','卢森堡':'LU','luxembourg':'LU',
+  '丹麦':'DK','denmark':'DK','波兰':'PL','poland':'PL',
+  '捷克':'CZ','czech':'CZ','czechia':'CZ','匈牙利':'HU','hungary':'HU',
+  '罗马尼亚':'RO','romania':'RO','保加利亚':'BG','bulgaria':'BG',
+  '希腊':'GR','greece':'GR','土耳其':'TR','turkey':'TR',
+  '俄罗斯':'RU','russia':'RU','乌克兰':'UA','ukraine':'UA',
+  '以色列':'IL','israel':'IL','阿联酋':'AE','uae':'AE',
+  '沙特':'SA','saudi':'SA','印度':'IN','india':'IN',
+  '泰国':'TH','thailand':'TH','马来西亚':'MY','malaysia':'MY',
+  '菲律宾':'PH','philippines':'PH','越南':'VN','vietnam':'VN',
+  '印尼':'ID','indonesia':'ID','巴西':'BR','brazil':'BR',
+  '阿根廷':'AR','argentina':'AR','智利':'CL','chile':'CL',
+  '墨西哥':'MX','mexico':'MX','哥伦比亚':'CO','colombia':'CO',
+  '南非':'ZA','south africa':'ZA','埃及':'EG','egypt':'EG',
+  '尼日利亚':'NG','nigeria':'NG','肯尼亚':'KE','kenya':'KE',
+  '巴基斯坦':'PK','pakistan':'PK','孟加拉':'BD','bangladesh':'BD',
+  '斯里兰卡':'LK','尼泊尔':'NP','缅甸':'MM','柬埔寨':'KH','老挝':'LA',
+  '新西兰':'NZ','new zealand':'NZ','冰岛':'IS','iceland':'IS',
+  '爱沙尼亚':'EE','拉脱维亚':'LV','立陶宛':'LT',
+  '斯洛伐克':'SK','克罗地亚':'HR','斯洛文尼亚':'SI','塞尔维亚':'RS',
+  '乌拉圭':'UY','秘鲁':'PE','厄瓜多尔':'EC',
+}
+const SHORT_CODES = {
+  'HK':'HK','TW':'TW','MO':'MO','CN':'CN','US':'US','JP':'JP','KR':'KR',
+  'SG':'SG','UK':'GB','GB':'GB','DE':'DE','FR':'FR','CA':'CA','AU':'AU',
+  'NL':'NL','SE':'SE','NO':'NO','FI':'FI','CH':'CH','IT':'IT','ES':'ES',
+  'PT':'PT','BE':'BE','AT':'AT','IE':'IE','LU':'LU','DK':'DK','PL':'PL',
+  'CZ':'CZ','HU':'HU','RO':'RO','BG':'BG','GR':'GR','TR':'TR','RU':'RU',
+  'UA':'UA','IL':'IL','AE':'AE','SA':'SA','IN':'IN','TH':'TH','MY':'MY',
+  'PH':'PH','VN':'VN','ID':'ID','BR':'BR','AR':'AR','CL':'CL','MX':'MX',
+  'CO':'CO','ZA':'ZA','EG':'EG','NG':'NG','KE':'KE','PK':'PK','BD':'BD',
+  'LK':'LK','NP':'NP','MM':'MM','KH':'KH','LA':'LA','NZ':'NZ','IS':'IS',
+  'EE':'EE','LV':'LV','LT':'LT','SK':'SK','HR':'HR','SI':'SI','RS':'RS',
+  'UY':'UY','PE':'PE','EC':'EC',
+}
+const SHORT_RE = new RegExp('(?:^|[\\s_\\-|｜])(?:' + Object.keys(SHORT_CODES).join('|') + ')(?=[\\s_\\-|｜]|$)', 'i')
 
 
 async function operator(proxies = [], targetPlatform, env) {
@@ -307,8 +293,17 @@ async function operator(proxies = [], targetPlatform, env) {
     if (existing?.cc && existing.cc !== 'XX') { if (geoFromAPI.has(srv)) geoNodeCount++; else nameNodeCount++; continue; }
     const nameStr = decodeURIComponent(proxy.name || '').toUpperCase();
     let found = false;
-    for (const kw in nameCC) {
-      if (nameStr.indexOf(kw.toUpperCase()) !== -1) { ccMap[srv] = { cc: nameCC[kw], city: '' }; nameNodeCount++; found = true; break; }
+    for (const kw in FLAG_CC) {
+      if (nameStr.indexOf(kw) !== -1) { ccMap[srv] = { cc: FLAG_CC[kw], city: '' }; nameNodeCount++; found = true; break; }
+    }
+    if (!found) {
+      for (const kw in LONG_KW) {
+        if (nameStr.indexOf(kw.toUpperCase()) !== -1) { ccMap[srv] = { cc: LONG_KW[kw], city: '' }; nameNodeCount++; found = true; break; }
+      }
+    }
+    if (!found) {
+      const m = nameStr.match(SHORT_RE);
+      if (m) { ccMap[srv] = { cc: SHORT_CODES[m[0].trim().toUpperCase()], city: '' }; nameNodeCount++; found = true; }
     }
     if (!found) { ccMap[srv] = { cc: 'XX', city: '' }; failNodeCount++; }
   }
