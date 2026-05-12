@@ -128,64 +128,6 @@ const nameCC = {
   '🇦🇺':'AU','澳大利亚':'AU','AU':'AU','australia':'AU',
   '🇳🇱':'NL','荷兰':'NL','NL':'NL','netherlands':'NL',
   '🇸🇪':'SE','瑞典':'SE','SE':'SE','sweden':'SE',
-  '🇳🇴':'NO','挪威':'NO','NO':'NO','norway':'NO',
-  '🇫🇮':'FI','芬兰':'FI','FI':'FI','finland':'FI',
-  '🇨🇭':'CH','瑞士':'CH','CH':'CH','switzerland':'CH',
-  '🇮🇹':'IT','意大利':'IT','IT':'IT','italy':'IT',
-  '🇪🇸':'ES','西班牙':'ES','ES':'ES','spain':'ES',
-  '🇵🇹':'PT','葡萄牙':'PT','PT':'PT','portugal':'PT',
-  '🇧🇪':'BE','比利时':'BE','BE':'BE','belgium':'BE',
-  '🇦🇹':'AT','奥地利':'AT','AT':'AT','austria':'AT',
-  '🇮🇪':'IE','爱尔兰':'IE','IE':'IE','ireland':'IE',
-  '🇱🇺':'LU','卢森堡':'LU','LU':'LU','luxembourg':'LU',
-  '🇩🇰':'DK','丹麦':'DK','DK':'DK','denmark':'DK',
-  '🇵🇱':'PL','波兰':'PL','PL':'PL','poland':'PL',
-  '🇨🇿':'CZ','捷克':'CZ','CZ':'CZ','czech':'CZ','czechia':'CZ',
-  '🇭🇺':'HU','匈牙利':'HU','HU':'HU','hungary':'HU',
-  '🇷🇴':'RO','罗马尼亚':'RO','RO':'RO','romania':'RO',
-  '🇧🇬':'BG','保加利亚':'BG','BG':'BG','bulgaria':'BG',
-  '🇬🇷':'GR','希腊':'GR','GR':'GR','greece':'GR',
-  '🇹🇷':'TR','土耳其':'TR','TR':'TR','turkey':'TR',
-  '🇷🇺':'RU','俄罗斯':'RU','RU':'RU','russia':'RU',
-  '🇺🇦':'UA','乌克兰':'UA','UA':'UA','ukraine':'UA',
-  '🇮🇱':'IL','以色列':'IL','IL':'IL','israel':'IL',
-  '🇦🇪':'AE','阿联酋':'AE','AE':'AE','uae':'AE',
-  '🇸🇦':'SA','沙特':'SA','SA':'SA','saudi':'SA',
-  '🇮🇳':'IN','印度':'IN','IN':'IN','india':'IN',
-  '🇹🇭':'TH','泰国':'TH','TH':'TH','thailand':'TH',
-  '🇲🇾':'MY','马来西亚':'MY','MY':'MY','malaysia':'MY',
-  '🇵🇭':'PH','菲律宾':'PH','PH':'PH','philippines':'PH',
-  '🇻🇳':'VN','越南':'VN','VN':'VN','vietnam':'VN',
-  '🇮🇩':'ID','印尼':'ID','ID':'ID','indonesia':'ID',
-  '🇧🇷':'BR','巴西':'BR','BR':'BR','brazil':'BR',
-  '🇦🇷':'AR','阿根廷':'AR','AR':'AR','argentina':'AR',
-  '🇨🇱':'CL','智利':'CL','CL':'CL','chile':'CL',
-  '🇲🇽':'MX','墨西哥':'MX','MX':'MX','mexico':'MX',
-  '🇨🇴':'CO','哥伦比亚':'CO','CO':'CO','colombia':'CO',
-  '🇿🇦':'ZA','南非':'ZA','ZA':'ZA','south africa':'ZA',
-  '🇪🇬':'EG','埃及':'EG','EG':'EG','egypt':'EG',
-  '🇳🇬':'NG','尼日利亚':'NG','NG':'NG','nigeria':'NG',
-  '🇰🇪':'KE','肯尼亚':'KE','KE':'KE','kenya':'KE',
-  '🇵🇰':'PK','巴基斯坦':'PK','PK':'PK','pakistan':'PK',
-  '🇧🇩':'BD','孟加拉':'BD','BD':'BD','bangladesh':'BD',
-  '🇱🇰':'LK','斯里兰卡':'LK','LK':'LK',
-  '🇳🇵':'NP','尼泊尔':'NP','NP':'NP',
-  '🇲🇲':'MM','缅甸':'MM','MM':'MM',
-  '🇰🇭':'KH','柬埔寨':'KH','KH':'KH',
-  '🇱🇦':'LA','老挝':'LA','LA':'LA',
-  '🇳🇿':'NZ','新西兰':'NZ','NZ':'NZ','new zealand':'NZ',
-  '🇮🇸':'IS','冰岛':'IS','IS':'IS','iceland':'IS',
-  '🇪🇪':'EE','爱沙尼亚':'EE','EE':'EE',
-  '🇱🇻':'LV','拉脱维亚':'LV','LV':'LV',
-  '🇱🇹':'LT','立陶宛':'LT','LT':'LT',
-  '🇸🇰':'SK','斯洛伐克':'SK','SK':'SK',
-  '🇭🇷':'HR','克罗地亚':'HR','HR':'HR',
-  '🇸🇮':'SI','斯洛文尼亚':'SI','SI':'SI',
-  '🇷🇸':'RS','塞尔维亚':'RS','RS':'RS',
-  '🇺🇾':'UY','乌拉圭':'UY','UY':'UY',
-  '🇵🇪':'PE','秘鲁':'PE','PE':'PE',
-  '🇪🇨':'EC','厄瓜多尔':'EC','EC':'EC',
-};
 
 async function operator(proxies = [], targetPlatform, env) {
   if (!proxies?.length) return proxies;
@@ -193,87 +135,92 @@ async function operator(proxies = [], targetPlatform, env) {
   const cache = scriptResourceCache;
   const cacheEnabled = !!$arguments.cache;
 
-  let vlessCount = 0;
-  if (U.RV === '1') {
+  const vlessCount = (() => {
+    if (U.RV !== '1') return 0;
     const before = proxies.length;
     proxies = proxies.filter(p => p.type !== 'vless');
-    vlessCount = before - proxies.length;
-  }
+    return before - proxies.length;
+  })();
   if (!proxies.length) return proxies;
 
   const servers = [...new Set(proxies.map(p => p.server))];
   const ccMap = {};
   const geoFromAPI = new Set();
 
+  const buildName = (cc, base) => PREFIX + (cc ? cc + NAME_SEP : '') + base;
+
   async function geoQuery(host) {
     let ip = host;
-    const isIP = /^\d{1,3}(\.\d{1,3}){3}$/.test(host) || host.indexOf(':') !== -1;
-    if (!isIP) {
-      const dnsList = [
+    if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(host) && host.indexOf(':') === -1) {
+      for (const url of [
         `https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(host)}&type=A`,
         `https://dns.alidns.com/resolve?name=${encodeURIComponent(host)}&type=A`,
         `https://doh.pub/dns-query?name=${encodeURIComponent(host)}&type=A`,
-      ];
-      for (const url of dnsList) {
+      ]) {
         try {
-          const dr = await $.http.get({ url, timeout: 5000, headers: { 'Accept': 'application/dns-json' } });
-          const dj = typeof dr.body === 'string' ? JSON.parse(dr.body) : dr.body;
-          if (dj?.Answer?.some(a => a.type === 1)) { ip = dj.Answer.find(a => a.type === 1).data; break; }
+          const r = await $.http.get({ url, timeout: 3500, headers: { 'Accept': 'application/dns-json' } });
+          const j = typeof r.body === 'string' ? JSON.parse(r.body) : r.body;
+          const a = j?.Answer?.find(a => a.type === 1);
+          if (a) { ip = a.data; break; }
         } catch (e) {}
       }
     }
 
     const apis = [
-      `https://ipwho.is/${ip}`,
-      `https://ipinfo.io/${ip}/json`,
-      `http://ip-api.com/json/${host}?fields=countryCode,city&lang=zh-CN`,
-      `https://api.ip.sb/geoip/${ip}`,
+      { url: `https://ipwho.is/${ip}`, ccKey: 'country_code', isIPAPI: false },
+      { url: `https://ipinfo.io/${ip}/json`, ccKey: 'country', isIPAPI: false },
+      { url: `http://ip-api.com/json/${host}?fields=countryCode,city&lang=zh-CN`, ccKey: 'countryCode', isIPAPI: true },
+      { url: `https://api.ip.sb/geoip/${ip}`, ccKey: 'country_code', isIPAPI: false },
     ];
 
-    for (const url of apis) {
+    for (const api of apis) {
       try {
-        const resp = await $.http.get({ url, timeout: 6000 });
+        const resp = await $.http.get({ url: api.url, timeout: 3500 });
         const data = typeof resp.body === 'string' ? JSON.parse(resp.body) : resp.body;
-        let cc = data?.country_code || data?.countryCode || data?.country || '';
-        if (typeof cc === 'string') cc = cc.toUpperCase();
-        if (cc && cc !== 'XX') {
-          if (cc === 'CN') {
-            try {
-              const r4 = await $.http.get({ url: `http://ip-api.com/json/${host}?fields=countryCode,city&lang=zh-CN`, timeout: 5000 });
-              const d4 = typeof r4.body === 'string' ? JSON.parse(r4.body) : r4.body;
-              if (d4?.countryCode) return { cc: 'CN', city: d4.city || '' };
-            } catch (e) {}
-          }
-          return { cc, city: data?.city || '' };
+        let cc = (data?.[api.ccKey] || '').toString().toUpperCase();
+        if (!cc || cc === 'XX') continue;
+        if (cc === 'CN' && !api.isIPAPI) {
+          try {
+            const r4 = await $.http.get({ url: `http://ip-api.com/json/${host}?fields=countryCode,city&lang=zh-CN`, timeout: 3500 });
+            const d4 = typeof r4.body === 'string' ? JSON.parse(r4.body) : r4.body;
+            if (d4?.countryCode) return { cc: 'CN', city: d4.city || '' };
+          } catch (e) {}
         }
+        return { cc, city: data?.city || '' };
       } catch (e) {}
     }
     return null;
   }
 
-  async function geoLookup(host) {
-    const geo = await geoQuery(host);
-    if (geo) { ccMap[host] = geo; geoFromAPI.add(host); return; }
-    ccMap[host] = { cc: 'XX', city: '' };
-  }
+  if (GM_MODE !== '0') {
+    const geoCache = {};
+    async function geoLookup(host) {
+      if (geoCache[host]) { ccMap[host] = geoCache[host]; geoFromAPI.add(host); return; }
+      if (cacheEnabled) {
+        const cached = cache.get('geo:' + host);
+        if (cached != null) {
+          const geo = typeof cached === 'string' ? { cc: cached, city: '' } : cached;
+          if (geo.cc && geo.cc !== 'XX') { geoCache[host] = geo; ccMap[host] = geo; geoFromAPI.add(host); return; }
+        }
+      }
+      const geo = await geoQuery(host);
+      if (geo) { geoCache[host] = geo; ccMap[host] = geo; geoFromAPI.add(host); if (cacheEnabled) cache.set('geo:' + host, geo); return; }
+      ccMap[host] = { cc: 'XX', city: '' };
+    }
 
-  const start = Date.now();
-  for (let i = 0; i < servers.length; i += 5) {
-    if (Date.now() - start > 40000) break;
-    await Promise.all(servers.slice(i, i + 5).map(h => geoLookup(h)));
-    if (i + 5 < servers.length) await new Promise(r => setTimeout(r, 200));
+    const start = Date.now();
+    for (let i = 0; i < servers.length; i += 5) {
+      if (Date.now() - start > 40000) break;
+      await Promise.all(servers.slice(i, i + 5).map(h => geoLookup(h)));
+      if (i + 5 < servers.length) await new Promise(r => setTimeout(r, 100));
+    }
   }
 
   let geoNodeCount = 0, nameNodeCount = 0, failNodeCount = 0;
-
   for (const proxy of proxies) {
     const srv = proxy.server;
     const existing = ccMap[srv];
-    if (existing && existing.cc && existing.cc !== 'XX') {
-      if (geoFromAPI.has(srv)) geoNodeCount++;
-      else nameNodeCount++;
-      continue;
-    }
+    if (existing?.cc && existing.cc !== 'XX') { if (geoFromAPI.has(srv)) geoNodeCount++; else nameNodeCount++; continue; }
     const nameStr = decodeURIComponent(proxy.name || '').toUpperCase();
     let found = false;
     for (const kw in nameCC) {
@@ -282,87 +229,60 @@ async function operator(proxies = [], targetPlatform, env) {
     if (!found) { ccMap[srv] = { cc: 'XX', city: '' }; failNodeCount++; }
   }
 
-  function geoLabel(server) {
+  const geoLabel = (server) => {
     const geo = ccMap[server];
-    if (!geo || !geo.cc || geo.cc === 'XX') return null;
-    if (geo.cc === 'CN' && geo.city) return geo.city;
-    return cc2flag(geo.cc);
-  }
+    if (!geo?.cc || geo.cc === 'XX') return null;
+    return geo.cc === 'CN' && geo.city ? geo.city : cc2flag(geo.cc);
+  };
 
-  function isSupported(server) {
+  const isSupported = (server) => {
     const geo = ccMap[server];
-    return geo && geo.cc && geo.cc !== 'XX' && !UNSUPPORTED.has(geo.cc);
-  }
+    return geo?.cc && geo.cc !== 'XX' && !UNSUPPORTED.has(geo.cc);
+  };
 
   const result = [];
   const isRandomMode = GM_MODE === '随机';
 
-  if (isRandomMode) {
-    const countryGroups = {};
-    for (const proxy of proxies) {
-      const flag = geoLabel(proxy.server) || '无旗';
-      if (!countryGroups[flag]) countryGroups[flag] = [];
-      countryGroups[flag].push(proxy);
-    }
+  const nameGroups = {};
+  const pickAndName = (list, p, i) => {
+    const item = list[i % list.length];
+    const cycle = Math.floor(i / list.length);
+    const base = cycle > 0 ? item + sup(cycle + 1) : item;
+    p.name = buildName(geoLabel(p.server), base);
+    result.push(p);
+  };
 
-    for (const flag in countryGroups) {
-      const group = countryGroups[flag];
+  if (isRandomMode) {
+    for (const p of proxies) {
+      const flag = geoLabel(p.server) || '无旗';
+      (nameGroups[flag] ??= []).push(p);
+    }
+    for (const flag in nameGroups) {
+      const group = nameGroups[flag];
       const list = flag === '无旗' ? MODES['吃货'] : MODES[MODE_KEYS[Math.floor(Math.random() * MODE_KEYS.length)]];
-      for (let i = 0; i < group.length; i++) {
-        const p = group[i];
-        const item = list[i % list.length];
-        const cycle = Math.floor(i / list.length);
-        const base = cycle > 0 ? item + sup(cycle + 1) : item;
-        const cc = geoLabel(p.server);
-        p.name = PREFIX + (cc ? cc + NAME_SEP : '') + base;
-        result.push(p);
-      }
+      group.forEach((p, i) => pickAndName(list, p, i));
     }
   } else if (CUSTOM_LIST.length > 0) {
-    for (let i = 0; i < proxies.length; i++) {
-      const p = proxies[i];
-      const item = CUSTOM_LIST[i % CUSTOM_LIST.length];
-      const cycle = Math.floor(i / CUSTOM_LIST.length);
-      const base = cycle > 0 ? item + sup(cycle + 1) : item;
-      const cc = geoLabel(p.server);
-      p.name = PREFIX + (cc ? cc + NAME_SEP : '') + base;
-      result.push(p);
-    }
+    proxies.forEach((p, i) => pickAndName(CUSTOM_LIST, p, i));
   } else if (GM_MODE && MODES[GM_MODE]) {
-    const list = MODES[GM_MODE];
-    for (let i = 0; i < proxies.length; i++) {
-      const p = proxies[i];
-      const item = list[i % list.length];
-      const cycle = Math.floor(i / list.length);
-      const base = cycle > 0 ? item + sup(cycle + 1) : item;
-      const cc = geoLabel(p.server);
-      p.name = PREFIX + (cc ? cc + NAME_SEP : '') + base;
-      result.push(p);
-    }
+    proxies.forEach((p, i) => pickAndName(MODES[GM_MODE], p, i));
   } else {
     const counter = {};
     for (const p of proxies) {
       const cc = geoLabel(p.server);
-      if (cc) {
-        if (!counter[cc]) counter[cc] = 0;
-        counter[cc]++;
-        p.name = PREFIX + cc + '-' + String(counter[cc]).padStart(2, '0');
-      } else {
-        p.name = PREFIX + p.name.trim();
-      }
+      if (cc) { counter[cc] = (counter[cc] || 0) + 1; p.name = buildName(null, cc + '-' + String(counter[cc]).padStart(2, '0')); }
+      else { p.name = PREFIX + p.name.trim(); }
       result.push(p);
     }
   }
 
   if (HZ_TEXT) {
-    if (IS_GPT) {
-      for (const p of result) { if (isSupported(p.server)) p.name += SUFFIX; }
-    } else {
-      for (const p of result) { p.name += SUFFIX; }
+    for (const p of result) {
+      if (!IS_GPT || isSupported(p.server)) p.name += SUFFIX;
     }
   }
 
-  let notifyMsg = `v6.0 改名${result.length}`;
+  let notifyMsg = `v7.0 改名${result.length}`;
   if (geoNodeCount > 0) notifyMsg += ` geo${geoNodeCount}/${result.length}`;
   if (nameNodeCount > 0) notifyMsg += ` 原名${nameNodeCount}`;
   if (failNodeCount > 0) notifyMsg += ` 失败${failNodeCount}`;
