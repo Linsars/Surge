@@ -128,6 +128,65 @@ const nameCC = {
   '🇦🇺':'AU','澳大利亚':'AU','AU':'AU','australia':'AU',
   '🇳🇱':'NL','荷兰':'NL','NL':'NL','netherlands':'NL',
   '🇸🇪':'SE','瑞典':'SE','SE':'SE','sweden':'SE',
+  '🇳🇴':'NO','挪威':'NO','NO':'NO','norway':'NO',
+  '🇫🇮':'FI','芬兰':'FI','FI':'FI','finland':'FI',
+  '🇨🇭':'CH','瑞士':'CH','CH':'CH','switzerland':'CH',
+  '🇮🇹':'IT','意大利':'IT','IT':'IT','italy':'IT',
+  '🇪🇸':'ES','西班牙':'ES','ES':'ES','spain':'ES',
+  '🇵🇹':'PT','葡萄牙':'PT','PT':'PT','portugal':'PT',
+  '🇧🇪':'BE','比利时':'BE','BE':'BE','belgium':'BE',
+  '🇦🇹':'AT','奥地利':'AT','AT':'AT','austria':'AT',
+  '🇮🇪':'IE','爱尔兰':'IE','IE':'IE','ireland':'IE',
+  '🇱🇺':'LU','卢森堡':'LU','LU':'LU','luxembourg':'LU',
+  '🇩🇰':'DK','丹麦':'DK','DK':'DK','denmark':'DK',
+  '🇵🇱':'PL','波兰':'PL','PL':'PL','poland':'PL',
+  '🇨🇿':'CZ','捷克':'CZ','CZ':'CZ','czech':'CZ','czechia':'CZ',
+  '🇭🇺':'HU','匈牙利':'HU','HU':'HU','hungary':'HU',
+  '🇷🇴':'RO','罗马尼亚':'RO','RO':'RO','romania':'RO',
+  '🇧🇬':'BG','保加利亚':'BG','BG':'BG','bulgaria':'BG',
+  '🇬🇷':'GR','希腊':'GR','GR':'GR','greece':'GR',
+  '🇹🇷':'TR','土耳其':'TR','TR':'TR','turkey':'TR',
+  '🇷🇺':'RU','俄罗斯':'RU','RU':'RU','russia':'RU',
+  '🇺🇦':'UA','乌克兰':'UA','UA':'UA','ukraine':'UA',
+  '🇮🇱':'IL','以色列':'IL','IL':'IL','israel':'IL',
+  '🇦🇪':'AE','阿联酋':'AE','AE':'AE','uae':'AE',
+  '🇸🇦':'SA','沙特':'SA','SA':'SA','saudi':'SA',
+  '🇮🇳':'IN','印度':'IN','IN':'IN','india':'IN',
+  '🇹🇭':'TH','泰国':'TH','TH':'TH','thailand':'TH',
+  '🇲🇾':'MY','马来西亚':'MY','MY':'MY','malaysia':'MY',
+  '🇵🇭':'PH','菲律宾':'PH','PH':'PH','philippines':'PH',
+  '🇻🇳':'VN','越南':'VN','VN':'VN','vietnam':'VN',
+  '🇮🇩':'ID','印尼':'ID','ID':'ID','indonesia':'ID',
+  '🇧🇷':'BR','巴西':'BR','BR':'BR','brazil':'BR',
+  '🇦🇷':'AR','阿根廷':'AR','AR':'AR','argentina':'AR',
+  '🇨🇱':'CL','智利':'CL','CL':'CL','chile':'CL',
+  '🇲🇽':'MX','墨西哥':'MX','MX':'MX','mexico':'MX',
+  '🇨🇴':'CO','哥伦比亚':'CO','CO':'CO','colombia':'CO',
+  '🇿🇦':'ZA','南非':'ZA','ZA':'ZA','south africa':'ZA',
+  '🇪🇬':'EG','埃及':'EG','EG':'EG','egypt':'EG',
+  '🇳🇬':'NG','尼日利亚':'NG','NG':'NG','nigeria':'NG',
+  '🇰🇪':'KE','肯尼亚':'KE','KE':'KE','kenya':'KE',
+  '🇵🇰':'PK','巴基斯坦':'PK','PK':'PK','pakistan':'PK',
+  '🇧🇩':'BD','孟加拉':'BD','BD':'BD','bangladesh':'BD',
+  '🇱🇰':'LK','斯里兰卡':'LK','LK':'LK',
+  '🇳🇵':'NP','尼泊尔':'NP','NP':'NP',
+  '🇲🇲':'MM','缅甸':'MM','MM':'MM',
+  '🇰🇭':'KH','柬埔寨':'KH','KH':'KH',
+  '🇱🇦':'LA','老挝':'LA','LA':'LA',
+  '🇳🇿':'NZ','新西兰':'NZ','NZ':'NZ','new zealand':'NZ',
+  '🇮🇸':'IS','冰岛':'IS','IS':'IS','iceland':'IS',
+  '🇪🇪':'EE','爱沙尼亚':'EE','EE':'EE',
+  '🇱🇻':'LV','拉脱维亚':'LV','LV':'LV',
+  '🇱🇹':'LT','立陶宛':'LT','LT':'LT',
+  '🇸🇰':'SK','斯洛伐克':'SK','SK':'SK',
+  '🇭🇷':'HR','克罗地亚':'HR','HR':'HR',
+  '🇸🇮':'SI','斯洛文尼亚':'SI','SI':'SI',
+  '🇷🇸':'RS','塞尔维亚':'RS','RS':'RS',
+  '🇺🇾':'UY','乌拉圭':'UY','UY':'UY',
+  '🇵🇪':'PE','秘鲁':'PE','PE':'PE',
+  '🇪🇨':'EC','厄瓜多尔':'EC','EC':'EC',
+};
+
 
 async function operator(proxies = [], targetPlatform, env) {
   if (!proxies?.length) return proxies;
@@ -165,14 +224,12 @@ async function operator(proxies = [], targetPlatform, env) {
         } catch (e) {}
       }
     }
-
     const apis = [
       { url: `https://ipwho.is/${ip}`, ccKey: 'country_code', isIPAPI: false },
       { url: `https://ipinfo.io/${ip}/json`, ccKey: 'country', isIPAPI: false },
       { url: `http://ip-api.com/json/${host}?fields=countryCode,city&lang=zh-CN`, ccKey: 'countryCode', isIPAPI: true },
       { url: `https://api.ip.sb/geoip/${ip}`, ccKey: 'country_code', isIPAPI: false },
     ];
-
     for (const api of apis) {
       try {
         const resp = await $.http.get({ url: api.url, timeout: 3500 });
@@ -207,7 +264,6 @@ async function operator(proxies = [], targetPlatform, env) {
       if (geo) { geoCache[host] = geo; ccMap[host] = geo; geoFromAPI.add(host); if (cacheEnabled) cache.set('geo:' + host, geo); return; }
       ccMap[host] = { cc: 'XX', city: '' };
     }
-
     const start = Date.now();
     for (let i = 0; i < servers.length; i += 5) {
       if (Date.now() - start > 40000) break;
@@ -234,7 +290,6 @@ async function operator(proxies = [], targetPlatform, env) {
     if (!geo?.cc || geo.cc === 'XX') return null;
     return geo.cc === 'CN' && geo.city ? geo.city : cc2flag(geo.cc);
   };
-
   const isSupported = (server) => {
     const geo = ccMap[server];
     return geo?.cc && geo.cc !== 'XX' && !UNSUPPORTED.has(geo.cc);
@@ -242,25 +297,20 @@ async function operator(proxies = [], targetPlatform, env) {
 
   const result = [];
   const isRandomMode = GM_MODE === '随机';
-
-  const nameGroups = {};
   const pickAndName = (list, p, i) => {
     const item = list[i % list.length];
     const cycle = Math.floor(i / list.length);
-    const base = cycle > 0 ? item + sup(cycle + 1) : item;
-    p.name = buildName(geoLabel(p.server), base);
+    p.name = buildName(geoLabel(p.server), cycle > 0 ? item + sup(cycle + 1) : item);
     result.push(p);
   };
 
   if (isRandomMode) {
-    for (const p of proxies) {
-      const flag = geoLabel(p.server) || '无旗';
-      (nameGroups[flag] ??= []).push(p);
-    }
-    for (const flag in nameGroups) {
-      const group = nameGroups[flag];
-      const list = flag === '无旗' ? MODES['吃货'] : MODES[MODE_KEYS[Math.floor(Math.random() * MODE_KEYS.length)]];
-      group.forEach((p, i) => pickAndName(list, p, i));
+    const groups = {};
+    for (const p of proxies) { const f = geoLabel(p.server) || '无旗'; (groups[f] ??= []).push(p); }
+    for (const f in groups) {
+      const g = groups[f];
+      const list = f === '无旗' ? MODES['吃货'] : MODES[MODE_KEYS[Math.floor(Math.random() * MODE_KEYS.length)]];
+      g.forEach((p, i) => pickAndName(list, p, i));
     }
   } else if (CUSTOM_LIST.length > 0) {
     proxies.forEach((p, i) => pickAndName(CUSTOM_LIST, p, i));
@@ -276,19 +326,14 @@ async function operator(proxies = [], targetPlatform, env) {
     }
   }
 
-  if (HZ_TEXT) {
-    for (const p of result) {
-      if (!IS_GPT || isSupported(p.server)) p.name += SUFFIX;
-    }
-  }
+  if (HZ_TEXT) for (const p of result) { if (!IS_GPT || isSupported(p.server)) p.name += SUFFIX; }
 
-  let notifyMsg = `v7.0 改名${result.length}`;
-  if (geoNodeCount > 0) notifyMsg += ` geo${geoNodeCount}/${result.length}`;
-  if (nameNodeCount > 0) notifyMsg += ` 原名${nameNodeCount}`;
-  if (failNodeCount > 0) notifyMsg += ` 失败${failNodeCount}`;
-  notifyMsg += ` 服务器${geoFromAPI.size}/${servers.length}`;
-  if (vlessCount > 0) notifyMsg += ` 屏蔽${vlessCount}`;
-  $.notify('智慧重命名', '', notifyMsg);
-
+  let msg = `v7.0 改名${result.length}`;
+  if (geoNodeCount) msg += ` geo${geoNodeCount}/${result.length}`;
+  if (nameNodeCount) msg += ` 原名${nameNodeCount}`;
+  if (failNodeCount) msg += ` 失败${failNodeCount}`;
+  msg += ` 服务器${geoFromAPI.size}/${servers.length}`;
+  if (vlessCount) msg += ` 屏蔽${vlessCount}`;
+  $.notify('智慧重命名', '', msg);
   return result;
 }
