@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         智慧重命名 - GeoIP + 创意命名
-// @version      5.7
+// @version      5.8
 // @description  SubStore 节点重命名：GeoIP 真实出口检测 + GPT 支持判断 + 多种创意循环命名
 // @author       Linsar
 // @example      #gm=诡秘&qz=机场&hz=GPT
@@ -368,10 +368,8 @@ async function operator(proxies = [], targetPlatform, env) {
     const geo = ccMap[result[i].server];
     if (geo && geo.cc && geo.cc !== 'XX') namedOK++;
   }
-  const failNodes = result.length - namedOK;
-  var msg = 'v5.7 地区码 ' + namedOK + '/' + result.length + ' 服务器 ' + geoOK + '/' + servers.length
-  if (failNodes > 0) msg += ' 失败' + failNodes
-  if (vlessCount > 0) msg += ' 屏蔽VLESS' + vlessCount
+  var msg = 'v5.8 改名 ' + namedOK + '/' + result.length + ' 服务器 ' + geoOK + '/' + servers.length
+  if (vlessCount > 0) msg += ' 屏蔽 ' + vlessCount
   $.notify('命名', '', msg);
   return result;
 }
