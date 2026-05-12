@@ -92,7 +92,7 @@ const MODES = {
   '吃货': mergeArrays(CHIHUO, QING_EMPERORS),
   '戏神': XISHEN,
   '诡秘': GUIMI,
-  '崩坏': mergeArrays(GENSHIN, HONKAI_BASE),
+  '崩坏': mergeArrays(HONKAI_BASE, GENSHIN),
   '修仙': mergeArrays(XIUXIAN, CTHULHU),
   '克系': mergeArrays(CTHULHU, XIUXIAN),
 };
