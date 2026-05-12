@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         智慧重命名 - GeoIP + 创意命名
-// @version      5.6
+// @version      5.7
 // @description  SubStore 节点重命名：GeoIP 真实出口检测 + GPT 支持判断 + 多种创意循环命名
 // @author       Linsar
 // @example      #gm=诡秘&qz=机场&hz=GPT
@@ -184,8 +184,11 @@ async function operator(proxies = [], targetPlatform, env) {
   const ccMap = {};
   const geoCache = {};
 
+  var vlessCount = 0
   if ($arguments.rv === '1' || $arguments.rv === 1) {
+    var before = proxies.length
     proxies = proxies.filter(p => p.type !== 'vless')
+    vlessCount = before - proxies.length
   }
   if (!proxies.length) return proxies
 
@@ -360,15 +363,15 @@ async function operator(proxies = [], targetPlatform, env) {
 
   let geoOK = 0;
   for (const k in ccMap) { if (ccMap[k] && ccMap[k].cc && ccMap[k].cc !== 'XX') geoOK++; }
-  const geoFail = servers.length - geoOK;
   let namedOK = 0;
   for (let i = 0; i < result.length; i++) {
     const geo = ccMap[result[i].server];
     if (geo && geo.cc && geo.cc !== 'XX') namedOK++;
   }
-  const msg = geoFail > 0
-    ? 'v5.6 地区码 ' + namedOK + '/' + result.length + ' 服务器 ' + geoOK + '/' + servers.length + ' 失败 ' + geoFail
-    : 'v5.6 地区码 ' + namedOK + '/' + result.length;
+  const failNodes = result.length - namedOK;
+  var msg = 'v5.7 地区码 ' + namedOK + '/' + result.length + ' 服务器 ' + geoOK + '/' + servers.length
+  if (failNodes > 0) msg += ' 失败' + failNodes
+  if (vlessCount > 0) msg += ' 屏蔽VLESS' + vlessCount
   $.notify('命名', '', msg);
   return result;
 }
