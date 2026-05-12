@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         智慧重命名 - GeoIP + 创意命名
-// @version      7.2
+// @version      7.3
 // @description  SubStore 节点重命名：GeoIP 出口检测 + GPT/流媒体判断 + 多创意循环命名
 // @author       Linsar
 // @example      #gm=诡秘&qz=机场&hz=GPT
@@ -271,14 +271,14 @@ async function operator(proxies = [], targetPlatform, env) {
     async function geoLookup(host) {
       if (geoCache[host]) { ccMap[host] = geoCache[host]; geoFromAPI.add(host); return; }
       if (cacheEnabled) {
-        const cached = cache.get('geo:' + host);
+        const cached = cache.get('geo2:' + host);
         if (cached != null) {
           const geo = typeof cached === 'string' ? { cc: cached, city: '' } : cached;
           if (geo.cc && geo.cc !== 'XX') { geoCache[host] = geo; ccMap[host] = geo; geoFromAPI.add(host); return; }
         }
       }
       const geo = await geoQuery(host);
-      if (geo) { geoCache[host] = geo; ccMap[host] = geo; geoFromAPI.add(host); if (cacheEnabled) cache.set('geo:' + host, geo); return; }
+      if (geo) { geoCache[host] = geo; ccMap[host] = geo; geoFromAPI.add(host); if (cacheEnabled) cache.set('geo2:' + host, geo); return; }
       ccMap[host] = { cc: 'XX', city: '' };
     }
     const start = Date.now();
@@ -354,7 +354,7 @@ async function operator(proxies = [], targetPlatform, env) {
 
   if (HZ_TEXT) for (const p of result) { if (!IS_GPT || isSupported(p.server)) p.name += SUFFIX; }
 
-  let msg = `v7.2 改名${result.length}`;
+  let msg = `v7.3 改名${result.length}`;
   if (geoNodeCount) msg += ` geo${geoNodeCount}/${result.length}`;
   if (nameNodeCount) msg += ` 原名${nameNodeCount}`;
   if (failNodeCount) msg += ` 失败${failNodeCount}`;
