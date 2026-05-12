@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         智慧重命名 - GeoIP + 创意命名
-// @version      7.1
+// @version      7.2
 // @description  SubStore 节点重命名：GeoIP 出口检测 + GPT/流媒体判断 + 多创意循环命名
 // @author       Linsar
 // @example      #gm=诡秘&qz=机场&hz=GPT
@@ -220,7 +220,10 @@ async function operator(proxies = [], targetPlatform, env) {
   const ccMap = {};
   const geoFromAPI = new Set();
 
-  const buildName = (cc, base) => PREFIX + (cc ? cc + NAME_SEP : '') + base;
+  const buildName = (cc, base, server) => {
+    const sep = server && geoFromAPI.has(server) ? SEP : NAME_SEP
+    return PREFIX + (cc ? cc + sep : '') + base
+  }
 
   async function geoQuery(host) {
     let ip = host;
@@ -323,7 +326,7 @@ async function operator(proxies = [], targetPlatform, env) {
   const pickAndName = (list, p, i) => {
     const item = list[i % list.length];
     const cycle = Math.floor(i / list.length);
-    p.name = buildName(geoLabel(p.server), cycle > 0 ? item + sup(cycle + 1) : item);
+    p.name = buildName(geoLabel(p.server), cycle > 0 ? item + sup(cycle + 1) : item, p.server);
     result.push(p);
   };
 
@@ -343,7 +346,7 @@ async function operator(proxies = [], targetPlatform, env) {
     const counter = {};
     for (const p of proxies) {
       const cc = geoLabel(p.server);
-      if (cc) { counter[cc] = (counter[cc] || 0) + 1; p.name = buildName(null, cc + '-' + String(counter[cc]).padStart(2, '0')); }
+      if (cc) { counter[cc] = (counter[cc] || 0) + 1; p.name = buildName(null, cc + '-' + String(counter[cc]).padStart(2, '0'), p.server); }
       else { p.name = PREFIX + p.name.trim(); }
       result.push(p);
     }
@@ -351,7 +354,7 @@ async function operator(proxies = [], targetPlatform, env) {
 
   if (HZ_TEXT) for (const p of result) { if (!IS_GPT || isSupported(p.server)) p.name += SUFFIX; }
 
-  let msg = `v7.1 改名${result.length}`;
+  let msg = `v7.2 改名${result.length}`;
   if (geoNodeCount) msg += ` geo${geoNodeCount}/${result.length}`;
   if (nameNodeCount) msg += ` 原名${nameNodeCount}`;
   if (failNodeCount) msg += ` 失败${failNodeCount}`;
