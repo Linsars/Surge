@@ -322,6 +322,12 @@ async function operator(proxies = [], targetPlatform, env) {
     '🇫🇮': 'FI', '芬兰': 'FI', 'FI': 'FI', 'finland': 'FI',
     '🇸🇪': 'SE', '瑞典': 'SE', 'SE': 'SE', 'sweden': 'SE',
     '🇨🇭': 'CH', '瑞士': 'CH', 'CH': 'CH', 'switzerland': 'CH',
+    'united states': 'US', 'united states of america': 'US',
+    'united kingdom': 'GB', 'great britain': 'GB',
+    'south korea': 'KR', 'republic of korea': 'KR',
+    'new zealand': 'NZ', 'czech republic': 'CZ', 'czechia': 'CZ',
+    'saudi arabia': 'SA', 'south africa': 'ZA',
+    'hong kong': 'HK', 'taiwan': 'TW',
   }
 
   const missing = new Set()
@@ -331,7 +337,7 @@ async function operator(proxies = [], targetPlatform, env) {
     for (var i = 0; i < proxies.length; i++) {
       var srv = proxies[i].server
       if (!missing.has(srv)) continue
-      var name = (proxies[i].name || '').toUpperCase()
+      var name = decodeURIComponent(proxies[i].name || '').toUpperCase()
       var found = null
       for (var kw in nameCC) {
         if (name.indexOf(kw.toUpperCase()) !== -1) { found = nameCC[kw]; break }
