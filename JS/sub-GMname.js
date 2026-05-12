@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         智慧重命名 - GeoIP + 创意命名
-// @version      7.0
+// @version      7.1
 // @description  SubStore 节点重命名：GeoIP 出口检测 + GPT/流媒体判断 + 多创意循环命名
 // @author       Linsar
 // @example      #gm=诡秘&qz=机场&hz=GPT
@@ -351,7 +351,7 @@ async function operator(proxies = [], targetPlatform, env) {
 
   if (HZ_TEXT) for (const p of result) { if (!IS_GPT || isSupported(p.server)) p.name += SUFFIX; }
 
-  let msg = `v7.0 改名${result.length}`;
+  let msg = `v7.1 改名${result.length}`;
   if (geoNodeCount) msg += ` geo${geoNodeCount}/${result.length}`;
   if (nameNodeCount) msg += ` 原名${nameNodeCount}`;
   if (failNodeCount) msg += ` 失败${failNodeCount}`;
