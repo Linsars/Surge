@@ -21,6 +21,7 @@ const HZ_TEXT = U.HZ || '';
 const IS_GPT = HZ_TEXT.toUpperCase() === 'GPT';
 const GM_MODE = U.GM || '';
 const CUSTOM_LIST = U.CUSTOM ? U.CUSTOM.split(/[,，]/).map(s => s.trim()).filter(Boolean) : [];
+const NAME_SEP = U.FGF ? SEP : ' ? ';
 
 const UNSUPPORTED = new Set(['HK','TW','MO','CN','RU','IR','KP','CU','BY','SY','AF','MM','LY','YE','SD','ER','CF','TD','SS','MK']);
 
@@ -313,7 +314,7 @@ async function operator(proxies = [], targetPlatform, env) {
         const cycle = Math.floor(i / list.length);
         const base = cycle > 0 ? item + sup(cycle + 1) : item;
         const cc = geoLabel(p.server);
-        p.name = PREFIX + (cc ? cc + SEP : '') + base;
+        p.name = PREFIX + (cc ? cc + NAME_SEP : '') + base;
         result.push(p);
       }
     }
@@ -324,7 +325,7 @@ async function operator(proxies = [], targetPlatform, env) {
       const cycle = Math.floor(i / CUSTOM_LIST.length);
       const base = cycle > 0 ? item + sup(cycle + 1) : item;
       const cc = geoLabel(p.server);
-      p.name = PREFIX + (cc ? cc + SEP : '') + base;
+      p.name = PREFIX + (cc ? cc + NAME_SEP : '') + base;
       result.push(p);
     }
   } else if (GM_MODE && MODES[GM_MODE]) {
@@ -335,7 +336,7 @@ async function operator(proxies = [], targetPlatform, env) {
       const cycle = Math.floor(i / list.length);
       const base = cycle > 0 ? item + sup(cycle + 1) : item;
       const cc = geoLabel(p.server);
-      p.name = PREFIX + (cc ? cc + SEP : '') + base;
+      p.name = PREFIX + (cc ? cc + NAME_SEP : '') + base;
       result.push(p);
     }
   } else {
