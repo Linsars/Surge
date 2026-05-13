@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         智慧重命名 - GeoIP + 创意命名
-// @version      7.4
+// @version      7.5
 // @description  SubStore 节点重命名：GeoIP 出口检测 + GPT/流媒体判断 + 多创意循环命名
 // @author       Linsar
 // @example      #gm=诡秘&qz=机场&hz=GPT
@@ -13,6 +13,10 @@
 //             hz=其他  → 对所有节点追加
 // FGF=      分隔符（默认｜，地区码分隔符默认 ?）
 // RV=       设为1时屏蔽所有 VLESS 节点（优先级最高）  示例：rv=1
+// CS=       全局超时秒数（默认 40）                  示例：cs=45
+// RD=       设为1强制刷新缓存                        示例：rd=1
+// TZ=       进度通知间隔（每处理 N 个服务器发一次）    示例：tz=30
+// DEBUG=    设为1输出调试信息                         示例：debug=1
 // GM=       命名模式（不传 → 地区-序号，CN 用城市名）
 //             gm=0    → 轻量模式：跳过 GeoIP 网络请求，仅用节点名识别地区码
 //             gm=随机 → 按地区分组，每组随机匹配一个模式，无旗帜用吃货兜底
@@ -50,6 +54,10 @@ const IS_GPT = HZ_TEXT.toUpperCase() === 'GPT';
 const GM_MODE = U.GM || '';
 const CUSTOM_LIST = U.CUSTOM ? U.CUSTOM.split(/[,，]/).map(s => s.trim()).filter(Boolean) : [];
 const NAME_SEP = U.FGF ? SEP : ' ? ';
+const GLOBAL_TIMEOUT = (parseInt(U.CS) || 40) * 1000;
+const RD = U.RD === '1';
+const TZ = parseInt(U.TZ) || 0;
+const DEBUG = U.DEBUG === '1';
 
 const UNSUPPORTED = new Set(['HK','TW','MO','CN','RU','IR','KP','CU','BY','SY','AF','MM','LY','YE','SD','ER','CF','TD','SS','MK']);
 
@@ -253,45 +261,57 @@ async function operator(proxies = [], targetPlatform, env) {
       { url: `https://api.ip.sb/geoip/${ip}`, ccKey: 'country_code', isIPAPI: false },
     ];
     for (const api of apis) {
-      try {
-        const resp = await $.http.get({ url: api.url, timeout: 3500 });
-        const data = parseBody(resp.body);
-        let cc = (data?.[api.ccKey] || '').toString().toUpperCase();
-        if (!cc || cc === 'XX') continue;
-        if (cc === 'CN' && !api.isIPAPI) {
-          try {
-            const r4 = await $.http.get({ url: `http://ip-api.com/json/${host}?fields=countryCode,city&lang=zh-CN`, timeout: 3500 });
-            const d4 = parseBody(r4.body);
-            if (d4?.countryCode) return { cc: 'CN', city: d4.city ?? '' };
-          } catch (e) {}
-        }
-        return { cc, city: data?.city || '' };
-      } catch (e) {}
+      for (let retry = 0; retry < 2; retry++) {
+        try {
+          const resp = await $.http.get({ url: api.url, timeout: 3500 });
+          const data = parseBody(resp.body);
+          let cc = (data?.[api.ccKey] || '').toString().toUpperCase();
+          if (!cc || cc === 'XX') break;
+          if (cc === 'CN' && !api.isIPAPI) {
+            try {
+              const r4 = await $.http.get({ url: `http://ip-api.com/json/${host}?fields=countryCode,city&lang=zh-CN`, timeout: 3500 });
+              const d4 = parseBody(r4.body);
+              if (d4?.countryCode) return { cc: 'CN', city: d4.city ?? '' };
+            } catch {}
+          }
+          return { cc, city: data?.city ?? '' };
+        } catch {}
+      }
     }
     return null;
   }
 
   if (GM_MODE !== '0') {
+    if (RD) cache.set('geo2:__clear__', true);
     const geoCache = {};
-    async function geoLookup(host) {
-      if (geoCache[host]) { ccMap[host] = geoCache[host]; geoFromAPI.add(host); return; }
-      if (cacheEnabled) {
+    let apiCalls = 0, cacheHits = 0, geoStart = Date.now();
+
+    const geoLookup = async (host) => {
+      if (geoCache[host]) { ccMap[host] = geoCache[host]; geoFromAPI.add(host); cacheHits++; return; }
+      if (!RD && cacheEnabled) {
         const cached = cache.get('geo2:' + host);
         if (cached != null) {
           const geo = typeof cached === 'string' ? { cc: cached, city: '' } : cached;
-          if (geo.cc && geo.cc !== 'XX') { geoCache[host] = geo; ccMap[host] = geo; geoFromAPI.add(host); return; }
+          if (geo.cc && geo.cc !== 'XX') { geoCache[host] = geo; ccMap[host] = geo; geoFromAPI.add(host); cacheHits++; return; }
         }
       }
       const geo = await geoQuery(host);
+      apiCalls++;
       if (geo) { geoCache[host] = geo; ccMap[host] = geo; geoFromAPI.add(host); if (cacheEnabled) cache.set('geo2:' + host, geo); return; }
       ccMap[host] = { cc: 'XX', city: '' };
-    }
+    };
+
+    const concurrency = servers.length <= 30 ? 10 : servers.length <= 80 ? 7 : 5;
     const start = Date.now();
-    for (let i = 0; i < servers.length; i += 5) {
-      if (Date.now() - start > 40000) break;
-      await Promise.all(servers.slice(i, i + 5).map(h => geoLookup(h)));
-      if (i + 5 < servers.length) await new Promise(r => setTimeout(r, 100));
+    for (let i = 0; i < servers.length; i += concurrency) {
+      if (Date.now() - start > GLOBAL_TIMEOUT) break;
+      await Promise.all(servers.slice(i, i + concurrency).map(h => geoLookup(h)));
+      if (TZ > 0 && (i + concurrency) % TZ < concurrency) {
+        $.notify('进度', '', `${Math.min(i + concurrency, servers.length)}/${servers.length} (${Math.round((Date.now() - start) / 1000)}s)`);
+      }
+      if (i + concurrency < servers.length) await new Promise(r => setTimeout(r, 100));
     }
+    if (DEBUG) $.notify('DEBUG', '', `api:${apiCalls} cache:${cacheHits} ${Math.round((Date.now() - geoStart) / 1000)}s`);
   }
 
   let geoNodeCount = 0, nameNodeCount = 0, failNodeCount = 0;
@@ -358,7 +378,7 @@ async function operator(proxies = [], targetPlatform, env) {
 
   if (HZ_TEXT) for (const p of result) { if (!IS_GPT || isSupported(p.server)) p.name += SUFFIX; }
 
-  let msg = `v7.4 改名${result.length}`;
+  let msg = `v7.5 改名${result.length}`;
   if (geoNodeCount) msg += ` geo${geoNodeCount}/${result.length}`;
   if (nameNodeCount) msg += ` 原名${nameNodeCount}`;
   if (failNodeCount) msg += ` 失败${failNodeCount}`;
