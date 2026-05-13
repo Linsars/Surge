@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         智慧重命名 - GeoIP + 创意命名
-// @version      7.5
-// @description  SubStore 节点重命名：GeoIP 出口检测 + GPT/流媒体判断 + 多创意循环命名
+// @version      1.7.6
+// @description  SubStore 节点重命名：GeoIP 优先地区识别 + GPT地区规则标签 + 多创意循环命名
 // @author       Linsar
 // @example      #gm=诡秘&qz=机场&hz=GPT
 // ==/UserScript==
@@ -19,8 +19,9 @@
 // DEBUG=    设为1输出调试信息                         示例：debug=1
 // GM=       命名模式（不传 → 地区-序号，CN 用城市名）
 //             gm=0    → 轻量模式：跳过 GeoIP 网络请求，仅用节点名识别地区码
-//             gm=随机 → 按地区分组，每组随机匹配一个模式，无旗帜用吃货兜底
-// CUSTOM=   自定义命名列表（逗号分隔）        示例：custom=东京,大阪,名古屋
+//             gm=0诡秘 → 轻量模式 + 指定命名模式
+//             gm=随机 → 按地区分组稳定随机匹配一个模式，无旗帜用吃货兜底
+//             gm=东京,大阪 → 自定义命名列表（CUSTOM= 仍兼容）
 //
 // ── GM 命名模式列表（含可用数量） ─────────────────────────
 // 生肖      780项    12生肖循环，64八卦兜底，数字兜底
@@ -51,7 +52,9 @@ const PREFIX = U.QZ ? U.QZ + SEP : '';
 const SUFFIX = U.HZ ? SEP + U.HZ : '';
 const HZ_TEXT = U.HZ || '';
 const IS_GPT = HZ_TEXT.toUpperCase() === 'GPT';
-const GM_MODE = U.GM || '';
+const GM_RAW = U.GM || '';
+const LIGHT_MODE = GM_RAW === '0' || GM_RAW.startsWith('0');
+const GM_MODE = LIGHT_MODE ? GM_RAW.slice(1) : GM_RAW;
 const CUSTOM_LIST = U.CUSTOM ? U.CUSTOM.split(/[,，]/).map(s => s.trim()).filter(Boolean) : [];
 const NAME_SEP = U.FGF ? SEP : ' ? ';
 const GLOBAL_TIMEOUT = (parseInt(U.CS) || 40) * 1000;
@@ -59,7 +62,7 @@ const RD = U.RD === '1';
 const TZ = parseInt(U.TZ) || 0;
 const DEBUG = U.DEBUG === '1';
 
-const UNSUPPORTED = new Set(['HK','TW','MO','CN','RU','IR','KP','CU','BY','SY','AF','MM','LY','YE','SD','ER','CF','TD','SS','MK']);
+const UNSUPPORTED = new Set(['CN','RU','IR','KP','CU','BY','SY','AF','MM','LY','YE','SD','ER','CF','TD','SS']);
 
 const ZODIAC = ['子鼠','丑牛','寅虎','卯兔','辰龙','巳蛇','午马','未羊','申猴','酉鸡','戌狗','亥猪'];
 const TAROT = ['愚者','魔术师','女祭司','皇后','皇帝','教皇','恋人','战车','力量','隐士','命运之轮','正义','倒吊人','死神','节制','恶魔','塔','星星','月亮','太阳','审判','世界'];
@@ -207,183 +210,322 @@ const SHORT_CODES = {
   'EE':'EE','LV':'LV','LT':'LT','SK':'SK','HR':'HR','SI':'SI','RS':'RS',
   'UY':'UY','PE':'PE','EC':'EC',
 }
-const SHORT_RE = new RegExp('(?:^|[\\s_\\-|｜])(?:' + Object.keys(SHORT_CODES).join('|') + ')(?=[\\s_\\-|｜]|$)', 'i')
+const RISKY_SHORT = new Set(['NO','IN','IS']);
+const SAFE_SHORT_CODES = {};
+for (const [k, v] of Object.entries(SHORT_CODES)) if (!RISKY_SHORT.has(k)) SAFE_SHORT_CODES[k] = v;
+const SHORT_RE = new RegExp('(?:^|[\\s_\\-|｜])(?:' + Object.keys(SAFE_SHORT_CODES).join('|') + ')(?=[\\s_\\-|｜]|$)', 'i')
 
 
-const parseBody = (body) => {
-  try { return typeof body === "string" ? JSON.parse(body) : body ?? null }
-  catch { return null }
+// ================= 工具函数 / Helpers =================
+const CACHE_TTL = 7 * 24 * 3600 * 1000;
+
+function parseBody(body) {
+  try { return typeof body === 'string' ? JSON.parse(body) : body ?? null; }
+  catch { return null; }
+}
+function splitList(text) {
+  return String(text || '').split(/[,，]/).map(s => s.trim()).filter(Boolean);
+}
+function normalizeCC(cc) {
+  return String(cc || '').trim().toUpperCase();
+}
+function normalizeName(name) {
+  try { return decodeURIComponent(name || '').toUpperCase(); }
+  catch { return String(name || '').toUpperCase(); }
+}
+function getHost(proxy) {
+  return typeof proxy?.server === 'string' ? proxy.server.trim() : '';
+}
+function getNodeKey(proxy) {
+  return `${getHost(proxy)}:${proxy?.port || ''}`;
+}
+function isIPv4(value) {
+  return /^(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}$/.test(value);
+}
+function makeRegion(cc, city = '', source = 'unknown', extra = {}) {
+  return { cc: normalizeCC(cc) || 'XX', city: city || '', source, ts: Date.now(), ...extra };
+}
+function isKnownRegion(region) {
+  return !!region?.cc && region.cc !== 'XX';
+}
+function debugRecord(ctx, stage, target, error) {
+  if (!ctx.config.debug) return;
+  const msg = `${stage} ${target}: ${error?.message || error}`;
+  ctx.debugErrors.push(msg);
+}
+function stableIndex(text, count) {
+  let h = 0;
+  for (let i = 0; i < text.length; i++) h = ((h << 5) - h + text.charCodeAt(i)) | 0;
+  return Math.abs(h) % count;
 }
 
-async function operator(proxies = [], targetPlatform, env) {
-  if (!proxies?.length) return proxies;
-  const $ = $substore;
-  const cache = scriptResourceCache;
-  const cacheEnabled = !!$arguments.cache;
+// ================= 配置解析 / Config =================
+function parseConfig() {
+  const gmInput = U.GM || '';
+  const liteMode = gmInput === '0' || gmInput.startsWith('0');
+  const renameInput = liteMode ? gmInput.slice(1) : gmInput;
+  const gmParts = splitList(renameInput);
+  const customNames = CUSTOM_LIST.length ? CUSTOM_LIST : (renameInput && gmParts.length > 1 && !MODES[renameInput] ? gmParts : []);
+  const renameMode = customNames.length ? '' : renameInput;
+  return {
+    sep: SEP,
+    prefix: PREFIX,
+    suffix: SUFFIX,
+    hzText: HZ_TEXT,
+    isGPT: IS_GPT,
+    liteMode,
+    renameInput,
+    renameMode,
+    customNames,
+    nameSep: NAME_SEP,
+    timeout: GLOBAL_TIMEOUT,
+    refreshCache: RD,
+    progressEvery: TZ,
+    debug: DEBUG,
+    removeVless: U.RV === '1',
+    cacheEnabled: $arguments.cache !== '0',
+  };
+}
+function createContext() {
+  return {
+    $: $substore,
+    cache: scriptResourceCache,
+    config: parseConfig(),
+    hostRegionMap: {},       // host -> GeoIP result
+    nodeRegionMap: {},       // server:port -> final region result
+    geoNodeKeys: new Set(),   // node keys whose final region came from GeoIP
+    debugErrors: [],
+    stats: { vlessRemoved: 0, geoNodes: 0, nameNodes: 0, failedNodes: 0, apiCalls: 0, cacheHits: 0, serverCount: 0 },
+  };
+}
 
-  const vlessCount = (() => {
-    if (U.RV !== '1') return 0;
-    const before = proxies.length;
-    proxies = proxies.filter(p => p.type !== 'vless');
-    return before - proxies.length;
-  })();
-  if (!proxies.length) return proxies;
-
-  const servers = [...new Set(proxies.map(p => p.server))];
-  const ccMap = {};
-  const geoFromAPI = new Set();
-
-  const buildName = (cc, base, server) => {
-    const sep = server && geoFromAPI.has(server) ? SEP : NAME_SEP
-    return PREFIX + (cc ? cc + sep : '') + base
+// ================= 名称地区识别 / Name region detection =================
+function detectRegionFromName(name) {
+  const text = normalizeName(name);
+  for (const [kw, cc] of Object.entries(FLAG_CC)) {
+    if (text.includes(kw)) return makeRegion(cc, '', 'name-flag');
   }
-
-  async function geoQuery(host) {
-    let ip = host;
-    if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(host) && !host.includes(':')) {
-      for (const url of [
-        `https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(host)}&type=A`,
-        `https://dns.alidns.com/resolve?name=${encodeURIComponent(host)}&type=A`,
-        `https://doh.pub/dns-query?name=${encodeURIComponent(host)}&type=A`,
-      ]) {
-        try {
-          const r = await $.http.get({ url, timeout: 3500, headers: { 'Accept': 'application/dns-json' } });
-          const j = parseBody(r.body);
-          const a = j?.Answer?.find(a => a.type === 1);
-          if (a) { ip = a.data; break; }
-        } catch (e) {}
-      }
-    }
-    const apis = [
-      { url: `https://ipwho.is/${ip}`, ccKey: 'country_code', isIPAPI: false },
-      { url: `https://ipinfo.io/${ip}/json`, ccKey: 'country', isIPAPI: false },
-      { url: `http://ip-api.com/json/${host}?fields=countryCode,city&lang=zh-CN`, ccKey: 'countryCode', isIPAPI: true },
-      { url: `https://api.ip.sb/geoip/${ip}`, ccKey: 'country_code', isIPAPI: false },
-    ];
-    for (const api of apis) {
-      for (let retry = 0; retry < 2; retry++) {
-        try {
-          const resp = await $.http.get({ url: api.url, timeout: 3500 });
-          const data = parseBody(resp.body);
-          let cc = (data?.[api.ccKey] || '').toString().toUpperCase();
-          if (!cc || cc === 'XX') break;
-          if (cc === 'CN' && !api.isIPAPI) {
-            try {
-              const r4 = await $.http.get({ url: `http://ip-api.com/json/${host}?fields=countryCode,city&lang=zh-CN`, timeout: 3500 });
-              const d4 = parseBody(r4.body);
-              if (d4?.countryCode) return { cc: 'CN', city: d4.city ?? '' };
-            } catch {}
-          }
-          return { cc, city: data?.city ?? '' };
-        } catch {}
-      }
-    }
-    return null;
+  for (const [kw, cc] of Object.entries(LONG_KW)) {
+    if (text.includes(kw.toUpperCase())) return makeRegion(cc, '', 'name-keyword');
   }
+  const m = text.match(SHORT_RE);
+  if (m) return makeRegion(SAFE_SHORT_CODES[m[0].trim().toUpperCase()], '', 'name-short');
+  return makeRegion('XX', '', 'name-failed');
+}
 
-  if (GM_MODE !== '0') {
-    if (RD) cache.set('geo2:__clear__', true);
-    const geoCache = {};
-    let apiCalls = 0, cacheHits = 0, geoStart = Date.now();
+// ================= GeoIP 缓存 / Geo cache =================
+function normalizeCachedRegion(cached) {
+  if (cached == null) return null;
+  if (typeof cached === 'string') return { cc: normalizeCC(cached), city: '', source: 'cache-legacy', ts: 0 };
+  return { ...cached, cc: normalizeCC(cached.cc) };
+}
+function isCacheValid(region) {
+  return isKnownRegion(region) && (!region.ts || Date.now() - region.ts < CACHE_TTL);
+}
+function readGeoCache(ctx, host) {
+  if (ctx.config.refreshCache || !ctx.config.cacheEnabled) return null;
+  const cached = normalizeCachedRegion(ctx.cache.get('geo2:' + host));
+  if (isCacheValid(cached)) {
+    ctx.stats.cacheHits++;
+    return { ...cached, source: cached.source || 'cache' };
+  }
+  return null;
+}
+function writeGeoCache(ctx, host, region) {
+  if (!ctx.config.cacheEnabled || !isKnownRegion(region)) return;
+  ctx.cache.set('geo2:' + host, { cc: region.cc, city: region.city || '', source: region.source || 'geo', ts: Date.now() });
+}
 
-    const geoLookup = async (host) => {
-      if (geoCache[host]) { ccMap[host] = geoCache[host]; geoFromAPI.add(host); cacheHits++; return; }
-      if (!RD && cacheEnabled) {
-        const cached = cache.get('geo2:' + host);
-        if (cached != null) {
-          const geo = typeof cached === 'string' ? { cc: cached, city: '' } : cached;
-          if (geo.cc && geo.cc !== 'XX') { geoCache[host] = geo; ccMap[host] = geo; geoFromAPI.add(host); cacheHits++; return; }
+// ================= GeoIP 查询 / Geo query =================
+async function resolveHostToIP(ctx, host) {
+  if (isIPv4(host) || host.includes(':')) return host;
+  for (const url of [
+    `https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(host)}&type=A`,
+    `https://dns.alidns.com/resolve?name=${encodeURIComponent(host)}&type=A`,
+    `https://doh.pub/dns-query?name=${encodeURIComponent(host)}&type=A`,
+  ]) {
+    try {
+      const resp = await ctx.$.http.get({ url, timeout: 3500, headers: { 'Accept': 'application/dns-json' } });
+      const data = parseBody(resp.body);
+      const answer = data?.Answer?.find(a => a.type === 1 && isIPv4(a.data));
+      if (answer) return answer.data;
+    } catch (e) { debugRecord(ctx, 'DoH', url, e); }
+  }
+  return host;
+}
+async function queryGeo(ctx, host) {
+  const ip = await resolveHostToIP(ctx, host);
+  const apis = [
+    { name: 'ipwho.is', url: `https://ipwho.is/${ip}`, ccKey: 'country_code', isIPAPI: false },
+    { name: 'ipinfo', url: `https://ipinfo.io/${ip}/json`, ccKey: 'country', isIPAPI: false },
+    { name: 'ip-api', url: `http://ip-api.com/json/${host}?fields=countryCode,city&lang=zh-CN`, ccKey: 'countryCode', isIPAPI: true },
+    { name: 'ip.sb', url: `https://api.ip.sb/geoip/${ip}`, ccKey: 'country_code', isIPAPI: false },
+  ];
+  for (const api of apis) {
+    for (let retry = 0; retry < 2; retry++) {
+      try {
+        const resp = await ctx.$.http.get({ url: api.url, timeout: 3500 });
+        const data = parseBody(resp.body);
+        const cc = normalizeCC(data?.[api.ccKey]);
+        if (!cc || cc === 'XX') break;
+        if (cc === 'CN' && !api.isIPAPI) {
+          try {
+            const r = await ctx.$.http.get({ url: `http://ip-api.com/json/${host}?fields=countryCode,city&lang=zh-CN`, timeout: 3500 });
+            const d = parseBody(r.body);
+            if (d?.countryCode) return makeRegion('CN', d.city || '', 'geo-ip-api-cn');
+          } catch (e) { debugRecord(ctx, 'CN-city', host, e); }
         }
-      }
-      const geo = await geoQuery(host);
-      apiCalls++;
-      if (geo) { geoCache[host] = geo; ccMap[host] = geo; geoFromAPI.add(host); if (cacheEnabled) cache.set('geo2:' + host, geo); return; }
-      ccMap[host] = { cc: 'XX', city: '' };
-    };
-
-    const concurrency = servers.length <= 30 ? 10 : servers.length <= 80 ? 7 : 5;
-    const start = Date.now();
-    for (let i = 0; i < servers.length; i += concurrency) {
-      if (Date.now() - start > GLOBAL_TIMEOUT) break;
-      await Promise.all(servers.slice(i, i + concurrency).map(h => geoLookup(h)));
-      if (TZ > 0 && (i + concurrency) % TZ < concurrency) {
-        $.notify('进度', '', `${Math.min(i + concurrency, servers.length)}/${servers.length} (${Math.round((Date.now() - start) / 1000)}s)`);
-      }
-      if (i + concurrency < servers.length) await new Promise(r => setTimeout(r, 100));
+        return makeRegion(cc, data?.city || '', 'geo-' + api.name);
+      } catch (e) { debugRecord(ctx, 'GeoAPI', api.name + '/' + host, e); }
     }
-    if (DEBUG) $.notify('DEBUG', '', `api:${apiCalls} cache:${cacheHits} ${Math.round((Date.now() - geoStart) / 1000)}s`);
   }
-
-  let geoNodeCount = 0, nameNodeCount = 0, failNodeCount = 0;
-  for (const proxy of proxies) {
-    const srv = proxy.server;
-    const existing = ccMap[srv];
-    if (existing?.cc && existing.cc !== 'XX') { if (geoFromAPI.has(srv)) geoNodeCount++; else nameNodeCount++; continue; }
-    const nameStr = decodeURIComponent(proxy.name || '').toUpperCase();
-    let found = false;
-    for (const [kw, cc] of Object.entries(FLAG_CC)) {
-      if (nameStr.includes(kw)) { ccMap[srv] = { cc, city: '' }; nameNodeCount++; found = true; break; }
+  return makeRegion('XX', '', 'geo-failed');
+}
+async function resolveHostRegion(ctx, host) {
+  const cached = readGeoCache(ctx, host);
+  if (cached) return cached;
+  ctx.stats.apiCalls++;
+  const region = await queryGeo(ctx, host);
+  writeGeoCache(ctx, host, region);
+  return region;
+}
+async function resolveAllHostRegions(ctx, proxies) {
+  if (ctx.config.liteMode) return;
+  const hosts = [...new Set(proxies.map(getHost).filter(Boolean))];
+  ctx.stats.serverCount = hosts.length;
+  const concurrency = hosts.length <= 30 ? 10 : hosts.length <= 80 ? 7 : 5;
+  const start = Date.now();
+  for (let i = 0; i < hosts.length; i += concurrency) {
+    if (Date.now() - start > ctx.config.timeout) break;
+    await Promise.all(hosts.slice(i, i + concurrency).map(async host => {
+      ctx.hostRegionMap[host] = await resolveHostRegion(ctx, host);
+    }));
+    if (ctx.config.debug && ctx.config.progressEvery > 0 && (i + concurrency) % ctx.config.progressEvery < concurrency) {
+      ctx.$.notify('进度', '', `${Math.min(i + concurrency, hosts.length)}/${hosts.length} (${Math.round((Date.now() - start) / 1000)}s)`);
     }
-    if (!found) {
-      for (const [kw, cc] of Object.entries(LONG_KW)) {
-        if (nameStr.includes(kw.toUpperCase())) { ccMap[srv] = { cc, city: '' }; nameNodeCount++; found = true; break; }
-      }
-    }
-    if (!found) {
-      const m = nameStr.match(SHORT_RE);
-      if (m) { ccMap[srv] = { cc: SHORT_CODES[m[0].trim().toUpperCase()], city: '' }; nameNodeCount++; found = true; }
-    }
-    if (!found) { ccMap[srv] = { cc: 'XX', city: '' }; failNodeCount++; }
+    if (i + concurrency < hosts.length) await new Promise(r => setTimeout(r, 100));
   }
+}
 
-  const geoLabel = (server) => {
-    const geo = ccMap[server];
-    if (!geo?.cc || geo.cc === 'XX') return null;
-    return geo.cc === 'CN' && geo.city ? geo.city : cc2flag(geo.cc);
-  };
-  const isSupported = (server) => {
-    const geo = ccMap[server];
-    return geo?.cc && geo.cc !== 'XX' && !UNSUPPORTED.has(geo.cc);
-  };
+// ================= 节点地区决议 / Node region resolution =================
+function resolveNodeRegion(ctx, proxy) {
+  const key = getNodeKey(proxy);
+  const host = getHost(proxy);
+  const geo = host ? ctx.hostRegionMap[host] : null;
+  if (isKnownRegion(geo)) {
+    const region = { ...geo, source: geo.source || 'geo' };
+    ctx.nodeRegionMap[key] = region;
+    ctx.geoNodeKeys.add(key);
+    ctx.stats.geoNodes++;
+    return region;
+  }
+  const nameRegion = detectRegionFromName(proxy.name);
+  ctx.nodeRegionMap[key] = nameRegion;
+  if (isKnownRegion(nameRegion)) ctx.stats.nameNodes++;
+  else ctx.stats.failedNodes++;
+  return nameRegion;
+}
+function resolveNodeRegions(ctx, proxies) {
+  for (const proxy of proxies) resolveNodeRegion(ctx, proxy);
+}
+function getNodeRegion(ctx, proxy) {
+  return ctx.nodeRegionMap[getNodeKey(proxy)] || makeRegion('XX', '', 'missing');
+}
+function getRegionLabel(ctx, proxy) {
+  const region = getNodeRegion(ctx, proxy);
+  if (!isKnownRegion(region)) return null;
+  return region.cc === 'CN' && region.city ? region.city : cc2flag(region.cc);
+}
+function isGPTSupportedRegion(ctx, proxy) {
+  const region = getNodeRegion(ctx, proxy);
+  return isKnownRegion(region) && !UNSUPPORTED.has(region.cc);
+}
 
+// ================= 命名 / Renaming =================
+function buildName(ctx, label, base, proxy) {
+  const sep = ctx.geoNodeKeys.has(getNodeKey(proxy)) ? ctx.config.sep : ctx.config.nameSep;
+  return ctx.config.prefix + (label ? label + sep : '') + base;
+}
+function pickNameFromList(list, index) {
+  const item = list[index % list.length];
+  const cycle = Math.floor(index / list.length);
+  return cycle > 0 ? item + sup(cycle + 1) : item;
+}
+function renameWithList(ctx, result, list, proxy, index) {
+  proxy.name = buildName(ctx, getRegionLabel(ctx, proxy), pickNameFromList(list, index), proxy);
+  result.push(proxy);
+}
+function renameProxies(ctx, proxies) {
   const result = [];
-  const isRandomMode = GM_MODE === '随机';
-  const pickAndName = (list, p, i) => {
-    const item = list[i % list.length];
-    const cycle = Math.floor(i / list.length);
-    p.name = buildName(geoLabel(p.server), cycle > 0 ? item + sup(cycle + 1) : item, p.server);
-    result.push(p);
-  };
-
-  if (isRandomMode) {
+  const { renameMode, customNames } = ctx.config;
+  if (renameMode === '随机') {
     const groups = {};
-    for (const p of proxies) { const f = geoLabel(p.server) || '无旗'; (groups[f] ??= []).push(p); }
-    Object.entries(groups).forEach(([f, g]) => {
-      const list = f === '无旗' ? MODES['吃货'] : MODES[MODE_KEYS[Math.floor(Math.random() * MODE_KEYS.length)]];
-      g.forEach((p, i) => pickAndName(list, p, i));
+    for (const proxy of proxies) {
+      const label = getRegionLabel(ctx, proxy) || '无旗';
+      (groups[label] ??= []).push(proxy);
+    }
+    Object.entries(groups).forEach(([label, group]) => {
+      const list = label === '无旗' ? MODES['吃货'] : MODES[MODE_KEYS[stableIndex(label, MODE_KEYS.length)]];
+      group.forEach((proxy, index) => renameWithList(ctx, result, list, proxy, index));
     });
-  } else if (CUSTOM_LIST.length > 0) {
-    proxies.forEach((p, i) => pickAndName(CUSTOM_LIST, p, i));
-  } else if (GM_MODE && MODES[GM_MODE]) {
-    proxies.forEach((p, i) => pickAndName(MODES[GM_MODE], p, i));
+  } else if (customNames.length > 0) {
+    proxies.forEach((proxy, index) => renameWithList(ctx, result, customNames, proxy, index));
+  } else if (renameMode && MODES[renameMode]) {
+    proxies.forEach((proxy, index) => renameWithList(ctx, result, MODES[renameMode], proxy, index));
   } else {
     const counter = {};
-    for (const p of proxies) {
-      const cc = geoLabel(p.server);
-      if (cc) { counter[cc] = (counter[cc] || 0) + 1; p.name = buildName(null, cc + '-' + String(counter[cc]).padStart(2, '0'), p.server); }
-      else { p.name = PREFIX + p.name.trim(); }
-      result.push(p);
+    for (const proxy of proxies) {
+      const label = getRegionLabel(ctx, proxy);
+      if (label) {
+        counter[label] = (counter[label] || 0) + 1;
+        proxy.name = buildName(ctx, null, label + '-' + String(counter[label]).padStart(2, '0'), proxy);
+      } else {
+        proxy.name = ctx.config.prefix + (proxy.name || '').trim();
+      }
+      result.push(proxy);
     }
   }
-
-  if (HZ_TEXT) for (const p of result) { if (!IS_GPT || isSupported(p.server)) p.name += SUFFIX; }
-
-  let msg = `v7.5 改名${result.length}`;
-  if (geoNodeCount) msg += ` geo${geoNodeCount}/${result.length}`;
-  if (nameNodeCount) msg += ` 原名${nameNodeCount}`;
-  if (failNodeCount) msg += ` 失败${failNodeCount}`;
-  msg += ` 服务器${geoFromAPI.size}/${servers.length}`;
-  if (vlessCount) msg += ` 屏蔽${vlessCount}`;
-  $.notify('智慧重命名', '', msg);
   return result;
 }
+function applySuffix(ctx, proxies) {
+  if (!ctx.config.hzText) return;
+  for (const proxy of proxies) {
+    if (!ctx.config.isGPT || isGPTSupportedRegion(ctx, proxy)) proxy.name += ctx.config.suffix;
+  }
+}
+
+// ================= 通知 / Notify =================
+function notifySummary(ctx, result) {
+  const st = ctx.stats;
+  let msg = `v1.7.6 改名${result.length}`;
+  if (st.geoNodes) msg += ` geo${st.geoNodes}/${result.length}`;
+  if (st.nameNodes) msg += ` 原名${st.nameNodes}`;
+  if (st.failedNodes) msg += ` 失败${st.failedNodes}`;
+  msg += ` 服务器${st.serverCount}`;
+  if (st.vlessRemoved) msg += ` 屏蔽${st.vlessRemoved}`;
+  if (ctx.config.debug) msg += ` api${st.apiCalls} cache${st.cacheHits}`;
+  if (ctx.config.debug && ctx.debugErrors.length) msg += ` err${ctx.debugErrors.length}`;
+  if (ctx.config.debug || st.failedNodes || st.vlessRemoved) ctx.$.notify('智慧重命名', '', msg);
+  if (ctx.config.debug && ctx.debugErrors.length) ctx.$.notify('智慧重命名 DEBUG', '', ctx.debugErrors.slice(0, 5).join('\n'));
+}
+
+// ================= 主入口 / Operator =================
+async function operator(proxies = [], targetPlatform, env) {
+  if (!proxies?.length) return proxies;
+  const ctx = createContext();
+
+  if (ctx.config.removeVless) {
+    const before = proxies.length;
+    proxies = proxies.filter(proxy => proxy.type !== 'vless');
+    ctx.stats.vlessRemoved = before - proxies.length;
+  }
+  if (!proxies.length) return proxies;
+
+  await resolveAllHostRegions(ctx, proxies);
+  resolveNodeRegions(ctx, proxies);
+  const result = renameProxies(ctx, proxies);
+  applySuffix(ctx, result);
+  notifySummary(ctx, result);
+  return result;
+}
+
