@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         智慧重命名 - GeoIP + 创意命名
-// @version      7.3
+// @version      7.4
 // @description  SubStore 节点重命名：GeoIP 出口检测 + GPT/流媒体判断 + 多创意循环命名
 // @author       Linsar
 // @example      #gm=诡秘&qz=机场&hz=GPT
@@ -34,7 +34,7 @@
 // 任意文字   —        自定义文字循环，数字兜底
 //
 
-const args = $arguments || {};
+const args = $arguments ?? {};
 const U = {};
 for (const k in args) {
   if (Object.prototype.hasOwnProperty.call(args, k)) {
@@ -202,6 +202,11 @@ const SHORT_CODES = {
 const SHORT_RE = new RegExp('(?:^|[\\s_\\-|｜])(?:' + Object.keys(SHORT_CODES).join('|') + ')(?=[\\s_\\-|｜]|$)', 'i')
 
 
+const parseBody = (body) => {
+  try { return typeof body === "string" ? JSON.parse(body) : body ?? null }
+  catch { return null }
+}
+
 async function operator(proxies = [], targetPlatform, env) {
   if (!proxies?.length) return proxies;
   const $ = $substore;
@@ -227,7 +232,7 @@ async function operator(proxies = [], targetPlatform, env) {
 
   async function geoQuery(host) {
     let ip = host;
-    if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(host) && host.indexOf(':') === -1) {
+    if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(host) && !host.includes(':')) {
       for (const url of [
         `https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(host)}&type=A`,
         `https://dns.alidns.com/resolve?name=${encodeURIComponent(host)}&type=A`,
@@ -235,7 +240,7 @@ async function operator(proxies = [], targetPlatform, env) {
       ]) {
         try {
           const r = await $.http.get({ url, timeout: 3500, headers: { 'Accept': 'application/dns-json' } });
-          const j = typeof r.body === 'string' ? JSON.parse(r.body) : r.body;
+          const j = parseBody(r.body);
           const a = j?.Answer?.find(a => a.type === 1);
           if (a) { ip = a.data; break; }
         } catch (e) {}
@@ -250,14 +255,14 @@ async function operator(proxies = [], targetPlatform, env) {
     for (const api of apis) {
       try {
         const resp = await $.http.get({ url: api.url, timeout: 3500 });
-        const data = typeof resp.body === 'string' ? JSON.parse(resp.body) : resp.body;
+        const data = parseBody(resp.body);
         let cc = (data?.[api.ccKey] || '').toString().toUpperCase();
         if (!cc || cc === 'XX') continue;
         if (cc === 'CN' && !api.isIPAPI) {
           try {
             const r4 = await $.http.get({ url: `http://ip-api.com/json/${host}?fields=countryCode,city&lang=zh-CN`, timeout: 3500 });
-            const d4 = typeof r4.body === 'string' ? JSON.parse(r4.body) : r4.body;
-            if (d4?.countryCode) return { cc: 'CN', city: d4.city || '' };
+            const d4 = parseBody(r4.body);
+            if (d4?.countryCode) return { cc: 'CN', city: d4.city ?? '' };
           } catch (e) {}
         }
         return { cc, city: data?.city || '' };
@@ -296,12 +301,12 @@ async function operator(proxies = [], targetPlatform, env) {
     if (existing?.cc && existing.cc !== 'XX') { if (geoFromAPI.has(srv)) geoNodeCount++; else nameNodeCount++; continue; }
     const nameStr = decodeURIComponent(proxy.name || '').toUpperCase();
     let found = false;
-    for (const kw in FLAG_CC) {
-      if (nameStr.indexOf(kw) !== -1) { ccMap[srv] = { cc: FLAG_CC[kw], city: '' }; nameNodeCount++; found = true; break; }
+    for (const [kw, cc] of Object.entries(FLAG_CC)) {
+      if (nameStr.includes(kw)) { ccMap[srv] = { cc, city: '' }; nameNodeCount++; found = true; break; }
     }
     if (!found) {
-      for (const kw in LONG_KW) {
-        if (nameStr.indexOf(kw.toUpperCase()) !== -1) { ccMap[srv] = { cc: LONG_KW[kw], city: '' }; nameNodeCount++; found = true; break; }
+      for (const [kw, cc] of Object.entries(LONG_KW)) {
+        if (nameStr.includes(kw.toUpperCase())) { ccMap[srv] = { cc, city: '' }; nameNodeCount++; found = true; break; }
       }
     }
     if (!found) {
@@ -333,11 +338,10 @@ async function operator(proxies = [], targetPlatform, env) {
   if (isRandomMode) {
     const groups = {};
     for (const p of proxies) { const f = geoLabel(p.server) || '无旗'; (groups[f] ??= []).push(p); }
-    for (const f in groups) {
-      const g = groups[f];
+    Object.entries(groups).forEach(([f, g]) => {
       const list = f === '无旗' ? MODES['吃货'] : MODES[MODE_KEYS[Math.floor(Math.random() * MODE_KEYS.length)]];
       g.forEach((p, i) => pickAndName(list, p, i));
-    }
+    });
   } else if (CUSTOM_LIST.length > 0) {
     proxies.forEach((p, i) => pickAndName(CUSTOM_LIST, p, i));
   } else if (GM_MODE && MODES[GM_MODE]) {
@@ -354,7 +358,7 @@ async function operator(proxies = [], targetPlatform, env) {
 
   if (HZ_TEXT) for (const p of result) { if (!IS_GPT || isSupported(p.server)) p.name += SUFFIX; }
 
-  let msg = `v7.3 改名${result.length}`;
+  let msg = `v7.4 改名${result.length}`;
   if (geoNodeCount) msg += ` geo${geoNodeCount}/${result.length}`;
   if (nameNodeCount) msg += ` 原名${nameNodeCount}`;
   if (failNodeCount) msg += ` 失败${failNodeCount}`;
