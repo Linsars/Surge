@@ -595,10 +595,10 @@ export default async function(ctx) {
   const HEADER_ICON = 11;
   const HEADER_TIME_FONT = 10;
   const HEADER_GAP = 4;
-  const TOP_GAP = 0;
-  const INFO_BOTTOM_GAP = isLarge ? 5 : 5;
+  const TOP_GAP = 3;
+  const HEADER_INFO_GAP = isLarge ? 2 : 1;
   const INFO_GAP = isLarge ? 4 : 2.5;
-  const BOTTOM_GAP = isLarge ? 3.2 : 3.2;
+  const BOTTOM_GAP = isLarge ? 3 : 2.5;
   const COL_GAP = 12;
 
   const leftColumn = {
@@ -648,30 +648,34 @@ export default async function(ctx) {
     backgroundColor: BG_COLOR,
     children: [
       {
-        type: 'stack', direction: 'row', alignItems: 'center', gap: HEADER_GAP,
+        type: 'stack', direction: 'column', gap: HEADER_INFO_GAP,
         children: [
-          { type: 'text', text: '数据中心(DCH)', font: { size: HEADER_FONT, weight: 'heavy' }, textColor: C_TITLE, flex: 1, maxLines: 1, minScale: 0.7 },
-          { type: 'image', src: `sf-symbol:${summaryIcon}`, color: summaryCol, width: 12, height: 12 },
-          { type: 'text', text: summaryTxt, font: { size: 10, weight: 'bold' }, textColor: summaryCol },
-          { type: 'spacer' },
-          ...(!isDirectPolicy ? [
-            { type: 'image', src: `sf-symbol:${policyOk ? 'checkmark.circle.fill' : (policyWarn ? 'exclamationmark.circle.fill' : 'questionmark.circle.fill')}`, color: policyOk ? C_GREEN : (policyWarn ? C_ORANGE : C_SUB), width: 10, height: 10 },
-            { type: 'text', text: policy, font: { size: 10, weight: 'bold' }, textColor: policyOk ? C_GREEN : (policyWarn ? C_ORANGE : C_SUB) },
-          ] : []),
           {
-            type: 'stack', direction: 'row', alignItems: 'center', gap: 3,
+            type: 'stack', direction: 'row', alignItems: 'center', gap: HEADER_GAP,
             children: [
-              { type: 'image', src: 'sf-symbol:arrow.clockwise', color: C_SUB, width: HEADER_ICON, height: HEADER_ICON },
-              { type: 'text', text: timeStr, font: { size: HEADER_TIME_FONT }, textColor: C_SUB }
+              { type: 'text', text: '数据中心(DCH)', font: { size: HEADER_FONT, weight: 'heavy' }, textColor: C_TITLE, flex: 1, maxLines: 1, minScale: 0.7 },
+              { type: 'image', src: `sf-symbol:${summaryIcon}`, color: summaryCol, width: 12, height: 12 },
+              { type: 'text', text: summaryTxt, font: { size: 10, weight: 'bold' }, textColor: summaryCol },
+              { type: 'spacer' },
+              ...(!isDirectPolicy ? [
+                { type: 'image', src: `sf-symbol:${policyOk ? 'checkmark.circle.fill' : (policyWarn ? 'exclamationmark.circle.fill' : 'questionmark.circle.fill')}`, color: policyOk ? C_GREEN : (policyWarn ? C_ORANGE : C_SUB), width: 10, height: 10 },
+                { type: 'text', text: policy, font: { size: 10, weight: 'bold' }, textColor: policyOk ? C_GREEN : (policyWarn ? C_ORANGE : C_SUB) },
+              ] : []),
+              {
+                type: 'stack', direction: 'row', alignItems: 'center', gap: 3,
+                children: [
+                  { type: 'image', src: 'sf-symbol:arrow.clockwise', color: C_SUB, width: HEADER_ICON, height: HEADER_ICON },
+                  { type: 'text', text: timeStr, font: { size: HEADER_TIME_FONT }, textColor: C_SUB }
+                ]
+              }
             ]
+          },
+          {
+            type: 'stack', direction: 'row', gap: COL_GAP,
+            children: [leftColumn, rightColumn]
           }
         ]
       },
-      {
-        type: 'stack', direction: 'row', gap: COL_GAP,
-        children: [leftColumn, rightColumn]
-      },
-      { type: 'stack', height: INFO_BOTTOM_GAP },
       { type: 'stack', height: 0.5, backgroundColor: { light: 'rgba(0,0,0,0.08)', dark: 'rgba(255,255,255,0.12)' } },
       unlockSection
     ]
