@@ -20,6 +20,12 @@ rules:
       match: 126.net
       policy: "DIRECT"
   - domain_suffix:
+      match: ip138.com
+      policy: "DIRECT"
+  - domain_suffix:
+      match: ip.cn
+      policy: "DIRECT"
+  - domain_suffix:
       match: ippure.com
       policy: "{{{POLICY}}}"
   - domain_suffix:

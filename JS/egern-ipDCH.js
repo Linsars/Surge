@@ -214,6 +214,43 @@ export default async function(ctx) {
       }
     } catch (e) {}
   }
+  async function getLocalCnGeo() {
+    const fetchIP138 = async () => {
+      try {
+        const html = await get('https://2026.ip138.com/', { 'User-Agent': BASE_UA }, 8000);
+        const ipMatch = html && html.match(/(\d{1,3}(?:\.\d{1,3}){3})/);
+        const geoMatch = html && html.match(/来自：([^<\n]+)/);
+        if (ipMatch) return { ip: ipMatch[1], geo: geoMatch ? geoMatch[1].replace(/<[^>]+>/g, '').trim() : '' };
+      } catch (e) {}
+      return null;
+    };
+    const fetchIPCN = async () => {
+      try {
+        const text = await get('https://my.ip.cn/', { 'User-Agent': BASE_UA }, 8000);
+        const ipMatch = text && text.match(/(\d{1,3}(?:\.\d{1,3}){3})/);
+        const geoMatch = text && text.match(/归属地：(.+)/);
+        if (ipMatch) return { ip: ipMatch[1], geo: geoMatch ? geoMatch[1].replace(/<[^>]+>/g, '').trim() : '' };
+      } catch (e) {}
+      return null;
+    };
+    const rs = await Promise.all([fetchIP138(), fetchIPCN()]);
+    const valid = rs.filter(r => r && r.ip);
+    if (!valid.length) return null;
+    const sameIp = valid.find(r => r.ip === lIp) || valid[0];
+    const candidates = valid.filter(r => r.ip === sameIp.ip && r.geo);
+    const picked = candidates.reduce((a, b) => (a.geo.length >= b.geo.length ? a : b), { geo: '' });
+    return { ip: sameIp.ip, geo: picked.geo || sameIp.geo || '' };
+  }
+
+  if (lIp !== "获取失败") {
+    try {
+      const cnGeo = await getLocalCnGeo();
+      if (cnGeo && cnGeo.geo) {
+        lIp = cnGeo.ip || lIp;
+        lLoc = cnGeo.geo;
+      }
+    } catch (e) {}
+  }
   if (lIp !== "获取失败") {
     try {
       const lcRes = await ctx.http.get(`https://ip.net.coffee/api/ip/lookup/${encodeURIComponent(lIp)}`, { timeout: 8000 });
