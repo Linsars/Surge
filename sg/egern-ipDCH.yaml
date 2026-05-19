@@ -32,6 +32,15 @@ rules:
       match: ip.sb
       policy: "{{{POLICY}}}"
   - domain_suffix:
+      match: ipify.org
+      policy: "{{{POLICY}}}"
+  - domain_suffix:
+      match: icanhazip.com
+      policy: "{{{POLICY}}}"
+  - domain_suffix:
+      match: ident.me
+      policy: "{{{POLICY}}}"
+  - domain_suffix:
       match: api.ipapi.is
       policy: "{{{POLICY}}}"
   - domain_suffix:

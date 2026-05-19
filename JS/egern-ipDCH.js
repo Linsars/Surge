@@ -307,30 +307,37 @@ export default async function(ctx) {
     return { lIp, lLoc, lIsp };
   }
 
+  async function getLandingIPv4() {
+    const parseIp = (txt) => {
+      if (!txt) return "";
+      try { const j = JSON.parse(txt); if (j && j.ip) return String(j.ip).trim(); } catch (e) {}
+      const m = String(txt).match(/\b(?:\d{1,3}\.){3}\d{1,3}\b/);
+      return m ? m[0] : "";
+    };
+    const sources = [
+      'https://api4.ipify.org?format=json',
+      'https://api-ipv4.ip.sb/ip',
+      'https://ipv4.icanhazip.com',
+      'https://v4.ident.me'
+    ];
+    for (const url of sources) {
+      try {
+        const res = await withTimeout(ctx.http.get(url, { timeout: 3500 }), 3800, null);
+        if (!res) continue;
+        const ip = parseIp(await res.text());
+        if (ip) return ip;
+      } catch (e) {}
+    }
+    return "";
+  }
+
   async function getLandingInfo() {
     let nIp = "获取失败", nLoc = "未知位置", nativeText = "未知";
     let riskIPPureTxt = "—", ippSev = -1;
     let riskIpapiTxt = "—", apiSev = -1;
     let riskCoffeeTxt = "—", coffeeSev = -1;
 
-    try {
-      const res = await withTimeout(ctx.http.get('https://my.ippure.com/v1/info', { timeout: 5000 }), 5200, null);
-      if (res) {
-        const d = JSON.parse(await res.text());
-        nIp = d.ip || "获取失败";
-        let code = d.countryCode || "";
-        if (code.toUpperCase() === 'TW') code = 'CN';
-        nLoc = `${fmtFlag(code)} ${d.country || ""} ${d.city || ""}`.trim() || "未知位置";
-        nativeText = d.isResidential === true ? "🏠 原生住宅" : (d.isResidential === false ? "🏢 商业机房" : "未知");
-        const risk = ti(d.fraudScore);
-        if (risk !== null) {
-          if (risk >= 80) { riskIPPureTxt = `极高 (${risk})`; ippSev = 4; }
-          else if (risk >= 70) { riskIPPureTxt = `高危 (${risk})`; ippSev = 3; }
-          else if (risk >= 40) { riskIPPureTxt = `中等 (${risk})`; ippSev = 1; }
-          else { riskIPPureTxt = `低危 (${risk})`; ippSev = 0; }
-        }
-      }
-    } catch (e) {}
+    nIp = await getLandingIPv4() || "获取失败";
 
     if (nIp === "获取失败") {
       try {
@@ -342,7 +349,6 @@ export default async function(ctx) {
             let code2 = d2.country_code || "";
             if (code2.toUpperCase() === 'TW') code2 = 'CN';
             nLoc = `${fmtFlag(code2)} ${d2.country || ""} ${d2.city || ""}`.trim();
-            nativeText = "未知";
           }
         }
       } catch (e) {}
@@ -350,6 +356,27 @@ export default async function(ctx) {
 
     if (nIp !== "获取失败") {
       await Promise.all([
+        (async () => {
+          try {
+            const coffeeRes = await withTimeout(ctx.http.get(`https://ip.net.coffee/api/ip/lookup/${encodeURIComponent(nIp)}`, { timeout: 4500 }), 4700, null);
+            if (!coffeeRes) return;
+            const cj = JSON.parse(await coffeeRes.text());
+            if (cj) {
+              let code = cj.countryCode || cj.country_code || "";
+              if (code.toUpperCase() === 'TW') code = 'CN';
+              nLoc = `${fmtFlag(code)} ${cj.country || ""} ${cj.city || ""}`.trim() || nLoc;
+              nativeText = cj.isResidential === true ? "🏠 原生住宅" : (cj.isResidential === false ? "🏢 商业机房" : (cj.is_datacenter ? "🏢 商业机房" : "未知"));
+              const score = ti(cj.trust_score);
+              if (score !== null) {
+                if (score < 30) { riskCoffeeTxt = `极高 (${score})`; coffeeSev = 4; }
+                else if (score < 45) { riskCoffeeTxt = `高危 (${score})`; coffeeSev = 3; }
+                else if (score < 60) { riskCoffeeTxt = `中等 (${score})`; coffeeSev = 2; }
+                else if (score < 75) { riskCoffeeTxt = `中低 (${score})`; coffeeSev = 1; }
+                else { riskCoffeeTxt = `低危 (${score})`; coffeeSev = 0; }
+              }
+            }
+          } catch (e) {}
+        })(),
         (async () => {
           try {
             const apiRes = await withTimeout(ctx.http.get(`https://api.ipapi.is/?q=${nIp}`, { timeout: 4500 }), 4700, null);
@@ -371,22 +398,15 @@ export default async function(ctx) {
         })(),
         (async () => {
           try {
-            const coffeeRes = await withTimeout(ctx.http.get(`https://ip.net.coffee/api/ip/lookup/${encodeURIComponent(nIp)}`, { timeout: 4500 }), 4700, null);
-            if (!coffeeRes) return;
-            const cj = JSON.parse(await coffeeRes.text());
-            if (cj) {
-              const score = ti(cj.trust_score);
-              if (score !== null) {
-                if (score < 30) { riskCoffeeTxt = `极高 (${score})`; coffeeSev = 4; }
-                else if (score < 45) { riskCoffeeTxt = `高危 (${score})`; coffeeSev = 3; }
-                else if (score < 60) { riskCoffeeTxt = `中等 (${score})`; coffeeSev = 2; }
-                else if (score < 75) { riskCoffeeTxt = `中低 (${score})`; coffeeSev = 1; }
-                else { riskCoffeeTxt = `低危 (${score})`; coffeeSev = 0; }
-              } else {
-                const hits = ['is_proxy','is_vpn','is_tor','is_abuser','is_bogon','is_crawler'].filter(k => cj[k]).length;
-                riskCoffeeTxt = `${hits}`;
-                coffeeSev = hits >= 3 ? 4 : hits >= 2 ? 3 : hits >= 1 ? 2 : 0;
-              }
+            const res = await withTimeout(ctx.http.get('https://my.ippure.com/v1/info', { timeout: 5000 }), 5200, null);
+            if (!res) return;
+            const d = JSON.parse(await res.text());
+            const risk = ti(d.fraudScore);
+            if (risk !== null) {
+              if (risk >= 80) { riskIPPureTxt = `极高 (${risk})`; ippSev = 4; }
+              else if (risk >= 70) { riskIPPureTxt = `高危 (${risk})`; ippSev = 3; }
+              else if (risk >= 40) { riskIPPureTxt = `中等 (${risk})`; ippSev = 1; }
+              else { riskIPPureTxt = `低危 (${risk})`; ippSev = 0; }
             }
           } catch (e) {}
         })()
