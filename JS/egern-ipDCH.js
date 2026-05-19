@@ -38,6 +38,11 @@ export default async function(ctx) {
   }
   function jp(s) { try { return JSON.parse(s); } catch (e) { return null; } }
   function ti(v) { const n = Number(v); return Number.isFinite(n) ? Math.round(n) : null; }
+  function withTimeout(promise, ms, fallback) {
+    let timer;
+    const timeout = new Promise(resolve => { timer = setTimeout(() => resolve(fallback), ms); });
+    return Promise.race([promise.catch(() => fallback), timeout]).then(v => { clearTimeout(timer); return v; });
+  }
 
   async function checkChatGPT() {
     try {
@@ -80,7 +85,7 @@ export default async function(ctx) {
 
   async function checkYouTube() {
     try {
-      const body = await get('https://www.youtube.com/premium', { "User-Agent": BASE_UA, "Accept-Language": "en" });
+      const body = await get('https://www.youtube.com/premium', { "User-Agent": BASE_UA, "Accept-Language": "en" }, 4000);
       if (!body) return "Cross";
       if (body.includes('www.google.cn')) return "CN";
       const isNotAvailable = body.includes('Premium is not available in your country') || body.includes('YouTube Premium is not available');
@@ -98,7 +103,7 @@ export default async function(ctx) {
   async function checkNetflix() {
     try {
       const titles = ["https://www.netflix.com/title/81280792", "https://www.netflix.com/title/70143836"];
-      const fetchTitle = async (url) => { try { return await get(url, { "User-Agent": BASE_UA }); } catch (e) { return ""; } };
+      const fetchTitle = async (url) => { try { return await get(url, { "User-Agent": BASE_UA }, 3500); } catch (e) { return ""; } };
       const bodies = await Promise.all([fetchTitle(titles[0]), fetchTitle(titles[1])]);
       const t1 = bodies[0], t2 = bodies[1];
       if (!t1 && !t2) return "Cross";
@@ -117,13 +122,13 @@ export default async function(ctx) {
 
   async function checkTikTok() {
     try {
-      let body1 = await get("https://www.tiktok.com/", { "User-Agent": BASE_UA });
+      let body1 = await get("https://www.tiktok.com/", { "User-Agent": BASE_UA }, 5000);
       if (body1 && body1.includes("Please wait...")) {
-        try { body1 = await get("https://www.tiktok.com/explore", { "User-Agent": BASE_UA }); } catch (e2) {}
+        try { body1 = await get("https://www.tiktok.com/explore", { "User-Agent": BASE_UA }, 4000); } catch (e2) {}
       }
       let m1 = body1 ? body1.match(/"region"\s*:\s*"([A-Z]{2})"/) : null;
       if (m1 && m1[1]) return m1[1];
-      const body2 = await get("https://www.tiktok.com/", { "User-Agent": BASE_UA, "Accept-Language": "en" });
+      const body2 = await get("https://www.tiktok.com/", { "User-Agent": BASE_UA, "Accept-Language": "en" }, 4000);
       const m2 = body2 ? body2.match(/"region"\s*:\s*"([A-Z]{2})"/) : null;
       if (m2 && m2[1]) return m2[1];
       if (body1 || body2) return "OK";
@@ -134,7 +139,7 @@ export default async function(ctx) {
   async function checkClaude() {
     const restricted = { CN: true, HK: true, MO: true, RU: true, KP: true, IR: true, SY: true, CU: true, BY: true, VE: true };
     try {
-      const traceTxt = await get("https://claude.ai/cdn-cgi/trace", { "User-Agent": BASE_UA }, 6000);
+      const traceTxt = await get("https://claude.ai/cdn-cgi/trace", { "User-Agent": BASE_UA }, 4500);
       const ipMatch = traceTxt ? traceTxt.match(/(?:^|\n)ip=([^\n]+)/) : null;
       const locMatch = traceTxt ? traceTxt.match(/(?:^|\n)loc=([A-Z]{2})/) : null;
       const cIp = ipMatch && ipMatch[1] ? ipMatch[1].trim() : "";
@@ -192,38 +197,29 @@ export default async function(ctx) {
     return `${fmtFlag(code)} ${parts.join(' ')}`.replace(/\s+/g, ' ').trim();
   }
 
+  function extractIspFromGeo(geo) {
+    const m = String(geo || '').match(/(电信|联通|移动|广电|铁通|教育网|长城宽带|鹏博士|China\s*Telecom|China\s*Unicom|China\s*Mobile|Chinanet)\s*$/i);
+    return m ? fmtISP(m[1]) : "";
+  }
   function stripIspFromGeo(geo) {
     return String(geo || '')
       .replace(/\s*(电信|联通|移动|广电|铁通|教育网|长城宽带|鹏博士|China\s*Telecom|China\s*Unicom|China\s*Mobile|Chinanet)\s*$/i, '')
       .trim();
   }
 
-  let lIp = "获取失败", lLoc = "未知位置", lIsp = "未知运营商";
-  try {
-    const lRes = await ctx.http.get('https://myip.ipip.net/json', { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 8000 });
-    const body = JSON.parse(await lRes.text());
-    if (body?.data) {
-      lIp = body.data.ip || "获取失败";
-      const locArr = body.data.location || [];
-      lLoc = `🇨🇳 ${locArr[1] || ""} ${locArr[2] || ""}`.trim() || "未知位置";
-      lIsp = fmtISP(locArr[4] || locArr[3]);
-    }
-  } catch (e) {}
-  if (lIp === "获取失败") {
-    try {
-      const res126 = await ctx.http.get('https://ipservice.ws.126.net/locate/api/getLocByIp', { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 8000 });
-      const body126 = JSON.parse(await res126.text());
-      if (body126?.result) {
-        lIp = body126.result.ip;
-        lLoc = `🇨🇳 ${body126.result.province || ""} ${body126.result.city || ""}`.trim();
-        lIsp = fmtISP(body126.result.operator || body126.result.company);
-      }
-    } catch (e) {}
-  }
+  const unlockPromise = Promise.all([
+    withTimeout(checkChatGPT(), 4500, "Cross"),
+    withTimeout(checkGemini(), 4500, "Cross"),
+    withTimeout(checkYouTube(), 4500, "Cross"),
+    withTimeout(checkNetflix(), 4500, "Cross"),
+    withTimeout(checkTikTok(), 4500, "Cross"),
+    withTimeout(checkClaude(), 4500, "Cross")
+  ]);
+
   async function getLocalCnGeo() {
     const fetchIP138 = async () => {
       try {
-        const html = await get('https://2026.ip138.com/', { 'User-Agent': BASE_UA }, 8000);
+        const html = await get('https://2026.ip138.com/', { 'User-Agent': BASE_UA }, 5000);
         const ipMatch = html && html.match(/(\d{1,3}(?:\.\d{1,3}){3})/);
         const geoMatch = html && html.match(/来自：([^<\n]+)/);
         if (ipMatch) return { ip: ipMatch[1], geo: geoMatch ? geoMatch[1].replace(/<[^>]+>/g, '').trim() : '' };
@@ -232,133 +228,181 @@ export default async function(ctx) {
     };
     const fetchIPCN = async () => {
       try {
-        const text = await get('https://my.ip.cn/', { 'User-Agent': BASE_UA }, 8000);
+        const text = await get('https://my.ip.cn/', { 'User-Agent': BASE_UA }, 5000);
         const ipMatch = text && text.match(/(\d{1,3}(?:\.\d{1,3}){3})/);
         const geoMatch = text && text.match(/归属地：(.+)/);
         if (ipMatch) return { ip: ipMatch[1], geo: geoMatch ? geoMatch[1].replace(/<[^>]+>/g, '').trim() : '' };
       } catch (e) {}
       return null;
     };
-    const rs = await Promise.all([fetchIP138(), fetchIPCN()]);
+    const rs = await Promise.all([
+      withTimeout(fetchIP138(), 5200, null),
+      withTimeout(fetchIPCN(), 5200, null)
+    ]);
     const valid = rs.filter(r => r && r.ip);
     if (!valid.length) return null;
-    const sameIp = valid.find(r => r.ip === lIp) || valid[0];
+    const sameIp = valid[0];
     const candidates = valid.filter(r => r.ip === sameIp.ip && r.geo);
     const picked = candidates.reduce((a, b) => (a.geo.length >= b.geo.length ? a : b), { geo: '' });
-    return { ip: sameIp.ip, geo: stripIspFromGeo(picked.geo || sameIp.geo || '') };
+    const rawGeo = picked.geo || sameIp.geo || '';
+    return { ip: sameIp.ip, geo: stripIspFromGeo(rawGeo), isp: extractIspFromGeo(rawGeo) };
   }
 
-  if (lIp !== "获取失败") {
+  async function getLocalByIpip() {
     try {
-      const cnGeo = await getLocalCnGeo();
-      if (cnGeo && cnGeo.geo) {
-        lIp = cnGeo.ip || lIp;
-        lLoc = cnGeo.geo;
+      const lRes = await ctx.http.get('https://myip.ipip.net/json', { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 5000 });
+      const body = JSON.parse(await lRes.text());
+      if (body?.data) {
+        const locArr = body.data.location || [];
+        return {
+          ip: body.data.ip || "获取失败",
+          loc: `🇨🇳 ${locArr[1] || ""} ${locArr[2] || ""}`.trim() || "未知位置",
+          isp: fmtISP(locArr[4] || locArr[3])
+        };
       }
     } catch (e) {}
-  }
-  if (lIp !== "获取失败") {
-    try {
-      const lcRes = await ctx.http.get(`https://ip.net.coffee/api/ip/lookup/${encodeURIComponent(lIp)}`, { timeout: 8000 });
-      const lc = JSON.parse(await lcRes.text());
-      if (lc) {
-        let lcCode = lc.countryCode || lc.country_code || "";
-        if (lcCode.toUpperCase() === 'TW') lcCode = 'CN';
-        const geoList = Array.isArray(lc.geo_sources) ? lc.geo_sources : [];
-        const mainGeo = { country: lc.country, region: lc.region, city: lc.city, country_code: lcCode };
-        const cnGeo = pickBestCnGeo([mainGeo].concat(geoList));
-        const detailLoc = cnGeo ? buildGeoLoc(cnGeo, lcCode) : "";
-        if (detailLoc && detailLoc !== "🌍") lLoc = detailLoc;
-        if (lc.isp || lc.asOrganization || lc.company_name) lIsp = fmtISP(lc.isp || lc.asOrganization || lc.company_name);
-      }
-    } catch (e) {}
+    return null;
   }
 
-  let nIp = "获取失败", nLoc = "未知位置", nativeText = "未知";
-  let riskIPPureTxt = "—", ippSev = -1;
+  async function getLocalInfo() {
+    let lIp = "获取失败", lLoc = "未知位置", lIsp = "未知运营商";
+    let hasLocalCnGeo = false;
+    const [cnGeo, ipipInfo] = await Promise.all([
+      withTimeout(getLocalCnGeo(), 5600, null),
+      withTimeout(getLocalByIpip(), 5600, null)
+    ]);
 
-  try {
-    const res = await ctx.http.get('https://my.ippure.com/v1/info', { timeout: 8000 });
-    const d = JSON.parse(await res.text());
-    nIp = d.ip || "获取失败";
-    let code = d.countryCode || "";
-    if (code.toUpperCase() === 'TW') code = 'CN';
-    const flag = fmtFlag(code);
-    nLoc = `${flag} ${d.country || ""} ${d.city || ""}`.trim() || "未知位置";
-    nativeText = d.isResidential === true ? "🏠 原生住宅" : (d.isResidential === false ? "🏢 商业机房" : "未知");
-    const risk = ti(d.fraudScore);
-    if (risk !== null) {
-      if (risk >= 80) { riskIPPureTxt = `极高 (${risk})`; ippSev = 4; }
-      else if (risk >= 70) { riskIPPureTxt = `高危 (${risk})`; ippSev = 3; }
-      else if (risk >= 40) { riskIPPureTxt = `中等 (${risk})`; ippSev = 1; }
-      else { riskIPPureTxt = `低危 (${risk})`; ippSev = 0; }
+    const base = ipipInfo || null;
+    if (base && base.ip && base.ip !== "获取失败") {
+      lIp = base.ip;
+      lLoc = base.loc || lLoc;
+      lIsp = base.isp || lIsp;
     }
-  } catch (e) {}
+    if (cnGeo && cnGeo.ip) {
+      lIp = cnGeo.ip;
+      if (cnGeo.geo) { lLoc = cnGeo.geo; hasLocalCnGeo = true; }
+      if (cnGeo.isp) lIsp = cnGeo.isp;
+    }
 
-  if (nIp === "获取失败") {
-    try {
-      const res2 = await ctx.http.get('https://api.ip.sb/geoip', { timeout: 8000 });
-      const d2 = JSON.parse(await res2.text());
-      if (d2 && d2.ip) {
-        nIp = d2.ip;
-        let code2 = d2.country_code || "";
-        if (code2.toUpperCase() === 'TW') code2 = 'CN';
-        nLoc = `${fmtFlag(code2)} ${d2.country || ""} ${d2.city || ""}`.trim();
-        nativeText = "未知";
-      }
-    } catch (e) {}
+    if (lIp !== "获取失败" && (!hasLocalCnGeo || lIsp === "未知运营商")) {
+      try {
+        const lcRes = await withTimeout(ctx.http.get(`https://ip.net.coffee/api/ip/lookup/${encodeURIComponent(lIp)}`, { timeout: 3000 }), 3200, null);
+        if (lcRes) {
+          const lc = JSON.parse(await lcRes.text());
+          if (lc) {
+            let lcCode = lc.countryCode || lc.country_code || "";
+            if (lcCode.toUpperCase() === 'TW') lcCode = 'CN';
+            if (!hasLocalCnGeo) {
+              const geoList = Array.isArray(lc.geo_sources) ? lc.geo_sources : [];
+              const mainGeo = { country: lc.country, region: lc.region, city: lc.city, country_code: lcCode };
+              const cnGeo2 = pickBestCnGeo([mainGeo].concat(geoList));
+              const detailLoc = cnGeo2 ? buildGeoLoc(cnGeo2, lcCode) : "";
+              if (detailLoc && detailLoc !== "🌍") lLoc = detailLoc;
+            }
+            if (lc.isp || lc.asOrganization || lc.company_name) lIsp = fmtISP(lc.isp || lc.asOrganization || lc.company_name);
+          }
+        }
+      } catch (e) {}
+    }
+    return { lIp, lLoc, lIsp };
   }
 
-  let riskIpapiTxt = "—", apiSev = -1;
-  if (nIp !== "获取失败") {
+  async function getLandingInfo() {
+    let nIp = "获取失败", nLoc = "未知位置", nativeText = "未知";
+    let riskIPPureTxt = "—", ippSev = -1;
+    let riskIpapiTxt = "—", apiSev = -1;
+    let riskCoffeeTxt = "—", coffeeSev = -1;
+
     try {
-      const apiRes = await ctx.http.get(`https://api.ipapi.is/?q=${nIp}`, { timeout: 8000 });
-      const j = JSON.parse(await apiRes.text());
-      if (j && j.company && j.company.abuser_score) {
-        const m = String(j.company.abuser_score).match(/([0-9.]+)\s*\(([^)]+)\)/);
-        if (m) {
-          const pct = Math.round(Number(m[1]) * 10000) / 100 + '%';
-          const lv = m[2].trim();
-          riskIpapiTxt = `${lv} (${pct}) Abuser`;
-          if (lv.includes('Very High')) apiSev = 4;
-          else if (lv.includes('High')) apiSev = 3;
-          else if (lv.includes('Elevated')) apiSev = 2;
-          else apiSev = 0;
+      const res = await withTimeout(ctx.http.get('https://my.ippure.com/v1/info', { timeout: 5000 }), 5200, null);
+      if (res) {
+        const d = JSON.parse(await res.text());
+        nIp = d.ip || "获取失败";
+        let code = d.countryCode || "";
+        if (code.toUpperCase() === 'TW') code = 'CN';
+        nLoc = `${fmtFlag(code)} ${d.country || ""} ${d.city || ""}`.trim() || "未知位置";
+        nativeText = d.isResidential === true ? "🏠 原生住宅" : (d.isResidential === false ? "🏢 商业机房" : "未知");
+        const risk = ti(d.fraudScore);
+        if (risk !== null) {
+          if (risk >= 80) { riskIPPureTxt = `极高 (${risk})`; ippSev = 4; }
+          else if (risk >= 70) { riskIPPureTxt = `高危 (${risk})`; ippSev = 3; }
+          else if (risk >= 40) { riskIPPureTxt = `中等 (${risk})`; ippSev = 1; }
+          else { riskIPPureTxt = `低危 (${risk})`; ippSev = 0; }
         }
       }
     } catch (e) {}
-  }
 
-  let riskCoffeeTxt = "—", coffeeSev = -1;
-  if (nIp !== "获取失败") {
-    try {
-      const coffeeRes = await ctx.http.get(`https://ip.net.coffee/api/ip/lookup/${encodeURIComponent(nIp)}`, { timeout: 8000 });
-      const cj = JSON.parse(await coffeeRes.text());
-      if (cj) {
-        const score = ti(cj.trust_score);
-        if (score !== null) {
-          if (score < 30) { riskCoffeeTxt = `极高 (${score})`; coffeeSev = 4; }
-          else if (score < 45) { riskCoffeeTxt = `高危 (${score})`; coffeeSev = 3; }
-          else if (score < 60) { riskCoffeeTxt = `中等 (${score})`; coffeeSev = 2; }
-          else if (score < 75) { riskCoffeeTxt = `中低 (${score})`; coffeeSev = 1; }
-          else { riskCoffeeTxt = `低危 (${score})`; coffeeSev = 0; }
-        } else {
-          const hits = ['is_proxy','is_vpn','is_tor','is_abuser','is_bogon','is_crawler'].filter(k => cj[k]).length;
-          riskCoffeeTxt = `${hits}`;
-          coffeeSev = hits >= 3 ? 4 : hits >= 2 ? 3 : hits >= 1 ? 2 : 0;
+    if (nIp === "获取失败") {
+      try {
+        const res2 = await withTimeout(ctx.http.get('https://api.ip.sb/geoip', { timeout: 4000 }), 4200, null);
+        if (res2) {
+          const d2 = JSON.parse(await res2.text());
+          if (d2 && d2.ip) {
+            nIp = d2.ip;
+            let code2 = d2.country_code || "";
+            if (code2.toUpperCase() === 'TW') code2 = 'CN';
+            nLoc = `${fmtFlag(code2)} ${d2.country || ""} ${d2.city || ""}`.trim();
+            nativeText = "未知";
+          }
         }
-      }
-    } catch (e) {}
+      } catch (e) {}
+    }
+
+    if (nIp !== "获取失败") {
+      await Promise.all([
+        (async () => {
+          try {
+            const apiRes = await withTimeout(ctx.http.get(`https://api.ipapi.is/?q=${nIp}`, { timeout: 4500 }), 4700, null);
+            if (!apiRes) return;
+            const j = JSON.parse(await apiRes.text());
+            if (j && j.company && j.company.abuser_score) {
+              const m = String(j.company.abuser_score).match(/([0-9.]+)\s*\(([^)]+)\)/);
+              if (m) {
+                const pct = Math.round(Number(m[1]) * 10000) / 100 + '%';
+                const lv = m[2].trim();
+                riskIpapiTxt = `${lv} (${pct}) Abuser`;
+                if (lv.includes('Very High')) apiSev = 4;
+                else if (lv.includes('High')) apiSev = 3;
+                else if (lv.includes('Elevated')) apiSev = 2;
+                else apiSev = 0;
+              }
+            }
+          } catch (e) {}
+        })(),
+        (async () => {
+          try {
+            const coffeeRes = await withTimeout(ctx.http.get(`https://ip.net.coffee/api/ip/lookup/${encodeURIComponent(nIp)}`, { timeout: 4500 }), 4700, null);
+            if (!coffeeRes) return;
+            const cj = JSON.parse(await coffeeRes.text());
+            if (cj) {
+              const score = ti(cj.trust_score);
+              if (score !== null) {
+                if (score < 30) { riskCoffeeTxt = `极高 (${score})`; coffeeSev = 4; }
+                else if (score < 45) { riskCoffeeTxt = `高危 (${score})`; coffeeSev = 3; }
+                else if (score < 60) { riskCoffeeTxt = `中等 (${score})`; coffeeSev = 2; }
+                else if (score < 75) { riskCoffeeTxt = `中低 (${score})`; coffeeSev = 1; }
+                else { riskCoffeeTxt = `低危 (${score})`; coffeeSev = 0; }
+              } else {
+                const hits = ['is_proxy','is_vpn','is_tor','is_abuser','is_bogon','is_crawler'].filter(k => cj[k]).length;
+                riskCoffeeTxt = `${hits}`;
+                coffeeSev = hits >= 3 ? 4 : hits >= 2 ? 3 : hits >= 1 ? 2 : 0;
+              }
+            }
+          } catch (e) {}
+        })()
+      ]);
+    }
+    return { nIp, nLoc, nativeText, riskIPPureTxt, ippSev, riskIpapiTxt, apiSev, riskCoffeeTxt, coffeeSev };
   }
 
-  const [gptStatus, geminiStatus, youtubeStatus, netflixStatus, tiktokStatus, claudeStatus] = await Promise.all([
-    checkChatGPT(),
-    checkGemini(),
-    checkYouTube(),
-    checkNetflix(),
-    checkTikTok(),
-    checkClaude()
+  const [localInfo, landingInfo, unlockStatuses] = await Promise.all([
+    getLocalInfo(),
+    getLandingInfo(),
+    unlockPromise
   ]);
+  const { lIp, lLoc, lIsp } = localInfo;
+  const { nIp, nLoc, nativeText, riskIPPureTxt, ippSev, riskIpapiTxt, apiSev, riskCoffeeTxt, coffeeSev } = landingInfo;
+  const [gptStatus, geminiStatus, youtubeStatus, netflixStatus, tiktokStatus, claudeStatus] = unlockStatuses;
 
   const proxySuccess = nIp !== "获取失败";
   const isDirectPolicy = !policy || policy.toUpperCase() === "DIRECT";
