@@ -38,6 +38,12 @@ rules:
       match: openai.com
       policy: "{{{POLICY}}}"
   - domain_suffix:
+      match: claude.ai
+      policy: "{{{POLICY}}}"
+  - domain_suffix:
+      match: anthropic.com
+      policy: "{{{POLICY}}}"
+  - domain_suffix:
       match: gemini.google.com
       policy: "{{{POLICY}}}"
   - domain_suffix:

@@ -131,6 +131,27 @@ export default async function(ctx) {
     } catch (e) { return "Cross"; }
   }
 
+  async function checkClaude() {
+    const restricted = { CN: true, HK: true, MO: true, RU: true, KP: true, IR: true, SY: true, CU: true, BY: true, VE: true };
+    try {
+      const traceTxt = await get("https://claude.ai/cdn-cgi/trace", { "User-Agent": BASE_UA }, 6000);
+      const ipMatch = traceTxt ? traceTxt.match(/(?:^|\n)ip=([^\n]+)/) : null;
+      const locMatch = traceTxt ? traceTxt.match(/(?:^|\n)loc=([A-Z]{2})/) : null;
+      const cIp = ipMatch && ipMatch[1] ? ipMatch[1].trim() : "";
+      const cc = locMatch && locMatch[1] ? locMatch[1].toUpperCase() : "";
+      if (cc && restricted[cc]) return "受限";
+      if (cIp) {
+        try {
+          const riskTxt = await get(`https://ip.net.coffee/api/iprisk/${encodeURIComponent(cIp)}`, null, 4000);
+          const r = JSON.parse(riskTxt);
+          const score = ti(r && r.trust_score);
+          if (score !== null && score < 50) return "风险";
+        } catch (e2) {}
+      }
+      return cc || "OK";
+    } catch (e) { return "Cross"; }
+  }
+
   const fmtISP = (isp) => {
     if (!isp) return "未知";
     const s = String(isp).toLowerCase();
@@ -165,6 +186,24 @@ export default async function(ctx) {
         lIp = body126.result.ip;
         lLoc = `🇨🇳 ${body126.result.province || ""} ${body126.result.city || ""}`.trim();
         lIsp = fmtISP(body126.result.operator || body126.result.company);
+      }
+    } catch (e) {}
+  }
+  if (lIp !== "获取失败") {
+    try {
+      const lcRes = await ctx.http.get(`https://ip.net.coffee/api/ip/lookup/${encodeURIComponent(lIp)}`, { timeout: 8000 });
+      const lc = JSON.parse(await lcRes.text());
+      if (lc) {
+        let lcCode = lc.countryCode || lc.country_code || "";
+        if (lcCode.toUpperCase() === 'TW') lcCode = 'CN';
+        const geoList = Array.isArray(lc.geo_sources) ? lc.geo_sources : [];
+        const fineGeo = geoList.find(g => g && g.city && /\(.+\)|区|县|County|District|Estate/i.test(String(g.city))) || geoList.find(g => g && (g.region || g.city));
+        const country = (fineGeo && fineGeo.country) || lc.country || "";
+        const region = (fineGeo && fineGeo.region) || lc.region || "";
+        const city = (fineGeo && fineGeo.city) || lc.city || "";
+        const detailLoc = `${fmtFlag(lcCode)} ${country} ${region} ${city}`.replace(/\s+/g, ' ').trim();
+        if (detailLoc && detailLoc !== "🌍") lLoc = detailLoc;
+        if (lc.isp || lc.asOrganization || lc.company_name) lIsp = fmtISP(lc.isp || lc.asOrganization || lc.company_name);
       }
     } catch (e) {}
   }
@@ -246,21 +285,23 @@ export default async function(ctx) {
     } catch (e) {}
   }
 
-  const [gptStatus, geminiStatus, youtubeStatus, netflixStatus, tiktokStatus] = await Promise.all([
+  const [gptStatus, geminiStatus, youtubeStatus, netflixStatus, tiktokStatus, claudeStatus] = await Promise.all([
     checkChatGPT(),
     checkGemini(),
     checkYouTube(),
     checkNetflix(),
-    checkTikTok()
+    checkTikTok(),
+    checkClaude()
   ]);
 
   const proxySuccess = nIp !== "获取失败";
   const isDirectPolicy = !policy || policy.toUpperCase() === "DIRECT";
   const policyOk = !isDirectPolicy && proxySuccess && nIp !== lIp;
   const policyWarn = !isDirectPolicy && (!proxySuccess || nIp === lIp);
-  const getUnlockColor = (status) => (status === "Cross" || status === "CN") ? C_RED : C_GREEN;
+  const getUnlockColor = (status) => (status === "Cross" || status === "CN" || status === "受限" || status === "风险") ? C_RED : C_GREEN;
   const getUnlockResult = (status) => {
     if (status === "Cross") return "不可用";
+    if (status === "Popcorn") return "仅自制";
     if (status === "CN") return "CN";
     return status;
   };
@@ -303,8 +344,8 @@ export default async function(ctx) {
   const summaryIcon = sevIcon(maxSev);
   const summaryTxt = sevText(maxSev);
   const summaryCol = sevColor(maxSev);
-  const SMALL_FONT = 10;
-  const SMALL_ICON = 12;
+  const SMALL_FONT = 9.5;
+  const SMALL_ICON = 11;
 
   function smallInfoRow(iconName, label, value, valueCol = C_MAIN) {
     return {
@@ -385,6 +426,7 @@ export default async function(ctx) {
     type: 'stack', direction: 'column', gap: BOTTOM_GAP_LEFT,
     children: [
       UnlockRow("GPT", gptStatus),
+      UnlockRow("Claude", claudeStatus),
       UnlockRow("Gemini", geminiStatus),
       UnlockRow("YouTube", youtubeStatus),
       UnlockRow("奈飞", netflixStatus),
