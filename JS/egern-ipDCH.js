@@ -85,7 +85,7 @@ export default async function(ctx) {
 
   async function checkYouTube() {
     try {
-      const body = await get('https://www.youtube.com/premium', { "User-Agent": BASE_UA, "Accept-Language": "en" }, 4000);
+      const body = await get('https://www.youtube.com/premium', { "User-Agent": BASE_UA, "Accept-Language": "en" }, 8000);
       if (!body) return "Cross";
       if (body.includes('www.google.cn')) return "CN";
       const isNotAvailable = body.includes('Premium is not available in your country') || body.includes('YouTube Premium is not available');
@@ -103,7 +103,7 @@ export default async function(ctx) {
   async function checkNetflix() {
     try {
       const titles = ["https://www.netflix.com/title/81280792", "https://www.netflix.com/title/70143836"];
-      const fetchTitle = async (url) => { try { return await get(url, { "User-Agent": BASE_UA }, 3500); } catch (e) { return ""; } };
+      const fetchTitle = async (url) => { try { return await get(url, { "User-Agent": BASE_UA }, 8000); } catch (e) { return ""; } };
       const bodies = await Promise.all([fetchTitle(titles[0]), fetchTitle(titles[1])]);
       const t1 = bodies[0], t2 = bodies[1];
       if (!t1 && !t2) return "Cross";
@@ -122,13 +122,13 @@ export default async function(ctx) {
 
   async function checkTikTok() {
     try {
-      let body1 = await get("https://www.tiktok.com/", { "User-Agent": BASE_UA }, 5000);
+      let body1 = await get("https://www.tiktok.com/", { "User-Agent": BASE_UA }, 8000);
       if (body1 && body1.includes("Please wait...")) {
-        try { body1 = await get("https://www.tiktok.com/explore", { "User-Agent": BASE_UA }, 4000); } catch (e2) {}
+        try { body1 = await get("https://www.tiktok.com/explore", { "User-Agent": BASE_UA }, 8000); } catch (e2) {}
       }
       let m1 = body1 ? body1.match(/"region"\s*:\s*"([A-Z]{2})"/) : null;
       if (m1 && m1[1]) return m1[1];
-      const body2 = await get("https://www.tiktok.com/", { "User-Agent": BASE_UA, "Accept-Language": "en" }, 4000);
+      const body2 = await get("https://www.tiktok.com/", { "User-Agent": BASE_UA, "Accept-Language": "en" }, 8000);
       const m2 = body2 ? body2.match(/"region"\s*:\s*"([A-Z]{2})"/) : null;
       if (m2 && m2[1]) return m2[1];
       if (body1 || body2) return "OK";
@@ -139,7 +139,7 @@ export default async function(ctx) {
   async function checkClaude() {
     const restricted = { CN: true, HK: true, MO: true, RU: true, KP: true, IR: true, SY: true, CU: true, BY: true, VE: true };
     try {
-      const traceTxt = await get("https://claude.ai/cdn-cgi/trace", { "User-Agent": BASE_UA }, 4500);
+      const traceTxt = await get("https://claude.ai/cdn-cgi/trace", { "User-Agent": BASE_UA }, 8000);
       const ipMatch = traceTxt ? traceTxt.match(/(?:^|\n)ip=([^\n]+)/) : null;
       const locMatch = traceTxt ? traceTxt.match(/(?:^|\n)loc=([A-Z]{2})/) : null;
       const cIp = ipMatch && ipMatch[1] ? ipMatch[1].trim() : "";
@@ -208,12 +208,12 @@ export default async function(ctx) {
   }
 
   const unlockPromise = Promise.all([
-    withTimeout(checkChatGPT(), 4500, "Cross"),
-    withTimeout(checkGemini(), 4500, "Cross"),
-    withTimeout(checkYouTube(), 4500, "Cross"),
-    withTimeout(checkNetflix(), 4500, "Cross"),
-    withTimeout(checkTikTok(), 4500, "Cross"),
-    withTimeout(checkClaude(), 4500, "Cross")
+    withTimeout(checkChatGPT(), 9000, "Cross"),
+    withTimeout(checkGemini(), 9000, "Cross"),
+    withTimeout(checkYouTube(), 9000, "Cross"),
+    withTimeout(checkNetflix(), 9000, "Cross"),
+    withTimeout(checkTikTok(), 9000, "Cross"),
+    withTimeout(checkClaude(), 9000, "Cross")
   ]);
 
   async function getLocalCnGeo() {
@@ -457,7 +457,6 @@ export default async function(ctx) {
   const summaryCol = sevColor(maxSev);
   const SMALL_FONT = isLarge ? 10 : 9.5;
   const SMALL_ICON = isLarge ? 12 : 11;
-  const BOTTOM_ROW_HEIGHT = isLarge ? 17 : 14;
 
   function smallInfoRow(iconName, label, value, valueCol = C_MAIN) {
     return {
@@ -476,12 +475,12 @@ export default async function(ctx) {
     const iconCol = getUnlockColor(status);
     const result = getUnlockResult(status);
     return {
-      type: 'stack', direction: 'row', alignItems: 'center', gap: 4, height: BOTTOM_ROW_HEIGHT,
+      type: 'stack', direction: 'row', alignItems: 'center', gap: 4,
       children: [
         { type: 'image', src: `sf-symbol:${iconName}`, color: iconCol, width: SMALL_ICON, height: SMALL_ICON },
         { type: 'text', text: name, font: { size: SMALL_FONT, weight: 'medium' }, textColor: C_MAIN, flex: 1, maxLines: 1 },
         { type: 'spacer' },
-        { type: 'text', text: result, font: { size: SMALL_FONT, weight: 'bold', family: 'Menlo' }, textColor: iconCol, width: isLarge ? 34 : 28, textAlign: 'right', maxLines: 1, minScale: 0.6 }
+        { type: 'text', text: result, font: { size: SMALL_FONT, weight: 'bold', family: 'Menlo' }, textColor: iconCol, maxLines: 1, minScale: 0.6 }
       ]
     };
   }
@@ -492,12 +491,12 @@ export default async function(ctx) {
     const src = parts[0] || grade.t;
     const val = parts[1] || '';
     return {
-      type: 'stack', direction: 'row', alignItems: 'center', gap: 4, height: BOTTOM_ROW_HEIGHT,
+      type: 'stack', direction: 'row', alignItems: 'center', gap: 4,
       children: [
         { type: 'image', src: `sf-symbol:${sevIcon(grade.sev)}`, color: col, width: SMALL_ICON, height: SMALL_ICON },
-        { type: 'text', text: src, font: { size: SMALL_FONT, weight: 'medium' }, textColor: C_SUB, width: isLarge ? 62 : 54, maxLines: 1, minScale: 0.7 },
+        { type: 'text', text: src, font: { size: SMALL_FONT, weight: 'medium' }, textColor: C_SUB, maxLines: 1, minScale: 0.7 },
         { type: 'spacer' },
-        { type: 'text', text: val, font: { size: SMALL_FONT, weight: 'bold', family: 'Menlo' }, textColor: col, flex: 1, textAlign: 'right', maxLines: 1, minScale: 0.45, lineBreakMode: 'tail' }
+        { type: 'text', text: val, font: { size: SMALL_FONT, weight: 'bold', family: 'Menlo' }, textColor: col, maxLines: 1, minScale: 0.5, lineBreakMode: 'tail' }
       ]
     };
   }
@@ -550,7 +549,7 @@ export default async function(ctx) {
   };
 
   const unlockSection = {
-    type: 'stack', direction: 'row', alignItems: 'flex-start', gap: COL_GAP,
+    type: 'stack', direction: 'row', gap: COL_GAP,
     children: [unlockLeft, unlockRight]
   };
 
