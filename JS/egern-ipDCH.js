@@ -192,6 +192,12 @@ export default async function(ctx) {
     return `${fmtFlag(code)} ${parts.join(' ')}`.replace(/\s+/g, ' ').trim();
   }
 
+  function stripIspFromGeo(geo) {
+    return String(geo || '')
+      .replace(/\s*(电信|联通|移动|广电|铁通|教育网|长城宽带|鹏博士|China\s*Telecom|China\s*Unicom|China\s*Mobile|Chinanet)\s*$/i, '')
+      .trim();
+  }
+
   let lIp = "获取失败", lLoc = "未知位置", lIsp = "未知运营商";
   try {
     const lRes = await ctx.http.get('https://myip.ipip.net/json', { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 8000 });
@@ -239,7 +245,7 @@ export default async function(ctx) {
     const sameIp = valid.find(r => r.ip === lIp) || valid[0];
     const candidates = valid.filter(r => r.ip === sameIp.ip && r.geo);
     const picked = candidates.reduce((a, b) => (a.geo.length >= b.geo.length ? a : b), { geo: '' });
-    return { ip: sameIp.ip, geo: picked.geo || sameIp.geo || '' };
+    return { ip: sameIp.ip, geo: stripIspFromGeo(picked.geo || sameIp.geo || '') };
   }
 
   if (lIp !== "获取失败") {
