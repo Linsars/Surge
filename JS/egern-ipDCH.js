@@ -407,11 +407,13 @@ export default async function(ctx) {
     return C_GREEN;
   }
 
+  const isLarge = widgetFamily === 'systemLarge';
   const summaryIcon = sevIcon(maxSev);
   const summaryTxt = sevText(maxSev);
   const summaryCol = sevColor(maxSev);
-  const SMALL_FONT = 9.5;
-  const SMALL_ICON = 11;
+  const SMALL_FONT = isLarge ? 10 : 9.5;
+  const SMALL_ICON = isLarge ? 12 : 11;
+  const BOTTOM_ROW_HEIGHT = isLarge ? 17 : 14;
 
   function smallInfoRow(iconName, label, value, valueCol = C_MAIN) {
     return {
@@ -430,12 +432,12 @@ export default async function(ctx) {
     const iconCol = getUnlockColor(status);
     const result = getUnlockResult(status);
     return {
-      type: 'stack', direction: 'row', alignItems: 'center', gap: 4,
+      type: 'stack', direction: 'row', alignItems: 'center', gap: 4, height: BOTTOM_ROW_HEIGHT,
       children: [
         { type: 'image', src: `sf-symbol:${iconName}`, color: iconCol, width: SMALL_ICON, height: SMALL_ICON },
-        { type: 'text', text: name, font: { size: SMALL_FONT, weight: 'medium' }, textColor: C_MAIN, flex: 1 },
+        { type: 'text', text: name, font: { size: SMALL_FONT, weight: 'medium' }, textColor: C_MAIN, flex: 1, maxLines: 1 },
         { type: 'spacer' },
-        { type: 'text', text: result, font: { size: SMALL_FONT, weight: 'bold' }, textColor: iconCol, maxLines: 1 }
+        { type: 'text', text: result, font: { size: SMALL_FONT, weight: 'bold', family: 'Menlo' }, textColor: iconCol, width: isLarge ? 34 : 28, textAlign: 'right', maxLines: 1, minScale: 0.6 }
       ]
     };
   }
@@ -446,19 +448,18 @@ export default async function(ctx) {
     const src = parts[0] || grade.t;
     const val = parts[1] || '';
     return {
-      type: 'stack', direction: 'row', alignItems: 'center', gap: 4,
+      type: 'stack', direction: 'row', alignItems: 'center', gap: 4, height: BOTTOM_ROW_HEIGHT,
       children: [
         { type: 'image', src: `sf-symbol:${sevIcon(grade.sev)}`, color: col, width: SMALL_ICON, height: SMALL_ICON },
-        { type: 'text', text: src, font: { size: SMALL_FONT }, textColor: C_SUB },
+        { type: 'text', text: src, font: { size: SMALL_FONT, weight: 'medium' }, textColor: C_SUB, width: isLarge ? 62 : 54, maxLines: 1, minScale: 0.7 },
         { type: 'spacer' },
-        { type: 'text', text: val, font: { size: SMALL_FONT, weight: 'bold', family: 'Menlo' }, textColor: col, maxLines: 1, minScale: 0.5, lineBreakMode: 'tail' }
+        { type: 'text', text: val, font: { size: SMALL_FONT, weight: 'bold', family: 'Menlo' }, textColor: col, flex: 1, textAlign: 'right', maxLines: 1, minScale: 0.45, lineBreakMode: 'tail' }
       ]
     };
   }
 
   const now = new Date();
   const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-  const isLarge = widgetFamily === 'systemLarge';
   const WIDGET_PADDING = isLarge ? [10, 12] : [8, 10];
   const HEADER_FONT = 13;
   const HEADER_ICON = 11;
@@ -466,8 +467,7 @@ export default async function(ctx) {
   const HEADER_GAP = 4;
   const TOP_GAP = 3;
   const INFO_GAP = 2.5;
-  const BOTTOM_GAP_LEFT = 3;
-  const BOTTOM_GAP_RIGHT = 2;
+  const BOTTOM_GAP = isLarge ? 3 : 2.5;
   const COL_GAP = 12;
 
   const leftColumn = {
@@ -489,7 +489,7 @@ export default async function(ctx) {
   };
 
   const unlockLeft = {
-    type: 'stack', direction: 'column', gap: BOTTOM_GAP_LEFT,
+    type: 'stack', direction: 'column', gap: BOTTOM_GAP, flex: 1,
     children: [
       UnlockRow("GPT", gptStatus),
       UnlockRow("Claude", claudeStatus),
@@ -501,12 +501,12 @@ export default async function(ctx) {
   };
 
   const unlockRight = {
-    type: 'stack', direction: 'column', gap: BOTTOM_GAP_RIGHT,
+    type: 'stack', direction: 'column', gap: BOTTOM_GAP, flex: 1,
     children: riskGrades.map(g => ScoreRow(g))
   };
 
   const unlockSection = {
-    type: 'stack', direction: 'row', gap: COL_GAP,
+    type: 'stack', direction: 'row', alignItems: 'flex-start', gap: COL_GAP,
     children: [unlockLeft, unlockRight]
   };
 
