@@ -379,7 +379,7 @@ export default async function(ctx) {
                 else if (score < 60) coffeeSev = 2;
                 else if (score < 75) coffeeSev = 1;
                 else coffeeSev = 0;
-                riskCoffeeTxt = riskText(coffeeSev, `信任${score}`);
+                riskCoffeeTxt = `信任${score}`;
               }
             }
           } catch (e) {}
@@ -398,7 +398,7 @@ export default async function(ctx) {
                 else if (lv.includes('High')) apiSev = 3;
                 else if (lv.includes('Elevated')) apiSev = 2;
                 else apiSev = 0;
-                riskIpapiTxt = riskText(apiSev, pct);
+                riskIpapiTxt = pct;
               }
             }
           } catch (e) {}
@@ -415,7 +415,7 @@ export default async function(ctx) {
               else if (risk >= 40) ippSev = 2;
               else if (risk > 0) ippSev = 1;
               else ippSev = 0;
-              riskIPPureTxt = riskText(ippSev, `风险${risk}`);
+              riskIPPureTxt = `风险${risk}`;
             }
           } catch (e) {}
         })(),
@@ -435,7 +435,7 @@ export default async function(ctx) {
                 else if (risk >= 30) proxySev = 2;
                 else if (risk > 0) proxySev = 1;
                 else proxySev = 0;
-                riskProxyTxt = riskText(proxySev, `${typ || (isProxy ? 'Proxy' : 'Clean')}/${risk}`);
+                riskProxyTxt = `${typ || (isProxy ? 'Proxy' : 'Clean')}/${risk}`;
               }
             }
           } catch (e) {}
@@ -445,8 +445,8 @@ export default async function(ctx) {
             const bbRes = await withTimeout(ctx.http.get(`https://blackbox.ipinfo.app/lookup/${encodeURIComponent(nIp)}`, { timeout: 3500 }), 3700, null);
             if (!bbRes) return;
             const txt = String(await bbRes.text()).trim().toUpperCase();
-            if (txt === 'Y') { blackSev = 3; riskBlackTxt = riskText(blackSev, '疑似代理'); }
-            else if (txt === 'N') { blackSev = 0; riskBlackTxt = riskText(blackSev, '正常'); }
+            if (txt === 'Y') { blackSev = 3; riskBlackTxt = '疑似代理'; }
+            else if (txt === 'N') { blackSev = 0; riskBlackTxt = '正常'; }
           } catch (e) {}
         })()
       ]);
@@ -535,17 +535,7 @@ export default async function(ctx) {
     if (sev >= 1) return C_YELLOW;
     return C_GREEN;
   }
-  function sevLabel(sev) {
-    if (sev < 0) return '—';
-    if (sev >= 4) return '极高';
-    if (sev >= 3) return '高危';
-    if (sev >= 2) return '中等';
-    if (sev >= 1) return '中低';
-    return '低危';
-  }
-  function riskText(sev, raw) {
-    return `${sevLabel(sev)}${raw ? ` (${raw})` : ''}`;
-  }
+  // Risk source rows show raw signals; sev remains internal for color and TG prediction.
 
   const summaryIcon = sevIcon(maxSev);
   const summaryTxt = sevText(maxSev);
@@ -591,7 +581,7 @@ export default async function(ctx) {
       type: 'stack', direction: 'row', alignItems: 'center', gap: 4,
       children: [
         { type: 'image', src: `sf-symbol:${sevIcon(grade.sev)}`, color: col, width: SMALL_ICON, height: SMALL_ICON },
-        { type: 'text', text: src, font: { size: SMALL_FONT, weight: 'medium' }, textColor: C_SUB, flex: 1, maxLines: 1 },
+        { type: 'text', text: src, font: { size: SMALL_FONT, weight: 'medium' }, textColor: C_SUB, maxLines: 1 },
         { type: 'spacer' },
         { type: 'text', text: val, font: { size: SMALL_FONT, weight: 'bold' }, textColor: col, maxLines: 1 }
       ]
