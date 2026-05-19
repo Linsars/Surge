@@ -595,7 +595,9 @@ export default async function(ctx) {
   const HEADER_ICON = 11;
   const HEADER_TIME_FONT = 10;
   const HEADER_GAP = 4;
-  const TOP_GAP = 3;
+  const TOP_GAP = 0;
+  const HEADER_INFO_GAP = isLarge ? 2 : 1;
+  const INFO_BOTTOM_GAP = isLarge ? 7 : 8;
   const INFO_GAP = isLarge ? 4 : 2.5;
   const BOTTOM_GAP = isLarge ? 3 : 2.5;
   const COL_GAP = 12;
@@ -666,10 +668,12 @@ export default async function(ctx) {
           }
         ]
       },
+      { type: 'stack', height: HEADER_INFO_GAP },
       {
         type: 'stack', direction: 'row', gap: COL_GAP,
         children: [leftColumn, rightColumn]
       },
+      { type: 'stack', height: INFO_BOTTOM_GAP },
       { type: 'stack', height: 0.5, backgroundColor: { light: 'rgba(0,0,0,0.08)', dark: 'rgba(255,255,255,0.12)' } },
       unlockSection
     ]
