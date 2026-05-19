@@ -480,7 +480,7 @@ export default async function(ctx) {
         { type: 'image', src: `sf-symbol:${iconName}`, color: iconCol, width: SMALL_ICON, height: SMALL_ICON },
         { type: 'text', text: name, font: { size: SMALL_FONT, weight: 'medium' }, textColor: C_MAIN, flex: 1, maxLines: 1 },
         { type: 'spacer' },
-        { type: 'text', text: result, font: { size: SMALL_FONT, weight: 'bold', family: 'Menlo' }, textColor: iconCol, maxLines: 1, minScale: 0.6 }
+        { type: 'text', text: result, font: { size: SMALL_FONT, weight: 'bold' }, textColor: iconCol, maxLines: 1 }
       ]
     };
   }
@@ -494,7 +494,7 @@ export default async function(ctx) {
       type: 'stack', direction: 'row', alignItems: 'center', gap: 4,
       children: [
         { type: 'image', src: `sf-symbol:${sevIcon(grade.sev)}`, color: col, width: SMALL_ICON, height: SMALL_ICON },
-        { type: 'text', text: src, font: { size: SMALL_FONT, weight: 'medium' }, textColor: C_SUB, maxLines: 1, minScale: 0.7 },
+        { type: 'text', text: src, font: { size: SMALL_FONT, weight: 'medium' }, textColor: C_SUB, maxLines: 1 },
         { type: 'spacer' },
         { type: 'text', text: val, font: { size: SMALL_FONT, weight: 'bold', family: 'Menlo' }, textColor: col, maxLines: 1, minScale: 0.5, lineBreakMode: 'tail' }
       ]
