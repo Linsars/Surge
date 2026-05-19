@@ -595,7 +595,7 @@ export default async function(ctx) {
   const HEADER_ICON = 11;
   const HEADER_TIME_FONT = 10;
   const HEADER_GAP = 4;
-  const TOP_GAP = isLarge ? 3.5 : 4;
+  const TOP_GAP = isLarge ? 4.5 : 5;
   const HEADER_INFO_GAP = isLarge ? 1.5 : 0;
   const INFO_GAP = isLarge ? 4 : 2.5;
   const BOTTOM_GAP = isLarge ? 3 : 2.5;
