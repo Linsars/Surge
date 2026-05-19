@@ -490,13 +490,13 @@ export default async function(ctx) {
     sourceGrades.forEach(g => { if (g.sev > maxSev) maxSev = g.sev; });
     tgLoginPrediction = tgLoginRiskText(maxSev);
     riskGrades = [
-      { sev: maxSev, t: `TG登陆预测: ${tgLoginPrediction}` },
+      { sev: maxSev, t: `TG预测: ${tgLoginPrediction}` },
       ...sourceGrades
     ];
   } else {
     maxSev = 4;
     riskGrades = [
-      { sev: 4, t: 'TG登陆预测: 无法判断' },
+      { sev: 4, t: 'TG预测: 无法判断' },
       { sev: -1, t: 'IPPure: —' },
       { sev: -1, t: 'ipapi: —' },
       { sev: -1, t: 'NetCoffee: —' },
@@ -521,9 +521,9 @@ export default async function(ctx) {
     return '纯净低危';
   }
   function tgLoginRiskText(sev) {
-    if (sev < 0) return '无法判断';
-    if (sev >= 4) return '易邮箱/收费';
-    if (sev >= 3) return '易要邮箱';
+    if (sev < 0) return '未知';
+    if (sev >= 4) return '邮箱/收费';
+    if (sev >= 3) return '易邮箱';
     if (sev >= 2) return '可能风控';
     if (sev >= 1) return '稍有风险';
     return '大概率正常';
@@ -591,7 +591,7 @@ export default async function(ctx) {
       type: 'stack', direction: 'row', alignItems: 'center', gap: 4,
       children: [
         { type: 'image', src: `sf-symbol:${sevIcon(grade.sev)}`, color: col, width: SMALL_ICON, height: SMALL_ICON },
-        { type: 'text', text: src, font: { size: SMALL_FONT, weight: 'medium' }, textColor: C_SUB, flex: 1, maxLines: 1, minScale: 0.7, lineBreakMode: 'tail' },
+        { type: 'text', text: src, font: { size: SMALL_FONT, weight: 'medium' }, textColor: C_SUB, maxLines: 1 },
         { type: 'spacer' },
         { type: 'text', text: val, font: { size: SMALL_FONT, weight: 'bold', family: 'Menlo' }, textColor: col, maxLines: 1, minScale: 0.5, lineBreakMode: 'tail' }
       ]
@@ -646,7 +646,7 @@ export default async function(ctx) {
   };
 
   const unlockSection = {
-    type: 'stack', direction: 'row', alignItems: 'flex-start', gap: COL_GAP,
+    type: 'stack', direction: 'row', gap: COL_GAP,
     children: [unlockLeft, unlockRight]
   };
 
