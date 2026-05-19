@@ -593,7 +593,7 @@ export default async function(ctx) {
   const WIDGET_PADDING = isLarge ? [10, 12] : [8, 10];
   const HEADER_FONT = 14;
   const HEADER_ICON = 11;
-  const HEADER_TIME_FONT = 10;
+  // Header text uses HEADER_FONT consistently.
   const HEADER_GAP = 4;
   const TOP_GAP = isLarge ? 4.5 : 5;
   const HEADER_INFO_GAP = isLarge ? 1.5 : 0;
@@ -658,7 +658,7 @@ export default async function(ctx) {
                 children: [
                   { type: 'text', text: '数据中心(DCH)', font: { size: HEADER_FONT, weight: 'heavy' }, textColor: C_TITLE, flex: 1, maxLines: 1, minScale: 0.65 },
                   { type: 'image', src: `sf-symbol:${summaryIcon}`, color: summaryCol, width: 12, height: 12 },
-                  { type: 'text', text: summaryTxt, font: { size: 10, weight: 'bold' }, textColor: summaryCol, maxLines: 1 }
+                  { type: 'text', text: summaryTxt, font: { size: HEADER_FONT, weight: 'bold' }, textColor: summaryCol, maxLines: 1 }
                 ]
               },
               {
@@ -666,14 +666,14 @@ export default async function(ctx) {
                 children: [
                   ...(!isDirectPolicy ? [
                     { type: 'image', src: `sf-symbol:${policyOk ? 'checkmark.circle.fill' : (policyWarn ? 'exclamationmark.circle.fill' : 'questionmark.circle.fill')}`, color: policyOk ? C_GREEN : (policyWarn ? C_ORANGE : C_SUB), width: 10, height: 10 },
-                    { type: 'text', text: policy, font: { size: 10, weight: 'bold' }, textColor: policyOk ? C_GREEN : (policyWarn ? C_ORANGE : C_SUB), flex: 1, maxLines: 1, minScale: 0.7 },
+                    { type: 'text', text: policy, font: { size: HEADER_FONT, weight: 'bold' }, textColor: policyOk ? C_GREEN : (policyWarn ? C_ORANGE : C_SUB), flex: 1, maxLines: 1, minScale: 0.7 },
                   ] : [{ type: 'spacer' }]),
                   { type: 'spacer' },
                   {
                     type: 'stack', direction: 'row', alignItems: 'center', gap: 3,
                     children: [
                       { type: 'image', src: 'sf-symbol:arrow.clockwise', color: C_SUB, width: HEADER_ICON, height: HEADER_ICON },
-                      { type: 'text', text: timeStr, font: { size: HEADER_TIME_FONT }, textColor: C_SUB }
+                      { type: 'text', text: timeStr, font: { size: HEADER_FONT }, textColor: C_SUB }
                     ]
                   }
                 ]
