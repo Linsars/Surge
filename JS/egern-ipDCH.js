@@ -167,37 +167,29 @@ export default async function(ctx) {
     return String.fromCodePoint(...code.toUpperCase().split('').map(c => 127397 + c.charCodeAt(0)));
   };
 
-  function zhGeoName(s) {
-    if (!s) return "";
-    const raw = String(s).trim();
-    const key = raw.toLowerCase();
-    const map = {
-      "china": "中国", "hong kong": "香港", "macao": "澳门", "macau": "澳门", "taiwan": "中国台湾",
-      "guangdong": "广东", "guangzhou": "广州", "shenzhen": "深圳", "foshan": "佛山", "dongguan": "东莞",
-      "beijing": "北京", "shanghai": "上海", "tianjin": "天津", "chongqing": "重庆",
-      "jiangsu": "江苏", "zhejiang": "浙江", "fujian": "福建", "sichuan": "四川", "hubei": "湖北", "hunan": "湖南",
-      "henan": "河南", "hebei": "河北", "shandong": "山东", "shanxi": "山西", "shaanxi": "陕西", "liaoning": "辽宁",
-      "jilin": "吉林", "heilongjiang": "黑龙江", "anhui": "安徽", "jiangxi": "江西", "guangxi": "广西", "yunnan": "云南",
-      "guizhou": "贵州", "hainan": "海南", "gansu": "甘肃", "qinghai": "青海", "ningxia": "宁夏", "xinjiang": "新疆",
-      "tibet": "西藏", "inner mongolia": "内蒙古"
-    };
-    return map[key] || raw;
+  function hasCjk(s) { return /[\u4e00-\u9fff]/.test(String(s || "")); }
+  function cnGeoScore(g) {
+    if (!g) return -1;
+    const text = [g.country, g.region, g.city].filter(Boolean).join(' ');
+    if (!hasCjk(text)) return -1;
+    let score = text.length;
+    if (/区|县|旗|镇|街道|乡/.test(text)) score += 100;
+    return score;
   }
-
-  function normalizeCnDetail(city) {
-    if (!city) return "";
-    const s = String(city).trim();
-    const m = s.match(/\(([^)]+)\)/);
-    const v = m ? m[1].trim() : s;
-    const map = { "panyu": "番禺", "panyu district": "番禺", "tianhe": "天河", "yuexiu": "越秀", "haizhu": "海珠", "baiyun": "白云", "huangpu": "黄埔", "nansha": "南沙", "liwan": "荔湾", "conghua": "从化", "zengcheng": "增城", "huadu": "花都" };
-    return map[v.toLowerCase()] || zhGeoName(v);
+  function pickBestCnGeo(list) {
+    let best = null, bestScore = -1;
+    (list || []).forEach(g => {
+      const score = cnGeoScore(g);
+      if (score > bestScore) { best = g; bestScore = score; }
+    });
+    return bestScore >= 0 ? best : null;
   }
-
-  function splitGeoCity(city) {
-    const s = String(city || "").trim();
-    const m = s.match(/^([^()]+)\s*\(([^)]+)\)$/);
-    if (!m) return { city: zhGeoName(s), detail: "" };
-    return { city: zhGeoName(m[1].trim()), detail: normalizeCnDetail(m[2].trim()) };
+  function buildGeoLoc(g, fallbackCode) {
+    if (!g) return "";
+    const code = g.country_code || g.countryCode || fallbackCode || "";
+    const parts = [g.country, g.region, g.city].filter(Boolean);
+    if (!parts.length) return "";
+    return `${fmtFlag(code)} ${parts.join(' ')}`.replace(/\s+/g, ' ').trim();
   }
 
   let lIp = "获取失败", lLoc = "未知位置", lIsp = "未知运营商";
@@ -230,15 +222,9 @@ export default async function(ctx) {
         let lcCode = lc.countryCode || lc.country_code || "";
         if (lcCode.toUpperCase() === 'TW') lcCode = 'CN';
         const geoList = Array.isArray(lc.geo_sources) ? lc.geo_sources : [];
-        const hasCnFine = (g) => g && g.city && /区|县|旗|镇|街道|乡/.test(String(g.city));
-        const hasFine = (g) => g && g.city && /\(.+\)|County|District|Estate|Ward|Borough/i.test(String(g.city));
-        const fineGeo = geoList.find(hasCnFine) || geoList.find(hasFine) || geoList.find(g => g && (g.region || g.city)) || null;
-        const country = zhGeoName((fineGeo && fineGeo.country) || lc.country || "");
-        const region = zhGeoName((fineGeo && fineGeo.region) || lc.region || "");
-        const citySplit = splitGeoCity((fineGeo && fineGeo.city) || lc.city || "");
-        const parts = [];
-        [country, region, citySplit.city, citySplit.detail].filter(Boolean).forEach(v => { if (!parts.includes(v)) parts.push(v); });
-        const detailLoc = `${fmtFlag(lcCode)} ${parts.join(' ')}`.replace(/\s+/g, ' ').trim();
+        const mainGeo = { country: lc.country, region: lc.region, city: lc.city, country_code: lcCode };
+        const cnGeo = pickBestCnGeo([mainGeo].concat(geoList));
+        const detailLoc = cnGeo ? buildGeoLoc(cnGeo, lcCode) : "";
         if (detailLoc && detailLoc !== "🌍") lLoc = detailLoc;
         if (lc.isp || lc.asOrganization || lc.company_name) lIsp = fmtISP(lc.isp || lc.asOrganization || lc.company_name);
       }
