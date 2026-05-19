@@ -591,7 +591,7 @@ export default async function(ctx) {
   const now = new Date();
   const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
   const WIDGET_PADDING = isLarge ? [10, 12] : [8, 10];
-  const HEADER_FONT = 13;
+  const HEADER_FONT = 14;
   const HEADER_ICON = 11;
   const HEADER_TIME_FONT = 10;
   const HEADER_GAP = 4;
@@ -651,21 +651,31 @@ export default async function(ctx) {
         type: 'stack', direction: 'column', gap: HEADER_INFO_GAP,
         children: [
           {
-            type: 'stack', direction: 'row', alignItems: 'center', gap: HEADER_GAP,
+            type: 'stack', direction: 'row', gap: COL_GAP,
             children: [
-              { type: 'text', text: '数据中心(DCH)', font: { size: HEADER_FONT, weight: 'heavy' }, textColor: C_TITLE, flex: 1, maxLines: 1, minScale: 0.7 },
-              { type: 'image', src: `sf-symbol:${summaryIcon}`, color: summaryCol, width: 12, height: 12 },
-              { type: 'text', text: summaryTxt, font: { size: 10, weight: 'bold' }, textColor: summaryCol },
-              { type: 'spacer' },
-              ...(!isDirectPolicy ? [
-                { type: 'image', src: `sf-symbol:${policyOk ? 'checkmark.circle.fill' : (policyWarn ? 'exclamationmark.circle.fill' : 'questionmark.circle.fill')}`, color: policyOk ? C_GREEN : (policyWarn ? C_ORANGE : C_SUB), width: 10, height: 10 },
-                { type: 'text', text: policy, font: { size: 10, weight: 'bold' }, textColor: policyOk ? C_GREEN : (policyWarn ? C_ORANGE : C_SUB) },
-              ] : []),
               {
-                type: 'stack', direction: 'row', alignItems: 'center', gap: 3,
+                type: 'stack', direction: 'row', alignItems: 'center', gap: HEADER_GAP, flex: 1,
                 children: [
-                  { type: 'image', src: 'sf-symbol:arrow.clockwise', color: C_SUB, width: HEADER_ICON, height: HEADER_ICON },
-                  { type: 'text', text: timeStr, font: { size: HEADER_TIME_FONT }, textColor: C_SUB }
+                  { type: 'text', text: '数据中心(DCH)', font: { size: HEADER_FONT, weight: 'heavy' }, textColor: C_TITLE, flex: 1, maxLines: 1, minScale: 0.65 },
+                  { type: 'image', src: `sf-symbol:${summaryIcon}`, color: summaryCol, width: 12, height: 12 },
+                  { type: 'text', text: summaryTxt, font: { size: 10, weight: 'bold' }, textColor: summaryCol, maxLines: 1 }
+                ]
+              },
+              {
+                type: 'stack', direction: 'row', alignItems: 'center', gap: HEADER_GAP, flex: 1,
+                children: [
+                  { type: 'spacer' },
+                  ...(!isDirectPolicy ? [
+                    { type: 'image', src: `sf-symbol:${policyOk ? 'checkmark.circle.fill' : (policyWarn ? 'exclamationmark.circle.fill' : 'questionmark.circle.fill')}`, color: policyOk ? C_GREEN : (policyWarn ? C_ORANGE : C_SUB), width: 10, height: 10 },
+                    { type: 'text', text: policy, font: { size: 10, weight: 'bold' }, textColor: policyOk ? C_GREEN : (policyWarn ? C_ORANGE : C_SUB), maxLines: 1 },
+                  ] : []),
+                  {
+                    type: 'stack', direction: 'row', alignItems: 'center', gap: 3,
+                    children: [
+                      { type: 'image', src: 'sf-symbol:arrow.clockwise', color: C_SUB, width: HEADER_ICON, height: HEADER_ICON },
+                      { type: 'text', text: timeStr, font: { size: HEADER_TIME_FONT }, textColor: C_SUB }
+                    ]
+                  }
                 ]
               }
             ]
