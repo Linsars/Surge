@@ -476,18 +476,31 @@ export default async function(ctx) {
   };
 
   let riskGrades = [];
-  if (proxySuccess) {
-    riskGrades.push({ sev: ippSev, t: `IPPure: ${riskIPPureTxt}` });
-    riskGrades.push({ sev: apiSev, t: `ipapi: ${riskIpapiTxt}` });
-    riskGrades.push({ sev: coffeeSev, t: `NetCoffee: ${riskCoffeeTxt}` });
-    riskGrades.push({ sev: proxySev, t: `ProxyCheck: ${riskProxyTxt}` });
-    riskGrades.push({ sev: blackSev, t: `Blackbox: ${riskBlackTxt}` });
-  } else {
-    riskGrades.push({ sev: 4, t: '获取失败' });
-  }
-
   let maxSev = -1;
-  riskGrades.forEach(g => { if (g.sev > maxSev) maxSev = g.sev; });
+  if (proxySuccess) {
+    const sourceGrades = [
+      { sev: ippSev, t: `IPPure: ${riskIPPureTxt}` },
+      { sev: apiSev, t: `ipapi: ${riskIpapiTxt}` },
+      { sev: coffeeSev, t: `NetCoffee: ${riskCoffeeTxt}` },
+      { sev: proxySev, t: `ProxyCheck: ${riskProxyTxt}` },
+      { sev: blackSev, t: `Blackbox: ${riskBlackTxt}` }
+    ];
+    sourceGrades.forEach(g => { if (g.sev > maxSev) maxSev = g.sev; });
+    riskGrades = [
+      { sev: maxSev, t: `TG登陆预测: ${tgLoginRiskText(maxSev)}` },
+      ...sourceGrades
+    ];
+  } else {
+    maxSev = 4;
+    riskGrades = [
+      { sev: 4, t: 'TG登陆预测: 无法判断' },
+      { sev: -1, t: 'IPPure: —' },
+      { sev: -1, t: 'ipapi: —' },
+      { sev: -1, t: 'NetCoffee: —' },
+      { sev: -1, t: 'ProxyCheck: —' },
+      { sev: -1, t: 'Blackbox: —' }
+    ];
+  }
 
   function sevIcon(sev) {
     if (sev < 0) return 'questionmark.shield.fill';
@@ -503,6 +516,14 @@ export default async function(ctx) {
     if (sev >= 2) return '中等风险';
     if (sev >= 1) return '中低风险';
     return '纯净低危';
+  }
+  function tgLoginRiskText(sev) {
+    if (sev < 0) return '无法判断';
+    if (sev >= 4) return '易邮箱/收费';
+    if (sev >= 3) return '易要邮箱';
+    if (sev >= 2) return '可能风控';
+    if (sev >= 1) return '稍有风险';
+    return '大概率正常';
   }
   function sevColor(sev) {
     if (sev < 0) return C_SUB;
