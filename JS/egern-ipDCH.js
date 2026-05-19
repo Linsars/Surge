@@ -464,6 +464,7 @@ export default async function(ctx) {
   const [gptStatus, geminiStatus, youtubeStatus, netflixStatus, tiktokStatus, claudeStatus] = unlockStatuses;
 
   const proxySuccess = nIp !== "获取失败";
+  const isLarge = widgetFamily === 'systemLarge';
   const isDirectPolicy = !policy || policy.toUpperCase() === "DIRECT";
   const policyOk = !isDirectPolicy && proxySuccess && nIp !== lIp;
   const policyWarn = !isDirectPolicy && (!proxySuccess || nIp === lIp);
@@ -477,6 +478,7 @@ export default async function(ctx) {
 
   let riskGrades = [];
   let maxSev = -1;
+  let tgLoginPrediction = '无法判断';
   if (proxySuccess) {
     const sourceGrades = [
       { sev: ippSev, t: `IPPure: ${riskIPPureTxt}` },
@@ -486,8 +488,9 @@ export default async function(ctx) {
       { sev: blackSev, t: `Blackbox: ${riskBlackTxt}` }
     ];
     sourceGrades.forEach(g => { if (g.sev > maxSev) maxSev = g.sev; });
+    tgLoginPrediction = tgLoginRiskText(maxSev);
     riskGrades = [
-      { sev: maxSev, t: `TG登陆预测: ${tgLoginRiskText(maxSev)}` },
+      { sev: maxSev, t: `TG登陆预测: ${tgLoginPrediction}` },
       ...sourceGrades
     ];
   } else {
@@ -544,7 +547,6 @@ export default async function(ctx) {
     return `${sevLabel(sev)}${raw ? ` (${raw})` : ''}`;
   }
 
-  const isLarge = widgetFamily === 'systemLarge';
   const summaryIcon = sevIcon(maxSev);
   const summaryTxt = sevText(maxSev);
   const summaryCol = sevColor(maxSev);
@@ -589,7 +591,7 @@ export default async function(ctx) {
       type: 'stack', direction: 'row', alignItems: 'center', gap: 4,
       children: [
         { type: 'image', src: `sf-symbol:${sevIcon(grade.sev)}`, color: col, width: SMALL_ICON, height: SMALL_ICON },
-        { type: 'text', text: src, font: { size: SMALL_FONT, weight: 'medium' }, textColor: C_SUB, maxLines: 1 },
+        { type: 'text', text: src, font: { size: SMALL_FONT, weight: 'medium' }, textColor: C_SUB, flex: 1, maxLines: 1, minScale: 0.7, lineBreakMode: 'tail' },
         { type: 'spacer' },
         { type: 'text', text: val, font: { size: SMALL_FONT, weight: 'bold', family: 'Menlo' }, textColor: col, maxLines: 1, minScale: 0.5, lineBreakMode: 'tail' }
       ]
@@ -644,7 +646,7 @@ export default async function(ctx) {
   };
 
   const unlockSection = {
-    type: 'stack', direction: 'row', gap: COL_GAP,
+    type: 'stack', direction: 'row', alignItems: 'flex-start', gap: COL_GAP,
     children: [unlockLeft, unlockRight]
   };
 
