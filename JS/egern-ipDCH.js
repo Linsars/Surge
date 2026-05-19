@@ -596,10 +596,9 @@ export default async function(ctx) {
   const HEADER_TIME_FONT = 10;
   const HEADER_GAP = 4;
   const TOP_GAP = 0;
-  const HEADER_INFO_GAP = isLarge ? 2 : 1;
-  const INFO_BOTTOM_GAP = isLarge ? 7 : 8;
+  const INFO_BOTTOM_GAP = isLarge ? 5 : 5;
   const INFO_GAP = isLarge ? 4 : 2.5;
-  const BOTTOM_GAP = isLarge ? 3 : 2.5;
+  const BOTTOM_GAP = isLarge ? 3.2 : 3.2;
   const COL_GAP = 12;
 
   const leftColumn = {
@@ -668,7 +667,6 @@ export default async function(ctx) {
           }
         ]
       },
-      { type: 'stack', height: HEADER_INFO_GAP },
       {
         type: 'stack', direction: 'row', gap: COL_GAP,
         children: [leftColumn, rightColumn]
