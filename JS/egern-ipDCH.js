@@ -223,17 +223,25 @@ export default async function(ctx) {
     } catch (e) {}
   }
 
-  let riskRegTxt = "—", riskRegCol = C_SUB, regSev = 0;
+  let riskCoffeeTxt = "—", riskCoffeeCol = C_SUB, coffeeSev = 0;
   if (nIp !== "获取失败") {
     try {
-      const regRes = await ctx.http.get(`https://api.ipregistry.co/${nIp}?key=${ctx.env.IPREGISTRY_KEY || 'tryout'}`, { timeout: 8000 });
-      const rj = JSON.parse(await regRes.text());
-      if (rj && rj.security) {
-        const sec = rj.security;
-        const hits = ['is_proxy','is_vpn','is_tor','is_tor_exit','is_abuser','is_attacker','is_threat','is_bogon'].filter(k => sec[k]).length;
-        riskRegTxt = `${hits}`;
-        riskRegCol = hits >= 3 ? C_RED : hits >= 2 ? C_ORANGE : hits >= 1 ? C_YELLOW : C_GREEN;
-        regSev = hits >= 3 ? 4 : hits >= 2 ? 3 : hits >= 1 ? 2 : 0;
+      const coffeeRes = await ctx.http.get(`https://ip.net.coffee/api/ip/lookup/${encodeURIComponent(nIp)}`, { timeout: 8000 });
+      const cj = JSON.parse(await coffeeRes.text());
+      if (cj) {
+        const score = ti(cj.trust_score);
+        if (score !== null) {
+          if (score < 30) { riskCoffeeTxt = `极高 (${score})`; riskCoffeeCol = C_RED; coffeeSev = 4; }
+          else if (score < 45) { riskCoffeeTxt = `高危 (${score})`; riskCoffeeCol = C_ORANGE; coffeeSev = 3; }
+          else if (score < 60) { riskCoffeeTxt = `中等 (${score})`; riskCoffeeCol = C_YELLOW; coffeeSev = 2; }
+          else if (score < 75) { riskCoffeeTxt = `中低 (${score})`; riskCoffeeCol = C_YELLOW; coffeeSev = 1; }
+          else { riskCoffeeTxt = `低危 (${score})`; riskCoffeeCol = C_GREEN; coffeeSev = 0; }
+        } else {
+          const hits = ['is_proxy','is_vpn','is_tor','is_abuser','is_bogon','is_crawler'].filter(k => cj[k]).length;
+          riskCoffeeTxt = `${hits}`;
+          riskCoffeeCol = hits >= 3 ? C_RED : hits >= 2 ? C_ORANGE : hits >= 1 ? C_YELLOW : C_GREEN;
+          coffeeSev = hits >= 3 ? 4 : hits >= 2 ? 3 : hits >= 1 ? 2 : 0;
+        }
       }
     } catch (e) {}
   }
@@ -260,7 +268,7 @@ export default async function(ctx) {
   if (proxySuccess) {
     riskGrades.push({ sev: ippSev, t: `IPPure: ${riskIPPureTxt}` });
     riskGrades.push({ sev: apiSev, t: `ipapi: ${riskIpapiTxt}` });
-    riskGrades.push({ sev: regSev, t: `ipregistry: ${riskRegTxt}` });
+    riskGrades.push({ sev: coffeeSev, t: `NetCoffee: ${riskCoffeeTxt}` });
   } else {
     riskGrades.push({ sev: 4, t: '获取失败' });
   }
