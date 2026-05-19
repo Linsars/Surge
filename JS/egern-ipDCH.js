@@ -455,6 +455,8 @@ export default async function(ctx) {
   const summaryIcon = sevIcon(maxSev);
   const summaryTxt = sevText(maxSev);
   const summaryCol = sevColor(maxSev);
+  const INFO_FONT = isLarge ? 12 : 10;
+  const INFO_ICON = isLarge ? 16 : 12;
   const SMALL_FONT = isLarge ? 10 : 9.5;
   const SMALL_ICON = isLarge ? 12 : 11;
 
@@ -462,10 +464,10 @@ export default async function(ctx) {
     return {
       type: 'stack', direction: 'row', alignItems: 'center', gap: 5,
       children: [
-        { type: 'image', src: `sf-symbol:${iconName}`, color: C_ICON, width: SMALL_ICON, height: SMALL_ICON },
-        { type: 'text', text: label, font: { size: SMALL_FONT }, textColor: C_SUB },
+        { type: 'image', src: `sf-symbol:${iconName}`, color: C_ICON, width: INFO_ICON, height: INFO_ICON },
+        { type: 'text', text: label, font: { size: INFO_FONT }, textColor: C_SUB },
         { type: 'spacer' },
-        { type: 'text', text: value, font: { size: SMALL_FONT, weight: 'bold', family: 'Menlo' }, textColor: valueCol, maxLines: 1, minScale: 0.5, lineBreakMode: 'tail' }
+        { type: 'text', text: value, font: { size: INFO_FONT, weight: 'bold', family: 'Menlo' }, textColor: valueCol, maxLines: 1, minScale: 0.5, lineBreakMode: 'tail' }
       ]
     };
   }
@@ -509,7 +511,7 @@ export default async function(ctx) {
   const HEADER_TIME_FONT = 10;
   const HEADER_GAP = 4;
   const TOP_GAP = 3;
-  const INFO_GAP = 2.5;
+  const INFO_GAP = isLarge ? 4 : 2.5;
   const BOTTOM_GAP = isLarge ? 3 : 2.5;
   const COL_GAP = 12;
 
