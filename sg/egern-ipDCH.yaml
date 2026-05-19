@@ -47,6 +47,12 @@ rules:
       match: ip.net.coffee
       policy: "{{{POLICY}}}"
   - domain_suffix:
+      match: proxycheck.io
+      policy: "{{{POLICY}}}"
+  - domain_suffix:
+      match: ipinfo.app
+      policy: "{{{POLICY}}}"
+  - domain_suffix:
       match: chatgpt.com
       policy: "{{{POLICY}}}"
   - domain_suffix:

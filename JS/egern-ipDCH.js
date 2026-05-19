@@ -320,15 +320,19 @@ export default async function(ctx) {
       'https://ipv4.icanhazip.com',
       'https://v4.ident.me'
     ];
-    for (const url of sources) {
+    const tasks = sources.map(async (url) => {
       try {
         const res = await withTimeout(ctx.http.get(url, { timeout: 3500 }), 3800, null);
-        if (!res) continue;
-        const ip = parseIp(await res.text());
-        if (ip) return ip;
-      } catch (e) {}
-    }
-    return "";
+        if (!res) return "";
+        return parseIp(await res.text());
+      } catch (e) { return ""; }
+    });
+    return await new Promise(resolve => {
+      let pending = tasks.length, done = false;
+      const finish = (v) => { if (!done && v) { done = true; resolve(v); } };
+      tasks.forEach(p => p.then(v => { if (v) finish(v); else if (--pending === 0 && !done) resolve(""); }).catch(() => { if (--pending === 0 && !done) resolve(""); }));
+      setTimeout(() => { if (!done) { done = true; resolve(""); } }, 3900);
+    });
   }
 
   async function getLandingInfo() {
@@ -336,6 +340,8 @@ export default async function(ctx) {
     let riskIPPureTxt = "—", ippSev = -1;
     let riskIpapiTxt = "—", apiSev = -1;
     let riskCoffeeTxt = "—", coffeeSev = -1;
+    let riskProxyTxt = "—", proxySev = -1;
+    let riskBlackTxt = "—", blackSev = -1;
 
     nIp = await getLandingIPv4() || "获取失败";
 
@@ -368,11 +374,12 @@ export default async function(ctx) {
               nativeText = cj.isResidential === true ? "🏠 原生住宅" : (cj.isResidential === false ? "🏢 商业机房" : (cj.is_datacenter ? "🏢 商业机房" : "未知"));
               const score = ti(cj.trust_score);
               if (score !== null) {
-                if (score < 30) { riskCoffeeTxt = `极高 (${score})`; coffeeSev = 4; }
-                else if (score < 45) { riskCoffeeTxt = `高危 (${score})`; coffeeSev = 3; }
-                else if (score < 60) { riskCoffeeTxt = `中等 (${score})`; coffeeSev = 2; }
-                else if (score < 75) { riskCoffeeTxt = `中低 (${score})`; coffeeSev = 1; }
-                else { riskCoffeeTxt = `低危 (${score})`; coffeeSev = 0; }
+                if (score < 30) coffeeSev = 4;
+                else if (score < 45) coffeeSev = 3;
+                else if (score < 60) coffeeSev = 2;
+                else if (score < 75) coffeeSev = 1;
+                else coffeeSev = 0;
+                riskCoffeeTxt = riskText(coffeeSev, `信任${score}`);
               }
             }
           } catch (e) {}
@@ -387,11 +394,11 @@ export default async function(ctx) {
               if (m) {
                 const pct = Math.round(Number(m[1]) * 10000) / 100 + '%';
                 const lv = m[2].trim();
-                riskIpapiTxt = `${lv} (${pct}) Abuser`;
                 if (lv.includes('Very High')) apiSev = 4;
                 else if (lv.includes('High')) apiSev = 3;
                 else if (lv.includes('Elevated')) apiSev = 2;
                 else apiSev = 0;
+                riskIpapiTxt = riskText(apiSev, pct);
               }
             }
           } catch (e) {}
@@ -403,16 +410,48 @@ export default async function(ctx) {
             const d = JSON.parse(await res.text());
             const risk = ti(d.fraudScore);
             if (risk !== null) {
-              if (risk >= 80) { riskIPPureTxt = `极高 (${risk})`; ippSev = 4; }
-              else if (risk >= 70) { riskIPPureTxt = `高危 (${risk})`; ippSev = 3; }
-              else if (risk >= 40) { riskIPPureTxt = `中等 (${risk})`; ippSev = 1; }
-              else { riskIPPureTxt = `低危 (${risk})`; ippSev = 0; }
+              if (risk >= 80) ippSev = 4;
+              else if (risk >= 70) ippSev = 3;
+              else if (risk >= 40) ippSev = 2;
+              else if (risk > 0) ippSev = 1;
+              else ippSev = 0;
+              riskIPPureTxt = riskText(ippSev, `风险${risk}`);
             }
+          } catch (e) {}
+        })(),
+        (async () => {
+          try {
+            const pcRes = await withTimeout(ctx.http.get(`https://proxycheck.io/v2/${encodeURIComponent(nIp)}?vpn=1&asn=1&risk=1`, { timeout: 4500 }), 4700, null);
+            if (!pcRes) return;
+            const pj = JSON.parse(await pcRes.text());
+            const item = pj && pj[nIp];
+            if (item) {
+              const risk = ti(item.risk);
+              const isProxy = String(item.proxy || '').toLowerCase() === 'yes';
+              const typ = item.type ? String(item.type) : '';
+              if (risk !== null) {
+                if (risk >= 80 || isProxy) proxySev = 4;
+                else if (risk >= 60) proxySev = 3;
+                else if (risk >= 30) proxySev = 2;
+                else if (risk > 0) proxySev = 1;
+                else proxySev = 0;
+                riskProxyTxt = riskText(proxySev, `${typ || (isProxy ? 'Proxy' : 'Clean')}/${risk}`);
+              }
+            }
+          } catch (e) {}
+        })(),
+        (async () => {
+          try {
+            const bbRes = await withTimeout(ctx.http.get(`https://blackbox.ipinfo.app/lookup/${encodeURIComponent(nIp)}`, { timeout: 3500 }), 3700, null);
+            if (!bbRes) return;
+            const txt = String(await bbRes.text()).trim().toUpperCase();
+            if (txt === 'Y') { blackSev = 3; riskBlackTxt = riskText(blackSev, '疑似代理'); }
+            else if (txt === 'N') { blackSev = 0; riskBlackTxt = riskText(blackSev, '正常'); }
           } catch (e) {}
         })()
       ]);
     }
-    return { nIp, nLoc, nativeText, riskIPPureTxt, ippSev, riskIpapiTxt, apiSev, riskCoffeeTxt, coffeeSev };
+    return { nIp, nLoc, nativeText, riskIPPureTxt, ippSev, riskIpapiTxt, apiSev, riskCoffeeTxt, coffeeSev, riskProxyTxt, proxySev, riskBlackTxt, blackSev };
   }
 
   const [localInfo, landingInfo, unlockStatuses] = await Promise.all([
@@ -421,7 +460,7 @@ export default async function(ctx) {
     unlockPromise
   ]);
   const { lIp, lLoc, lIsp } = localInfo;
-  const { nIp, nLoc, nativeText, riskIPPureTxt, ippSev, riskIpapiTxt, apiSev, riskCoffeeTxt, coffeeSev } = landingInfo;
+  const { nIp, nLoc, nativeText, riskIPPureTxt, ippSev, riskIpapiTxt, apiSev, riskCoffeeTxt, coffeeSev, riskProxyTxt, proxySev, riskBlackTxt, blackSev } = landingInfo;
   const [gptStatus, geminiStatus, youtubeStatus, netflixStatus, tiktokStatus, claudeStatus] = unlockStatuses;
 
   const proxySuccess = nIp !== "获取失败";
@@ -441,6 +480,8 @@ export default async function(ctx) {
     riskGrades.push({ sev: ippSev, t: `IPPure: ${riskIPPureTxt}` });
     riskGrades.push({ sev: apiSev, t: `ipapi: ${riskIpapiTxt}` });
     riskGrades.push({ sev: coffeeSev, t: `NetCoffee: ${riskCoffeeTxt}` });
+    riskGrades.push({ sev: proxySev, t: `ProxyCheck: ${riskProxyTxt}` });
+    riskGrades.push({ sev: blackSev, t: `Blackbox: ${riskBlackTxt}` });
   } else {
     riskGrades.push({ sev: 4, t: '获取失败' });
   }
@@ -469,6 +510,17 @@ export default async function(ctx) {
     if (sev >= 3) return C_ORANGE;
     if (sev >= 1) return C_YELLOW;
     return C_GREEN;
+  }
+  function sevLabel(sev) {
+    if (sev < 0) return '—';
+    if (sev >= 4) return '极高';
+    if (sev >= 3) return '高危';
+    if (sev >= 2) return '中等';
+    if (sev >= 1) return '中低';
+    return '低危';
+  }
+  function riskText(sev, raw) {
+    return `${sevLabel(sev)}${raw ? ` (${raw})` : ''}`;
   }
 
   const isLarge = widgetFamily === 'systemLarge';
