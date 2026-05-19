@@ -145,54 +145,19 @@ function buildUA(baseUA, seed) {
   return `PingMe/1.0.0 (${model}; iOS ${iosVer}; Scale/${scale}) CFNetwork/${cfn} Darwin/${darwin}`;
 }
 
-function seededText(seed, len) {
-  const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  let out = '', block = '', n = 0;
-  while (out.length < len) {
-    if (!block.length) block = MD5(`${seed}:${n++}`);
-    const piece = block.slice(0, 2);
-    block = block.slice(2);
-    out += chars[parseInt(piece, 16) % chars.length];
-  }
-  return out;
-}
-
-function seededUuid(seed) {
-  let h = '', n = 0;
-  while (h.length < 32) h += MD5(`${seed}:uuid:${n++}`);
-  h = h.slice(0, 32);
-  const variant = (8 + (parseInt(h[16], 16) % 4)).toString(16);
-  return `${h.slice(0,8)}-${h.slice(8,12)}-4${h.slice(13,16)}-${variant}${h.slice(17,20)}-${h.slice(20,32)}`.toUpperCase();
-}
-
-function buildDeviceProfile(acc, index) {
-  const seed = `${scriptName}:${acc.id || acc.alias || index}`;
-  return {
-    uniquedeviceid: seededUuid(seed),
-    callpin: seededText(`${seed}:callpin`, 20)
-  };
-}
-
-function buildSignedParamsRaw(capture, deviceProfile) {
+function buildSignedParamsRaw(capture) {
   const params = {};
   Object.keys(capture.paramsRaw || {}).forEach(k => {
     if (k !== 'sign' && k !== 'signDate') params[k] = capture.paramsRaw[k];
   });
-  // 关键修复：视频奖励额度疑似按设备维度计算。
-  // 多账号如果共用抓包里的 uniquedeviceid/callpin，会把 MAX_VIDEO 分摊成全账号总次数。
-  // 这里给每个账号生成稳定且不同的设备指纹，并重新签名，让每个账号独立拿满 MAX_VIDEO。
-  if (deviceProfile) {
-    if ('uniquedeviceid' in params) params.uniquedeviceid = deviceProfile.uniquedeviceid;
-    if ('callpin' in params) params.callpin = deviceProfile.callpin;
-  }
   params.signDate = getUTCSignDate();
   const signBase = Object.keys(params).sort().map(k => `${k}=${params[k]}`).join('&');
   params.sign = MD5(signBase + SECRET);
   return params;
 }
 
-function buildUrl(path, capture, deviceProfile) {
-  const params = buildSignedParamsRaw(capture, deviceProfile);
+function buildUrl(path, capture) {
+  const params = buildSignedParamsRaw(capture);
   const qs = Object.keys(params).map(k => `${k}=${encodeURIComponent(params[k])}`).join('&');
   return `https://api.pingmeapp.net/app/${path}?${qs}`;
 }
@@ -233,11 +198,10 @@ function runAccount(acc, index, total) {
   const tag = `[账号${index+1}/${total} ${acc.alias || acc.id}]`;
   const ua = buildUA(acc.baseUA, acc.uaSeed);
   const headers = buildHeaders(acc.capture, ua);
-  const deviceProfile = buildDeviceProfile(acc, index);
   const msgs = [tag];
 
   function fetchApi(path) {
-    const url = buildUrl(path, acc.capture, deviceProfile);
+    const url = buildUrl(path, acc.capture);
     return withTimeout(
       new Promise((resolve, reject) => {
         $httpClient.get({ url, headers }, (err, resp, data) => {
