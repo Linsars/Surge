@@ -20,28 +20,13 @@ rules:
       match: 126.net
       policy: "DIRECT"
   - domain_suffix:
-      match: my.ippure.com
-      policy: "{{{POLICY}}}"
-  - domain_suffix:
-      match: ip-api.com
-      policy: "{{{POLICY}}}"
-  - domain_suffix:
-      match: api.ipapi.is
-      policy: "{{{POLICY}}}"
-  - domain_suffix:
-      match: ipinfo.io
+      match: ippure.com
       policy: "{{{POLICY}}}"
   - domain_suffix:
       match: ip.sb
       policy: "{{{POLICY}}}"
   - domain_suffix:
-      match: ippure.com
-      policy: "{{{POLICY}}}"
-  - domain_suffix:
-      match: ip2location.io
-      policy: "{{{POLICY}}}"
-  - domain_suffix:
-      match: db-ip.com
+      match: api.ipapi.is
       policy: "{{{POLICY}}}"
   - domain_suffix:
       match: ip.net.coffee

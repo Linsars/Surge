@@ -15,10 +15,9 @@ export default async function(ctx) {
     return { type: 'widget', padding: 16, backgroundColor: BG_COLOR, children: [{ type: 'text', text: '请使用中号或大号组件', font: { size: 'callout' }, textColor: C_MAIN, textAlign: 'center' }] };
   }
 
-  const policy = (ctx.env && ctx.env.POLICY) ? ctx.env.POLICY : "";
+  const policy = String((ctx.env && ctx.env.POLICY) ? ctx.env.POLICY : "").trim();
   const BASE_UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1";
 
-  async function safe(fn) { try { return await fn(); } catch (e) { return null; } }
   async function get(url, headers, timeout) {
     const opts = { timeout: timeout || 8000 };
     if (headers) opts.headers = headers;
@@ -171,7 +170,7 @@ export default async function(ctx) {
   }
 
   let nIp = "获取失败", nLoc = "未知位置", nativeText = "未知";
-  let riskIPPureTxt = "低危 (0)", riskIPPureCol = C_GREEN, ippSev = 0;
+  let riskIPPureTxt = "—", ippSev = -1;
 
   try {
     const res = await ctx.http.get('https://my.ippure.com/v1/info', { timeout: 8000 });
@@ -184,9 +183,9 @@ export default async function(ctx) {
     nativeText = d.isResidential === true ? "🏠 原生住宅" : (d.isResidential === false ? "🏢 商业机房" : "未知");
     const risk = ti(d.fraudScore);
     if (risk !== null) {
-      if (risk >= 80) { riskIPPureTxt = `极高 (${risk})`; riskIPPureCol = C_RED; ippSev = 4; }
-      else if (risk >= 70) { riskIPPureTxt = `高危 (${risk})`; riskIPPureCol = C_ORANGE; ippSev = 3; }
-      else if (risk >= 40) { riskIPPureTxt = `中等 (${risk})`; riskIPPureCol = C_YELLOW; ippSev = 1; }
+      if (risk >= 80) { riskIPPureTxt = `极高 (${risk})`; ippSev = 4; }
+      else if (risk >= 70) { riskIPPureTxt = `高危 (${risk})`; ippSev = 3; }
+      else if (risk >= 40) { riskIPPureTxt = `中等 (${risk})`; ippSev = 1; }
       else { riskIPPureTxt = `低危 (${risk})`; ippSev = 0; }
     }
   } catch (e) {}
@@ -205,7 +204,7 @@ export default async function(ctx) {
     } catch (e) {}
   }
 
-  let riskIpapiTxt = "低危 (0%)", riskIpapiCol = C_GREEN, apiSev = 0;
+  let riskIpapiTxt = "—", apiSev = -1;
   if (nIp !== "获取失败") {
     try {
       const apiRes = await ctx.http.get(`https://api.ipapi.is/?q=${nIp}`, { timeout: 8000 });
@@ -216,14 +215,16 @@ export default async function(ctx) {
           const pct = Math.round(Number(m[1]) * 10000) / 100 + '%';
           const lv = m[2].trim();
           riskIpapiTxt = `${lv} (${pct}) Abuser`;
-          riskIpapiCol = lv.includes('High') || lv.includes('Very High') ? C_ORANGE : (lv.includes('Elevated') ? C_YELLOW : C_GREEN);
-          apiSev = lv.includes('High') || lv.includes('Very High') ? 3 : (lv.includes('Elevated') ? 2 : 0);
+          if (lv.includes('Very High')) apiSev = 4;
+          else if (lv.includes('High')) apiSev = 3;
+          else if (lv.includes('Elevated')) apiSev = 2;
+          else apiSev = 0;
         }
       }
     } catch (e) {}
   }
 
-  let riskCoffeeTxt = "—", riskCoffeeCol = C_SUB, coffeeSev = 0;
+  let riskCoffeeTxt = "—", coffeeSev = -1;
   if (nIp !== "获取失败") {
     try {
       const coffeeRes = await ctx.http.get(`https://ip.net.coffee/api/ip/lookup/${encodeURIComponent(nIp)}`, { timeout: 8000 });
@@ -231,15 +232,14 @@ export default async function(ctx) {
       if (cj) {
         const score = ti(cj.trust_score);
         if (score !== null) {
-          if (score < 30) { riskCoffeeTxt = `极高 (${score})`; riskCoffeeCol = C_RED; coffeeSev = 4; }
-          else if (score < 45) { riskCoffeeTxt = `高危 (${score})`; riskCoffeeCol = C_ORANGE; coffeeSev = 3; }
-          else if (score < 60) { riskCoffeeTxt = `中等 (${score})`; riskCoffeeCol = C_YELLOW; coffeeSev = 2; }
-          else if (score < 75) { riskCoffeeTxt = `中低 (${score})`; riskCoffeeCol = C_YELLOW; coffeeSev = 1; }
-          else { riskCoffeeTxt = `低危 (${score})`; riskCoffeeCol = C_GREEN; coffeeSev = 0; }
+          if (score < 30) { riskCoffeeTxt = `极高 (${score})`; coffeeSev = 4; }
+          else if (score < 45) { riskCoffeeTxt = `高危 (${score})`; coffeeSev = 3; }
+          else if (score < 60) { riskCoffeeTxt = `中等 (${score})`; coffeeSev = 2; }
+          else if (score < 75) { riskCoffeeTxt = `中低 (${score})`; coffeeSev = 1; }
+          else { riskCoffeeTxt = `低危 (${score})`; coffeeSev = 0; }
         } else {
           const hits = ['is_proxy','is_vpn','is_tor','is_abuser','is_bogon','is_crawler'].filter(k => cj[k]).length;
           riskCoffeeTxt = `${hits}`;
-          riskCoffeeCol = hits >= 3 ? C_RED : hits >= 2 ? C_ORANGE : hits >= 1 ? C_YELLOW : C_GREEN;
           coffeeSev = hits >= 3 ? 4 : hits >= 2 ? 3 : hits >= 1 ? 2 : 0;
         }
       }
@@ -255,8 +255,9 @@ export default async function(ctx) {
   ]);
 
   const proxySuccess = nIp !== "获取失败";
-  const policyOk = policy && policy !== "DIRECT" && proxySuccess && nIp !== lIp;
-  const policyWarn = policy && policy !== "DIRECT" && (!proxySuccess || nIp === lIp);
+  const isDirectPolicy = !policy || policy.toUpperCase() === "DIRECT";
+  const policyOk = !isDirectPolicy && proxySuccess && nIp !== lIp;
+  const policyWarn = !isDirectPolicy && (!proxySuccess || nIp === lIp);
   const getUnlockColor = (status) => (status === "Cross" || status === "CN") ? C_RED : C_GREEN;
   const getUnlockResult = (status) => {
     if (status === "Cross") return "不可用";
@@ -273,16 +274,18 @@ export default async function(ctx) {
     riskGrades.push({ sev: 4, t: '获取失败' });
   }
 
-  let maxSev = 0;
+  let maxSev = -1;
   riskGrades.forEach(g => { if (g.sev > maxSev) maxSev = g.sev; });
 
   function sevIcon(sev) {
+    if (sev < 0) return 'questionmark.shield.fill';
     if (sev >= 4) return 'xmark.shield.fill';
     if (sev >= 3) return 'exclamationmark.shield.fill';
     if (sev >= 1) return 'exclamationmark.shield.fill';
     return 'checkmark.shield.fill';
   }
   function sevText(sev) {
+    if (sev < 0) return '风险未知';
     if (sev >= 4) return '极高风险';
     if (sev >= 3) return '高风险';
     if (sev >= 2) return '中等风险';
@@ -290,6 +293,7 @@ export default async function(ctx) {
     return '纯净低危';
   }
   function sevColor(sev) {
+    if (sev < 0) return C_SUB;
     if (sev >= 4) return C_RED;
     if (sev >= 3) return C_ORANGE;
     if (sev >= 1) return C_YELLOW;
@@ -411,7 +415,7 @@ export default async function(ctx) {
           { type: 'image', src: `sf-symbol:${summaryIcon}`, color: summaryCol, width: 12, height: 12 },
           { type: 'text', text: summaryTxt, font: { size: 10, weight: 'bold' }, textColor: summaryCol },
           { type: 'spacer' },
-          ...(policy && policy !== "DIRECT" ? [
+          ...(!isDirectPolicy ? [
             { type: 'image', src: `sf-symbol:${policyOk ? 'checkmark.circle.fill' : (policyWarn ? 'exclamationmark.circle.fill' : 'questionmark.circle.fill')}`, color: policyOk ? C_GREEN : (policyWarn ? C_ORANGE : C_SUB), width: 10, height: 10 },
             { type: 'text', text: policy, font: { size: 10, weight: 'bold' }, textColor: policyOk ? C_GREEN : (policyWarn ? C_ORANGE : C_SUB) },
           ] : []),
