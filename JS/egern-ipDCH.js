@@ -664,11 +664,11 @@ export default async function(ctx) {
               {
                 type: 'stack', direction: 'row', alignItems: 'center', gap: HEADER_GAP, flex: 1,
                 children: [
-                  { type: 'spacer' },
                   ...(!isDirectPolicy ? [
                     { type: 'image', src: `sf-symbol:${policyOk ? 'checkmark.circle.fill' : (policyWarn ? 'exclamationmark.circle.fill' : 'questionmark.circle.fill')}`, color: policyOk ? C_GREEN : (policyWarn ? C_ORANGE : C_SUB), width: 10, height: 10 },
-                    { type: 'text', text: policy, font: { size: 10, weight: 'bold' }, textColor: policyOk ? C_GREEN : (policyWarn ? C_ORANGE : C_SUB), maxLines: 1 },
-                  ] : []),
+                    { type: 'text', text: policy, font: { size: 10, weight: 'bold' }, textColor: policyOk ? C_GREEN : (policyWarn ? C_ORANGE : C_SUB), flex: 1, maxLines: 1, minScale: 0.7 },
+                  ] : [{ type: 'spacer' }]),
+                  { type: 'spacer' },
                   {
                     type: 'stack', direction: 'row', alignItems: 'center', gap: 3,
                     children: [
