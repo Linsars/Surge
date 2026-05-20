@@ -734,8 +734,6 @@ export default async function(ctx) {
   const intelClean = otxSev === 0 && greySev === 0 && dshieldSev === 0 && pulseSev === 0;
   const intelValue = intelHit ? intelParts.slice(0, 2).join('+') : (intelClean ? '未收录' : '—');
   const intelSev = Math.max(otxSev, greySev, dshieldSev, pulseSev);
-  const dshieldValue = dshieldSev >= 3 ? dshieldTxt : (dshieldSev === 0 ? '无记录' : '—');
-  const pulsediveValue = pulseSev >= 3 ? pulseTxt : (pulseSev === 0 ? '未收录' : '—');
   const workerPorts = Array.isArray(w.sensitive_ports) && w.sensitive_ports.length ? w.sensitive_ports.join(',') : (Array.isArray(w.vulns) && w.vulns.length ? `${w.vulns.length}漏洞` : '');
   const portValue = portSev >= 3 ? portTxt : (workerPorts || (portSev >= 0 ? portTxt : '—'));
   const portRiskSev = (Array.isArray(w.vulns) && w.vulns.length) ? 4 : (Array.isArray(w.sensitive_ports) && w.sensitive_ports.length ? 3 : portSev);
@@ -767,8 +765,6 @@ export default async function(ctx) {
   else if (portRiskSev >= 3) scoreCandidates.push(55);
   if (asnRiskSev >= 3) scoreCandidates.push(60); else if (asnRiskSev >= 2) scoreCandidates.push(35);
   const riskScore = scoreCandidates.length ? Math.round(Math.max(...scoreCandidates)) : null;
-  const workerScoreValue = riskScore !== null ? `${riskScore}` : '—';
-  const workerScoreSev = riskScore !== null ? (riskScore >= 70 ? 4 : (riskScore >= 45 ? 3 : (riskScore >= 25 ? 2 : (riskScore >= 10 ? 1 : 0)))) : -1;
   const anonSev = proxyValue === 'Tor' || torValue === '是' ? 4 : (['否', '—'].includes(proxyValue) ? yesNoSev(proxyValue, 3) : Math.max(proxySev, 3));
   const anonValue = torValue === '是' && proxyValue !== 'Tor' ? `Tor+${proxyValue}` : proxyValue;
   const isResidential = flags.residential === true;
@@ -786,9 +782,9 @@ export default async function(ctx) {
 
   if (proxySuccess && riskGrades[0]) {
     const tgRisk = calcTelegramLoginRisk({
-      proxyValue, dcValue, residentialValue, blacklistValue: banHit ? '命中' : banValue, intelValue, dshieldValue, pulsediveValue, portValue,
+      proxyValue, dcValue, residentialValue, blacklistValue: banHit ? '命中' : banValue,
       ippSev, apiSev, coffeeSev, proxySev, blackSev, intelSev, portRiskSev,
-      nativeText, riskProxyTxt, riskIPPureTxt, riskCoffeeTxt, riskIpapiTxt
+      nativeText, riskProxyTxt
     });
     const workerTgSev = w.tg === '邮箱/收费' ? 4 : (w.tg === '易邮箱' ? 3 : (w.tg === '可能风控' ? 2 : (w.tg === '稍有风险' ? 1 : (w.tg === '大概率正常' ? 0 : -1))));
     if (workerTgSev > tgRisk.sev) riskGrades[0] = { sev: workerTgSev, t: `TG预测: ${w.tg}` };
@@ -851,9 +847,10 @@ export default async function(ctx) {
   }
   // Risk source rows show raw signals; sev remains internal for color and TG prediction.
 
-  const summaryIcon = sevIcon(maxSev);
+  const riskScoreSev = riskScore !== null ? (riskScore >= 70 ? 4 : (riskScore >= 45 ? 3 : (riskScore >= 25 ? 2 : (riskScore >= 10 ? 1 : 0)))) : maxSev;
+  const summaryIcon = sevIcon(riskScoreSev);
   const summaryTxt = riskScore !== null ? `风险 ${riskScore}` : sevText(maxSev);
-  const summaryCol = sevColor(maxSev);
+  const summaryCol = sevColor(riskScoreSev);
   const INFO_FONT = isLarge ? 12 : 10;
   const INFO_ICON = isLarge ? 16 : 12;
   const SMALL_FONT = isLarge ? 10 : 9.5;
