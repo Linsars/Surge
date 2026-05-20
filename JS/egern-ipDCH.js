@@ -773,16 +773,13 @@ export default async function(ctx) {
   const anonValue = torValue === '是' && proxyValue !== 'Tor' ? `Tor+${proxyValue}` : proxyValue;
   const isResidential = flags.residential === true;
   const residentialValue = isResidential ? '是' : (dcValue === '是' || !['—', '否'].includes(proxyValue) ? '否' : '—');
-  const residentialSev = residentialValue === '是' ? 0 : (residentialValue === '否' ? 2 : -1);
   const riskDimensions = [
     { sev: anonSev, t: `匿名网络: ${anonValue}` },
     { sev: banHit ? 4 : (banValue === '未命中' ? 0 : -1), t: `封禁名单: ${banValue}` },
     { sev: fraudSev, t: `欺诈指数: ${fraudTxt}` },
-    { sev: residentialSev, t: `住宅IP: ${residentialValue}` },
     { sev: asnRiskSev, t: `ASN风险: ${asnRiskTxt}` },
     { sev: intelSev, t: `情报记录: ${intelValue}` },
-    { sev: portRiskSev, t: `端口风险: ${portValue}` },
-    { sev: workerScoreSev, t: `风险评分: ${workerScoreValue}` }
+    { sev: portRiskSev, t: `端口风险: ${portValue}` }
   ];
 
   if (proxySuccess) riskDimensions.forEach(g => { if (g.sev > maxSev) maxSev = g.sev; });
@@ -855,7 +852,7 @@ export default async function(ctx) {
   // Risk source rows show raw signals; sev remains internal for color and TG prediction.
 
   const summaryIcon = sevIcon(maxSev);
-  const summaryTxt = sevText(maxSev);
+  const summaryTxt = riskScore !== null ? `风险 ${riskScore}` : sevText(maxSev);
   const summaryCol = sevColor(maxSev);
   const INFO_FONT = isLarge ? 12 : 10;
   const INFO_ICON = isLarge ? 16 : 12;
@@ -956,8 +953,8 @@ export default async function(ctx) {
   const riskDimensionSection = {
     type: 'stack', direction: 'row', gap: COL_GAP,
     children: [
-      { type: 'stack', direction: 'column', gap: BOTTOM_GAP, flex: 1, children: riskDimensions.slice(0, 4).map(g => ScoreRow(g)) },
-      { type: 'stack', direction: 'column', gap: BOTTOM_GAP, flex: 1, children: riskDimensions.slice(4).map(g => ScoreRow(g)) }
+      { type: 'stack', direction: 'column', gap: BOTTOM_GAP, flex: 1, children: riskDimensions.slice(0, 3).map(g => ScoreRow(g)) },
+      { type: 'stack', direction: 'column', gap: BOTTOM_GAP, flex: 1, children: riskDimensions.slice(3).map(g => ScoreRow(g)) }
     ]
   };
 
