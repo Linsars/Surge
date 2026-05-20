@@ -725,15 +725,20 @@ export default async function(ctx) {
   const banClean = sfsSev === 0 && blockSev === 0 && spamSev === 0 && (w.spamhaus === '未命中' || !w.spamhaus);
   const banValue = banHit ? (workerSpamHit ? w.spamhaus : (spamSev >= 4 ? spamTxt : (sfsSev >= 3 ? sfsTxt : blockTxt))) : (banClean ? '未命中' : '—');
   const blacklistValue = blackSev >= 3 ? riskBlackTxt : (blackSev === 0 ? '正常' : '—');
-  const intelHit = otxSev >= 3 || greySev >= 3 || pulseSev >= 3;
-  const intelClean = otxSev === 0 && greySev === 0;
-  const intelValue = intelHit ? (otxSev >= 3 ? otxTxt : (greySev >= 3 ? greyTxt : pulseTxt)) : (intelClean ? '未收录' : '—');
+  const intelParts = [];
+  if (otxSev >= 3) intelParts.push(`OTX/${otxTxt}`);
+  if (greySev >= 3) intelParts.push(`Grey/${greyTxt}`);
+  if (dshieldSev >= 3) intelParts.push(`DShield/${dshieldTxt}`);
+  if (pulseSev >= 3) intelParts.push(`Pulse/${pulseTxt}`);
+  const intelHit = intelParts.length > 0;
+  const intelClean = otxSev === 0 && greySev === 0 && dshieldSev === 0 && pulseSev === 0;
+  const intelValue = intelHit ? intelParts.slice(0, 2).join('+') : (intelClean ? '未收录' : '—');
+  const intelSev = Math.max(otxSev, greySev, dshieldSev, pulseSev);
   const dshieldValue = dshieldSev >= 3 ? dshieldTxt : (dshieldSev === 0 ? '无记录' : '—');
   const pulsediveValue = pulseSev >= 3 ? pulseTxt : (pulseSev === 0 ? '未收录' : '—');
   const workerPorts = Array.isArray(w.sensitive_ports) && w.sensitive_ports.length ? w.sensitive_ports.join(',') : (Array.isArray(w.vulns) && w.vulns.length ? `${w.vulns.length}漏洞` : '');
   const portValue = portSev >= 3 ? portTxt : (workerPorts || (portSev >= 0 ? portTxt : '—'));
   const portRiskSev = (Array.isArray(w.vulns) && w.vulns.length) ? 4 : (Array.isArray(w.sensitive_ports) && w.sensitive_ports.length ? 3 : portSev);
-  const fraudTxt = riskIPPureTxt !== '—' ? riskIPPureTxt.replace('风险', '') : riskIpapiTxt;
   const compactName = s => {
     const v = String(s || '').replace(/\b(Network|Services|Limited|Ltd|Inc|LLC|Co\.?|Corporation|Company)\b/gi, '').replace(/\s+/g, ' ').trim();
     return v.length > 12 ? `${v.slice(0, 11)}…` : v;
@@ -745,7 +750,16 @@ export default async function(ctx) {
     const m = String(s || '').match(/(\d+(?:\.\d+)?)/);
     return m ? Number(m[1]) : null;
   };
-  const scoreCandidates = [typeof w.score === 'number' ? w.score : null, firstNum(riskProxyTxt), firstNum(riskIPPureTxt)].filter(v => typeof v === 'number' && Number.isFinite(v));
+  const fraudCandidates = [
+    { src: 'IPPure', val: firstNum(riskIPPureTxt), sev: ippSev },
+    { src: 'Proxy', val: firstNum(riskProxyTxt), sev: proxySev },
+    { src: 'NetCoffee', val: firstNum(riskCoffeeTxt), sev: coffeeSev },
+    { src: 'ipapi', val: firstNum(riskIpapiTxt), sev: apiSev }
+  ].filter(x => typeof x.val === 'number' && Number.isFinite(x.val));
+  const fraudBest = fraudCandidates.sort((a, b) => (b.sev - a.sev) || (b.val - a.val))[0];
+  const fraudTxt = fraudBest ? `${Math.round(fraudBest.val * 100) / 100}` : '—';
+  const fraudSev = fraudBest ? fraudBest.sev : -1;
+  const scoreCandidates = [typeof w.score === 'number' ? w.score : null, firstNum(riskProxyTxt), firstNum(riskIPPureTxt), firstNum(riskCoffeeTxt)].filter(v => typeof v === 'number' && Number.isFinite(v));
   if (proxyValue === 'Tor' || torValue === '是') scoreCandidates.push(90);
   if (!['否', '—'].includes(proxyValue)) scoreCandidates.push(60);
   if (banHit) scoreCandidates.push(85);
@@ -755,15 +769,14 @@ export default async function(ctx) {
   const riskScore = scoreCandidates.length ? Math.round(Math.max(...scoreCandidates)) : null;
   const workerScoreValue = riskScore !== null ? `${riskScore}` : '—';
   const workerScoreSev = riskScore !== null ? (riskScore >= 70 ? 4 : (riskScore >= 45 ? 3 : (riskScore >= 25 ? 2 : (riskScore >= 10 ? 1 : 0)))) : -1;
+  const anonSev = proxyValue === 'Tor' || torValue === '是' ? 4 : (['否', '—'].includes(proxyValue) ? yesNoSev(proxyValue, 3) : Math.max(proxySev, 3));
+  const anonValue = torValue === '是' && proxyValue !== 'Tor' ? `Tor+${proxyValue}` : proxyValue;
   const riskDimensions = [
-    { sev: proxyValue === 'Tor' ? 4 : (['否', '—'].includes(proxyValue) ? yesNoSev(proxyValue, 3) : Math.max(proxySev, 3)), t: `代理/VPN: ${proxyValue}` },
-    { sev: torValue === '是' ? 4 : torSev, t: `Tor出口: ${torValue}` },
+    { sev: anonSev, t: `匿名网络: ${anonValue}` },
     { sev: banHit ? 4 : (banValue === '未命中' ? 0 : -1), t: `封禁名单: ${banValue}` },
-    { sev: Math.max(ippSev, apiSev), t: `欺诈指数: ${fraudTxt}` },
+    { sev: fraudSev, t: `欺诈指数: ${fraudTxt}` },
     { sev: asnRiskSev, t: `ASN风险: ${asnRiskTxt}` },
-    { sev: intelHit ? 3 : (intelValue === '未收录' ? 0 : -1), t: `威胁情报: ${intelValue}` },
-    { sev: dshieldSev, t: `攻击记录: ${dshieldValue}` },
-    { sev: pulseSev, t: `可疑情报: ${pulsediveValue}` },
+    { sev: intelSev, t: `情报记录: ${intelValue}` },
     { sev: portRiskSev, t: `端口风险: ${portValue}` },
     { sev: workerScoreSev, t: `风险评分: ${workerScoreValue}` }
   ];
@@ -773,7 +786,7 @@ export default async function(ctx) {
   if (proxySuccess && riskGrades[0]) {
     const tgRisk = calcTelegramLoginRisk({
       proxyValue, dcValue, blacklistValue: banHit ? '命中' : banValue, intelValue, dshieldValue, pulsediveValue, portValue,
-      ippSev, apiSev, coffeeSev, proxySev, blackSev,
+      ippSev, apiSev, coffeeSev, proxySev, blackSev, intelSev, portRiskSev,
       nativeText, riskProxyTxt, riskIPPureTxt, riskCoffeeTxt, riskIpapiTxt
     });
     const workerTgSev = w.tg === '邮箱/收费' ? 4 : (w.tg === '易邮箱' ? 3 : (w.tg === '可能风控' ? 2 : (w.tg === '稍有风险' ? 1 : (w.tg === '大概率正常' ? 0 : -1))));
@@ -806,10 +819,8 @@ export default async function(ctx) {
     const proxy = (s.proxyValue && !['否', '—'].includes(s.proxyValue)) || proxyTxt.includes('vpn') || proxyTxt.includes('proxy');
 
     if (s.blacklistValue === '命中' || s.blackSev >= 3) add(38);
-    if (s.intelValue === '命中') add(26);
-    if (s.dshieldValue === '攻击记录') add(20);
-    if (s.pulsediveValue === '可疑') add(20);
-    if (s.portValue === '暴露') add(12);
+    if (s.intelSev >= 4) add(30); else if (s.intelSev >= 3) add(20);
+    if (s.portRiskSev >= 4) add(24); else if (s.portRiskSev >= 3) add(12);
 
     if (proxy && s.proxySev >= 4) add(30);
     else if (proxy && s.proxySev >= 3) add(20);
@@ -939,8 +950,8 @@ export default async function(ctx) {
   const riskDimensionSection = {
     type: 'stack', direction: 'row', gap: COL_GAP,
     children: [
-      { type: 'stack', direction: 'column', gap: BOTTOM_GAP, flex: 1, children: riskDimensions.slice(0, 5).map(g => ScoreRow(g)) },
-      { type: 'stack', direction: 'column', gap: BOTTOM_GAP, flex: 1, children: riskDimensions.slice(5, 10).map(g => ScoreRow(g)) }
+      { type: 'stack', direction: 'column', gap: BOTTOM_GAP, flex: 1, children: riskDimensions.slice(0, 4).map(g => ScoreRow(g)) },
+      { type: 'stack', direction: 'column', gap: BOTTOM_GAP, flex: 1, children: riskDimensions.slice(4).map(g => ScoreRow(g)) }
     ]
   };
 
