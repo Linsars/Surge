@@ -771,10 +771,14 @@ export default async function(ctx) {
   const workerScoreSev = riskScore !== null ? (riskScore >= 70 ? 4 : (riskScore >= 45 ? 3 : (riskScore >= 25 ? 2 : (riskScore >= 10 ? 1 : 0)))) : -1;
   const anonSev = proxyValue === 'Tor' || torValue === '是' ? 4 : (['否', '—'].includes(proxyValue) ? yesNoSev(proxyValue, 3) : Math.max(proxySev, 3));
   const anonValue = torValue === '是' && proxyValue !== 'Tor' ? `Tor+${proxyValue}` : proxyValue;
+  const isResidential = flags.residential === true;
+  const residentialValue = isResidential ? '是' : (dcValue === '是' || !['—', '否'].includes(proxyValue) ? '否' : '—');
+  const residentialSev = residentialValue === '是' ? 0 : (residentialValue === '否' ? 2 : -1);
   const riskDimensions = [
     { sev: anonSev, t: `匿名网络: ${anonValue}` },
     { sev: banHit ? 4 : (banValue === '未命中' ? 0 : -1), t: `封禁名单: ${banValue}` },
     { sev: fraudSev, t: `欺诈指数: ${fraudTxt}` },
+    { sev: residentialSev, t: `住宅IP: ${residentialValue}` },
     { sev: asnRiskSev, t: `ASN风险: ${asnRiskTxt}` },
     { sev: intelSev, t: `情报记录: ${intelValue}` },
     { sev: portRiskSev, t: `端口风险: ${portValue}` },
@@ -785,7 +789,7 @@ export default async function(ctx) {
 
   if (proxySuccess && riskGrades[0]) {
     const tgRisk = calcTelegramLoginRisk({
-      proxyValue, dcValue, blacklistValue: banHit ? '命中' : banValue, intelValue, dshieldValue, pulsediveValue, portValue,
+      proxyValue, dcValue, residentialValue, blacklistValue: banHit ? '命中' : banValue, intelValue, dshieldValue, pulsediveValue, portValue,
       ippSev, apiSev, coffeeSev, proxySev, blackSev, intelSev, portRiskSev,
       nativeText, riskProxyTxt, riskIPPureTxt, riskCoffeeTxt, riskIpapiTxt
     });
@@ -831,6 +835,8 @@ export default async function(ctx) {
     if (s.apiSev >= 4) add(24); else if (s.apiSev >= 3) add(18); else if (s.apiSev >= 2) add(10);
     if (coffeeRisk >= 4) add(22); else if (coffeeRisk >= 3) add(15); else if (coffeeRisk >= 2) add(8); else if (coffeeRisk === 0 && !proxy && !dc) add(-8);
 
+    if (s.residentialValue === '是') add(-15);
+    else if (s.residentialValue === '否') add(12);
     if (!proxy && !dc && s.blackSev === 0 && s.ippSev <= 1 && s.apiSev <= 1 && coffeeRisk <= 1) add(-10);
 
     if (score >= 70) return { sev: 4, text: '邮箱/收费' };
