@@ -43,6 +43,32 @@ export default async function(ctx) {
     const timeout = new Promise(resolve => { timer = setTimeout(() => resolve(fallback), ms); });
     return Promise.race([promise.catch(() => fallback), timeout]).then(v => { clearTimeout(timer); return v; });
   }
+  function stripHtml(s) {
+    return String(s || '')
+      .replace(/<[^>]*>/g, '')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&#39;/g, "'")
+      .replace(/&quot;/g, '"')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+  function extractIpriskValue(html, label) {
+    const re = new RegExp('<tr><td>' + label + '</td><td>([\\s\\S]*?)</td></tr>', 'i');
+    const m = String(html || '').match(re);
+    return m && m[1] ? stripHtml(m[1]) : '';
+  }
+  function puritySev(score) {
+    const n = Number(score);
+    if (!Number.isFinite(n)) return -1;
+    if (n >= 85) return 0;
+    if (n >= 70) return 1;
+    if (n >= 55) return 2;
+    if (n >= 40) return 3;
+    return 4;
+  }
 
   async function checkChatGPT() {
     try {
@@ -342,6 +368,7 @@ export default async function(ctx) {
     let riskCoffeeTxt = "—", coffeeSev = -1;
     let riskProxyTxt = "—", proxySev = -1;
     let riskBlackTxt = "—", blackSev = -1;
+    let ipriskScore = null, ipriskSev = -1, ipriskType = "—", ipriskLevel = "—", ipriskProxy = "—", ipriskDc = "—", ipriskTags = "";
 
     nIp = await getLandingIPv4() || "获取失败";
 
@@ -448,10 +475,28 @@ export default async function(ctx) {
             if (txt === 'Y') { blackSev = 3; riskBlackTxt = '疑似代理'; }
             else if (txt === 'N') { blackSev = 0; riskBlackTxt = '正常'; }
           } catch (e) {}
+        })(),
+        (async () => {
+          try {
+            const iprRes = await withTimeout(ctx.http.get(`https://iprisk.top/ip/${encodeURIComponent(nIp)}`, { timeout: 5200 }), 5400, null);
+            if (!iprRes || (iprRes.status && iprRes.status >= 400)) return;
+            const html = await iprRes.text();
+            const scoreTxt = extractIpriskValue(html, '纯净度评分');
+            const sm = scoreTxt.match(/(\d{1,3})\s*\/\s*100/);
+            if (sm) {
+              ipriskScore = Math.max(0, Math.min(100, Number(sm[1])));
+              ipriskSev = puritySev(ipriskScore);
+            }
+            ipriskLevel = extractIpriskValue(html, '风险等级') || ipriskLevel;
+            ipriskType = extractIpriskValue(html, 'IP 类型') || ipriskType;
+            ipriskProxy = extractIpriskValue(html, '是否代理/VPN') || ipriskProxy;
+            ipriskDc = extractIpriskValue(html, '是否机房 IP') || ipriskDc;
+            ipriskTags = extractIpriskValue(html, '标签') || '';
+          } catch (e) {}
         })()
       ]);
     }
-    return { nIp, nLoc, nativeText, riskIPPureTxt, ippSev, riskIpapiTxt, apiSev, riskCoffeeTxt, coffeeSev, riskProxyTxt, proxySev, riskBlackTxt, blackSev };
+    return { nIp, nLoc, nativeText, riskIPPureTxt, ippSev, riskIpapiTxt, apiSev, riskCoffeeTxt, coffeeSev, riskProxyTxt, proxySev, riskBlackTxt, blackSev, ipriskScore, ipriskSev, ipriskType, ipriskLevel, ipriskProxy, ipriskDc, ipriskTags };
   }
 
   const [localInfo, landingInfo, unlockStatuses] = await Promise.all([
@@ -460,7 +505,7 @@ export default async function(ctx) {
     unlockPromise
   ]);
   const { lIp, lLoc, lIsp } = localInfo;
-  const { nIp, nLoc, nativeText, riskIPPureTxt, ippSev, riskIpapiTxt, apiSev, riskCoffeeTxt, coffeeSev, riskProxyTxt, proxySev, riskBlackTxt, blackSev } = landingInfo;
+  const { nIp, nLoc, nativeText, riskIPPureTxt, ippSev, riskIpapiTxt, apiSev, riskCoffeeTxt, coffeeSev, riskProxyTxt, proxySev, riskBlackTxt, blackSev, ipriskScore, ipriskSev, ipriskType, ipriskLevel, ipriskProxy, ipriskDc, ipriskTags } = landingInfo;
   const [gptStatus, geminiStatus, youtubeStatus, netflixStatus, tiktokStatus, claudeStatus] = unlockStatuses;
 
   const proxySuccess = nIp !== "获取失败";
@@ -504,6 +549,34 @@ export default async function(ctx) {
       { sev: -1, t: 'Blackbox: —' }
     ];
   }
+  if (ipriskSev > maxSev) maxSev = ipriskSev;
+  if (proxySuccess) {
+    tgLoginPrediction = tgLoginRiskText(maxSev);
+    if (riskGrades[0]) riskGrades[0] = { sev: maxSev, t: `TG预测: ${tgLoginPrediction}` };
+  }
+
+  const tagText = String(ipriskTags || '');
+  const hasTag = (kw) => tagText.toLowerCase().includes(String(kw).toLowerCase());
+  const yesNoSev = (v, yesSev = 3) => v === '是' ? yesSev : (v === '否' ? 0 : -1);
+  const dcValue = ipriskDc !== '—' ? ipriskDc : (nativeText.includes('商业机房') ? '是' : (nativeText.includes('原生住宅') ? '否' : '—'));
+  const proxyValue = ipriskProxy !== '—' ? ipriskProxy : (riskProxyTxt.includes('VPN') || riskProxyTxt.includes('Proxy') ? '是' : (riskProxyTxt.includes('Clean') ? '否' : '—'));
+  const blacklistValue = hasTag('黑名单') || blackSev >= 3 ? '命中' : (blackSev === 0 ? '未命中' : '—');
+  const intelValue = hasTag('情报') || hasTag('ThreatFox') || hasTag('Pulsedive') ? '命中' : (tagText ? '未见' : '—');
+  const dshieldValue = hasTag('DShield') ? '攻击记录' : (tagText ? '未见' : '—');
+  const pulsediveValue = hasTag('Pulsedive') ? '可疑' : (tagText ? '未见' : '—');
+  const portValue = hasTag('端口') || hasTag('Shodan') ? '暴露' : (tagText ? '未见' : '—');
+  const riskDimensions = [
+    { sev: ipriskSev, t: `纯净度: ${ipriskScore !== null ? ipriskScore + '/100' : '—'}` },
+    { sev: yesNoSev(proxyValue, 4), t: `代理/VPN: ${proxyValue}` },
+    { sev: yesNoSev(dcValue, 2), t: `机房IP: ${dcValue}` },
+    { sev: blacklistValue === '命中' ? 4 : (blacklistValue === '未命中' ? 0 : -1), t: `黑名单: ${blacklistValue}` },
+    { sev: Math.max(ippSev, apiSev), t: `欺诈指数: ${riskIPPureTxt !== '—' ? riskIPPureTxt.replace('风险', '') : riskIpapiTxt}` },
+    { sev: apiSev, t: `ASN信誉: ${riskIpapiTxt}` },
+    { sev: intelValue === '命中' ? 3 : (intelValue === '未见' ? 0 : -1), t: `威胁情报: ${intelValue}` },
+    { sev: dshieldValue === '攻击记录' ? 3 : (dshieldValue === '未见' ? 0 : -1), t: `DShield: ${dshieldValue}` },
+    { sev: pulsediveValue === '可疑' ? 3 : (pulsediveValue === '未见' ? 0 : -1), t: `Pulsedive: ${pulsediveValue}` },
+    { sev: portValue === '暴露' ? 3 : (portValue === '未见' ? 0 : -1), t: `端口风险: ${portValue}` }
+  ];
 
   function sevIcon(sev) {
     if (sev < 0) return 'questionmark.shield.fill';
@@ -590,15 +663,15 @@ export default async function(ctx) {
 
   const now = new Date();
   const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-  const WIDGET_PADDING = isLarge ? [10, 12] : [8, 10];
+  const WIDGET_PADDING = isLarge ? [8, 12] : [8, 10];
   const HEADER_FONT = 14;
   const HEADER_ICON = 11;
   // Main title uses HEADER_FONT; secondary header text stays compact.
   const HEADER_GAP = 4;
-  const TOP_GAP = isLarge ? 4.5 : 5;
-  const HEADER_INFO_GAP = isLarge ? 1.5 : 0;
-  const INFO_GAP = isLarge ? 4 : 2.5;
-  const BOTTOM_GAP = isLarge ? 3 : 2.5;
+  const TOP_GAP = isLarge ? 2.5 : 5;
+  const HEADER_INFO_GAP = 0;
+  const INFO_GAP = isLarge ? 2.5 : 2.5;
+  const BOTTOM_GAP = isLarge ? 1.8 : 2.5;
   const COL_GAP = 12;
 
   const leftColumn = {
@@ -636,58 +709,63 @@ export default async function(ctx) {
     children: riskGrades.map(g => ScoreRow(g))
   };
 
+  const riskDimensionSection = {
+    type: 'stack', direction: 'row', gap: COL_GAP,
+    children: [
+      { type: 'stack', direction: 'column', gap: BOTTOM_GAP, flex: 1, children: riskDimensions.slice(0, 5).map(g => ScoreRow(g)) },
+      { type: 'stack', direction: 'column', gap: BOTTOM_GAP, flex: 1, children: riskDimensions.slice(5, 10).map(g => ScoreRow(g)) }
+    ]
+  };
+
   const unlockSection = {
     type: 'stack', direction: 'row', gap: COL_GAP,
     children: [unlockLeft, unlockRight]
   };
+
+  const headerInfoSection = {
+    type: 'stack', direction: 'column', gap: HEADER_INFO_GAP,
+    children: [
+      {
+        type: 'stack', direction: 'row', gap: COL_GAP,
+        children: [
+          {
+            type: 'stack', direction: 'row', alignItems: 'center', gap: HEADER_GAP, flex: 1,
+            children: [
+              { type: 'text', text: '数据中心（DCH）', font: { size: HEADER_FONT, weight: 'heavy' }, textColor: C_TITLE, flex: 1, maxLines: 1, minScale: 0.65 },
+              { type: 'image', src: `sf-symbol:${summaryIcon}`, color: summaryCol, width: 12, height: 12 },
+              { type: 'text', text: summaryTxt, font: { size: 10, weight: 'bold' }, textColor: summaryCol, maxLines: 1 }
+            ]
+          },
+          {
+            type: 'stack', direction: 'row', alignItems: 'center', gap: HEADER_GAP, flex: 1,
+            children: [
+              ...(!isDirectPolicy ? [
+                { type: 'image', src: `sf-symbol:${policyOk ? 'checkmark.circle.fill' : (policyWarn ? 'exclamationmark.circle.fill' : 'questionmark.circle.fill')}`, color: policyOk ? C_GREEN : (policyWarn ? C_ORANGE : C_SUB), width: 10, height: 10 },
+                { type: 'text', text: policy, font: { size: 10, weight: 'bold' }, textColor: policyOk ? C_GREEN : (policyWarn ? C_ORANGE : C_SUB), flex: 1, maxLines: 1, minScale: 0.7 },
+              ] : [{ type: 'spacer' }]),
+              { type: 'spacer' },
+              {
+                type: 'stack', direction: 'row', alignItems: 'center', gap: 3,
+                children: [
+                  { type: 'image', src: 'sf-symbol:arrow.clockwise', color: C_SUB, width: HEADER_ICON, height: HEADER_ICON },
+                  { type: 'text', text: timeStr, font: { size: 10 }, textColor: C_SUB }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      { type: 'stack', direction: 'row', gap: COL_GAP, children: [leftColumn, rightColumn] }
+    ]
+  };
+
+  const divider = { type: 'stack', height: 0.5, backgroundColor: { light: 'rgba(0,0,0,0.08)', dark: 'rgba(255,255,255,0.12)' } };
 
   return {
     type: 'widget',
     padding: WIDGET_PADDING,
     gap: TOP_GAP,
     backgroundColor: BG_COLOR,
-    children: [
-      {
-        type: 'stack', direction: 'column', gap: HEADER_INFO_GAP,
-        children: [
-          {
-            type: 'stack', direction: 'row', gap: COL_GAP,
-            children: [
-              {
-                type: 'stack', direction: 'row', alignItems: 'center', gap: HEADER_GAP, flex: 1,
-                children: [
-                  { type: 'text', text: '数据中心（DCH）', font: { size: HEADER_FONT, weight: 'heavy' }, textColor: C_TITLE, flex: 1, maxLines: 1, minScale: 0.65 },
-                  { type: 'image', src: `sf-symbol:${summaryIcon}`, color: summaryCol, width: 12, height: 12 },
-                  { type: 'text', text: summaryTxt, font: { size: 10, weight: 'bold' }, textColor: summaryCol, maxLines: 1 }
-                ]
-              },
-              {
-                type: 'stack', direction: 'row', alignItems: 'center', gap: HEADER_GAP, flex: 1,
-                children: [
-                  ...(!isDirectPolicy ? [
-                    { type: 'image', src: `sf-symbol:${policyOk ? 'checkmark.circle.fill' : (policyWarn ? 'exclamationmark.circle.fill' : 'questionmark.circle.fill')}`, color: policyOk ? C_GREEN : (policyWarn ? C_ORANGE : C_SUB), width: 10, height: 10 },
-                    { type: 'text', text: policy, font: { size: 10, weight: 'bold' }, textColor: policyOk ? C_GREEN : (policyWarn ? C_ORANGE : C_SUB), flex: 1, maxLines: 1, minScale: 0.7 },
-                  ] : [{ type: 'spacer' }]),
-                  { type: 'spacer' },
-                  {
-                    type: 'stack', direction: 'row', alignItems: 'center', gap: 3,
-                    children: [
-                      { type: 'image', src: 'sf-symbol:arrow.clockwise', color: C_SUB, width: HEADER_ICON, height: HEADER_ICON },
-                      { type: 'text', text: timeStr, font: { size: 10 }, textColor: C_SUB }
-                    ]
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            type: 'stack', direction: 'row', gap: COL_GAP,
-            children: [leftColumn, rightColumn]
-          }
-        ]
-      },
-      { type: 'stack', height: 0.5, backgroundColor: { light: 'rgba(0,0,0,0.08)', dark: 'rgba(255,255,255,0.12)' } },
-      unlockSection
-    ]
+    children: isLarge ? [headerInfoSection, riskDimensionSection, divider, unlockSection] : [headerInfoSection, divider, unlockSection]
   };
 }
