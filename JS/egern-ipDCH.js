@@ -17,6 +17,7 @@ export default async function(ctx) {
 
   const policy = String((ctx.env && ctx.env.POLICY) ? ctx.env.POLICY : "").trim();
   const BASE_UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1";
+  const RISK_DATA_BASE = "https://raw.githubusercontent.com/Linsars/ip-risk-data/main/dist";
 
   async function get(url, headers, timeout) {
     const opts = { timeout: timeout || 8000 };
@@ -38,6 +39,24 @@ export default async function(ctx) {
   }
   function jp(s) { try { return JSON.parse(s); } catch (e) { return null; } }
   function ti(v) { const n = Number(v); return Number.isFinite(n) ? Math.round(n) : null; }
+  function ip4ToInt(ip) {
+    const p = String(ip || '').split('.').map(x => Number(x));
+    if (p.length !== 4 || p.some(x => !Number.isInteger(x) || x < 0 || x > 255)) return null;
+    return (((p[0] * 256 + p[1]) * 256 + p[2]) * 256 + p[3]) >>> 0;
+  }
+  function ip4InCidr(ip, cidr) {
+    const n = ip4ToInt(ip);
+    const m = String(cidr || '').match(/^(\d{1,3}(?:\.\d{1,3}){3})\/(\d{1,2})$/);
+    if (n === null || !m) return false;
+    const base = ip4ToInt(m[1]);
+    const bits = Number(m[2]);
+    if (base === null || bits < 0 || bits > 32) return false;
+    const mask = bits === 0 ? 0 : (0xffffffff << (32 - bits)) >>> 0;
+    return (n & mask) === (base & mask);
+  }
+  function ip4InCidrList(ip, txt) {
+    return String(txt || '').split(/\n+/).some(line => ip4InCidr(ip, line.trim()));
+  }
   function withTimeout(promise, ms, fallback) {
     let timer;
     const timeout = new Promise(resolve => { timer = setTimeout(() => resolve(fallback), ms); });
@@ -365,6 +384,7 @@ export default async function(ctx) {
     let dshieldTxt = "—", dshieldSev = -1;
     let sfsTxt = "—", sfsSev = -1;
     let blockTxt = "—", blockSev = -1;
+    let spamTxt = "—", spamSev = -1;
     let torTxt = "否", torSev = 0;
     let otxTxt = "—", otxSev = -1;
     let greyTxt = "—", greySev = -1;
@@ -559,7 +579,19 @@ export default async function(ctx) {
         })(),
         (async () => {
           try {
-            const r = await withTimeout(ctx.http.get('https://check.torproject.org/torbulkexitlist', { timeout: 4200 }), 4400, null);
+            const drop = await withTimeout(ctx.http.get(`${RISK_DATA_BASE}/spamhaus-drop.txt`, { timeout: 3600 }), 3800, null);
+            const edrop = await withTimeout(ctx.http.get(`${RISK_DATA_BASE}/spamhaus-edrop.txt`, { timeout: 3600 }), 3800, null);
+            const dropTxt = drop ? await drop.text() : '';
+            const edropTxt = edrop ? await edrop.text() : '';
+            const hitDrop = ip4InCidrList(nIp, dropTxt);
+            const hitEdrop = ip4InCidrList(nIp, edropTxt);
+            if (hitDrop || hitEdrop) { spamSev = 4; spamTxt = hitEdrop ? 'EDROP' : 'DROP'; }
+            else { spamSev = 0; spamTxt = '未命中'; }
+          } catch (e) {}
+        })(),
+        (async () => {
+          try {
+            const r = await withTimeout(ctx.http.get(`${RISK_DATA_BASE}/tor-exit-v4.txt`, { timeout: 3600 }), 3800, null);
             if (!r) return;
             const txt = `\n${String(await r.text()).trim()}\n`;
             if (txt.includes(`\n${nIp}\n`)) { attrFlags.tor = true; torSev = 4; torTxt = '是'; nativeText = buildNativeText(attrFlags, companyName || asnOrg, companyType || asnType); }
@@ -615,7 +647,7 @@ export default async function(ctx) {
       ]);
     }
     nativeText = buildNativeText(attrFlags, companyName || asnOrg, companyType || asnType);
-    return { nIp, nLoc, nativeText, attrFlags, riskIPPureTxt, ippSev, riskIpapiTxt, apiSev, riskCoffeeTxt, coffeeSev, riskProxyTxt, proxySev, riskBlackTxt, blackSev, ipApiProxy, ipApiHosting, dshieldTxt, dshieldSev, sfsTxt, sfsSev, blockTxt, blockSev, torTxt, torSev, otxTxt, otxSev, greyTxt, greySev, pulseTxt, pulseSev, portTxt, portSev };
+    return { nIp, nLoc, nativeText, attrFlags, riskIPPureTxt, ippSev, riskIpapiTxt, apiSev, riskCoffeeTxt, coffeeSev, riskProxyTxt, proxySev, riskBlackTxt, blackSev, ipApiProxy, ipApiHosting, dshieldTxt, dshieldSev, sfsTxt, sfsSev, blockTxt, blockSev, spamTxt, spamSev, torTxt, torSev, otxTxt, otxSev, greyTxt, greySev, pulseTxt, pulseSev, portTxt, portSev };
   }
 
   const [localInfo, landingInfo, unlockStatuses] = await Promise.all([
@@ -624,7 +656,7 @@ export default async function(ctx) {
     unlockPromise
   ]);
   const { lIp, lLoc, lIsp } = localInfo;
-  const { nIp, nLoc, nativeText, attrFlags, riskIPPureTxt, ippSev, riskIpapiTxt, apiSev, riskCoffeeTxt, coffeeSev, riskProxyTxt, proxySev, riskBlackTxt, blackSev, ipApiProxy, ipApiHosting, dshieldTxt, dshieldSev, sfsTxt, sfsSev, blockTxt, blockSev, torTxt, torSev, otxTxt, otxSev, greyTxt, greySev, pulseTxt, pulseSev, portTxt, portSev } = landingInfo;
+  const { nIp, nLoc, nativeText, attrFlags, riskIPPureTxt, ippSev, riskIpapiTxt, apiSev, riskCoffeeTxt, coffeeSev, riskProxyTxt, proxySev, riskBlackTxt, blackSev, ipApiProxy, ipApiHosting, dshieldTxt, dshieldSev, sfsTxt, sfsSev, blockTxt, blockSev, spamTxt, spamSev, torTxt, torSev, otxTxt, otxSev, greyTxt, greySev, pulseTxt, pulseSev, portTxt, portSev } = landingInfo;
   const [gptStatus, geminiStatus, youtubeStatus, netflixStatus, tiktokStatus, claudeStatus] = unlockStatuses;
 
   const proxySuccess = nIp !== "获取失败";
@@ -672,14 +704,14 @@ export default async function(ctx) {
   const proxyValue = flags.tor ? 'Tor' : ((flags.proxy || flags.vpn || ipApiProxy === '是' || riskProxyTxt.includes('VPN') || riskProxyTxt.includes('Proxy')) ? '是' : ((ipApiProxy === '否' || riskProxyTxt.includes('Clean')) ? '否' : '—'));
   const torValue = flags.tor || torSev >= 4 ? '是' : (torTxt || '否');
   const dcValue = (flags.datacenter || ipApiHosting === '是' || nativeText.includes('云') || nativeText.includes('机房')) ? '是' : ((flags.residential || flags.mobile || ipApiHosting === '否') ? '否' : '—');
-  const blacklistHit = blackSev >= 3 || sfsSev >= 3 || blockSev >= 3;
-  const blacklistClean = blackSev === 0 && sfsSev === 0 && blockSev === 0;
-  const blacklistValue = blacklistHit ? (blackSev >= 3 ? riskBlackTxt : (sfsSev >= 3 ? sfsTxt : blockTxt)) : (blacklistClean ? '未命中' : '—');
+  const blacklistHit = blackSev >= 3 || sfsSev >= 3 || blockSev >= 3 || spamSev >= 4;
+  const blacklistClean = blackSev === 0 && sfsSev === 0 && blockSev === 0 && spamSev === 0;
+  const blacklistValue = blacklistHit ? (spamSev >= 4 ? spamTxt : (blackSev >= 3 ? riskBlackTxt : (sfsSev >= 3 ? sfsTxt : blockTxt))) : (blacklistClean ? '未命中' : '—');
   const intelHit = otxSev >= 3 || greySev >= 3 || pulseSev >= 3;
   const intelClean = otxSev === 0 && greySev === 0;
-  const intelValue = intelHit ? (otxSev >= 3 ? otxTxt : (greySev >= 3 ? greyTxt : pulseTxt)) : (intelClean ? '未见' : '—');
-  const dshieldValue = dshieldSev >= 3 ? dshieldTxt : (dshieldSev === 0 ? '未见' : '—');
-  const pulsediveValue = pulseSev >= 3 ? pulseTxt : (pulseSev === 0 ? '未见' : '—');
+  const intelValue = intelHit ? (otxSev >= 3 ? otxTxt : (greySev >= 3 ? greyTxt : pulseTxt)) : (intelClean ? '未收录' : '—');
+  const dshieldValue = dshieldSev >= 3 ? dshieldTxt : (dshieldSev === 0 ? '无记录' : '—');
+  const pulsediveValue = pulseSev >= 3 ? pulseTxt : (pulseSev === 0 ? '未收录' : '—');
   const portValue = portSev >= 3 ? portTxt : (portSev >= 0 ? portTxt : '—');
   const fraudTxt = riskIPPureTxt !== '—' ? riskIPPureTxt.replace('风险', '') : riskIpapiTxt;
   const riskDimensions = [
@@ -689,7 +721,7 @@ export default async function(ctx) {
     { sev: blacklistHit ? 4 : (blacklistValue === '未命中' ? 0 : -1), t: `黑名单: ${blacklistValue}` },
     { sev: Math.max(ippSev, apiSev), t: `欺诈指数: ${fraudTxt}` },
     { sev: apiSev, t: `ASN信誉: ${riskIpapiTxt}` },
-    { sev: intelHit ? 3 : (intelValue === '未见' ? 0 : -1), t: `威胁情报: ${intelValue}` },
+    { sev: intelHit ? 3 : (intelValue === '未收录' ? 0 : -1), t: `威胁情报: ${intelValue}` },
     { sev: dshieldSev, t: `攻击记录: ${dshieldValue}` },
     { sev: pulseSev, t: `可疑情报: ${pulsediveValue}` },
     { sev: portSev, t: `端口风险: ${portValue}` }
@@ -878,7 +910,7 @@ export default async function(ctx) {
     type: 'stack', direction: 'column', gap: HEADER_INFO_GAP,
     children: [
       {
-        type: 'stack', direction: 'row', gap: COL_GAP,
+        type: 'stack', direction: 'row', gap: COL_GAP, height: isLarge ? 22 : undefined,
         children: [
           {
             type: 'stack', direction: 'row', alignItems: 'center', gap: HEADER_GAP, flex: 1,
