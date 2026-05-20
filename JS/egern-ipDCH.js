@@ -715,7 +715,9 @@ export default async function(ctx) {
   const yesNoSev = (v, yesSev = 3) => v === '是' ? yesSev : (v === '否' ? 0 : -1);
   const flags = attrFlags || {};
   const w = workerRisk || {};
-  const proxyValue = flags.tor ? 'Tor' : ((w.proxy === '是' || flags.proxy || flags.vpn || ipApiProxy === '是' || riskProxyTxt.includes('VPN') || riskProxyTxt.includes('Proxy')) ? '是' : ((w.proxy === '否' || ipApiProxy === '否' || riskProxyTxt.includes('Clean')) ? '否' : '—'));
+  const workerProxyTxt = w.proxy === '是' ? `${w.proxy_type || 'Proxy'}${w.proxy_risk != null ? '/' + w.proxy_risk : ''}` : '';
+  const localProxyTxt = riskProxyTxt && !['正常', '—'].includes(riskProxyTxt) ? riskProxyTxt : (flags.vpn ? 'VPN' : (flags.proxy ? 'Proxy' : ''));
+  const proxyValue = flags.tor ? 'Tor' : (workerProxyTxt || localProxyTxt || ((w.proxy === '否' || ipApiProxy === '否' || riskProxyTxt.includes('Clean')) ? '否' : '—'));
   const torValue = flags.tor || torSev >= 4 || w.tor === '是' ? '是' : (torTxt || '否');
   const dcValue = (w.datacenter === '是' || flags.datacenter || ipApiHosting === '是' || nativeText.includes('云') || nativeText.includes('机房')) ? '是' : ((w.datacenter === '否' || flags.residential || flags.mobile || ipApiHosting === '否') ? '否' : '—');
   const workerSpamHit = w.spamhaus && w.spamhaus !== '未命中';
@@ -732,12 +734,29 @@ export default async function(ctx) {
   const portValue = portSev >= 3 ? portTxt : (workerPorts || (portSev >= 0 ? portTxt : '—'));
   const portRiskSev = (Array.isArray(w.vulns) && w.vulns.length) ? 4 : (Array.isArray(w.sensitive_ports) && w.sensitive_ports.length ? 3 : portSev);
   const fraudTxt = riskIPPureTxt !== '—' ? riskIPPureTxt.replace('风险', '') : riskIpapiTxt;
-  const asnRiskTxt = w.cloud && w.cloud !== '否' ? `${w.cloud}/${riskIpapiTxt}` : (asnType ? `${asnType}/${riskIpapiTxt}` : riskIpapiTxt);
+  const compactName = s => {
+    const v = String(s || '').replace(/\b(Network|Services|Limited|Ltd|Inc|LLC|Co\.?|Corporation|Company)\b/gi, '').replace(/\s+/g, ' ').trim();
+    return v.length > 12 ? `${v.slice(0, 11)}…` : v;
+  };
+  const asnLabel = w.cloud && w.cloud !== '否' ? compactName(w.cloud) : (asnType ? compactName(asnType) : '');
+  const asnRiskTxt = asnLabel ? `${asnLabel}/${riskIpapiTxt}` : riskIpapiTxt;
   const asnRiskSev = w.cloud && w.cloud !== '否' ? Math.max(apiSev, 2) : apiSev;
-  const workerScoreValue = typeof w.score === 'number' ? `${w.score}` : '—';
-  const workerScoreSev = typeof w.score === 'number' ? (w.score >= 70 ? 4 : (w.score >= 45 ? 3 : (w.score >= 25 ? 2 : (w.score >= 10 ? 1 : 0)))) : -1;
+  const firstNum = s => {
+    const m = String(s || '').match(/(\d+(?:\.\d+)?)/);
+    return m ? Number(m[1]) : null;
+  };
+  const scoreCandidates = [typeof w.score === 'number' ? w.score : null, firstNum(riskProxyTxt), firstNum(riskIPPureTxt)].filter(v => typeof v === 'number' && Number.isFinite(v));
+  if (proxyValue === 'Tor' || torValue === '是') scoreCandidates.push(90);
+  if (!['否', '—'].includes(proxyValue)) scoreCandidates.push(60);
+  if (banHit) scoreCandidates.push(85);
+  if (Array.isArray(w.vulns) && w.vulns.length) scoreCandidates.push(90);
+  else if (portRiskSev >= 3) scoreCandidates.push(55);
+  if (asnRiskSev >= 3) scoreCandidates.push(60); else if (asnRiskSev >= 2) scoreCandidates.push(35);
+  const riskScore = scoreCandidates.length ? Math.round(Math.max(...scoreCandidates)) : null;
+  const workerScoreValue = riskScore !== null ? `${riskScore}` : '—';
+  const workerScoreSev = riskScore !== null ? (riskScore >= 70 ? 4 : (riskScore >= 45 ? 3 : (riskScore >= 25 ? 2 : (riskScore >= 10 ? 1 : 0)))) : -1;
   const riskDimensions = [
-    { sev: proxyValue === 'Tor' ? 4 : yesNoSev(proxyValue, 3), t: `代理/VPN: ${proxyValue}` },
+    { sev: proxyValue === 'Tor' ? 4 : (['否', '—'].includes(proxyValue) ? yesNoSev(proxyValue, 3) : Math.max(proxySev, 3)), t: `代理/VPN: ${proxyValue}` },
     { sev: torValue === '是' ? 4 : torSev, t: `Tor出口: ${torValue}` },
     { sev: banHit ? 4 : (banValue === '未命中' ? 0 : -1), t: `封禁名单: ${banValue}` },
     { sev: Math.max(ippSev, apiSev), t: `欺诈指数: ${fraudTxt}` },
@@ -746,7 +765,7 @@ export default async function(ctx) {
     { sev: dshieldSev, t: `攻击记录: ${dshieldValue}` },
     { sev: pulseSev, t: `可疑情报: ${pulsediveValue}` },
     { sev: portRiskSev, t: `端口风险: ${portValue}` },
-    { sev: workerScoreSev, t: `综合评分: ${workerScoreValue}` }
+    { sev: workerScoreSev, t: `风险评分: ${workerScoreValue}` }
   ];
 
   if (proxySuccess) riskDimensions.forEach(g => { if (g.sev > maxSev) maxSev = g.sev; });
@@ -784,7 +803,7 @@ export default async function(ctx) {
     const proxyTxt = String(s.riskProxyTxt || '').toLowerCase();
     const coffeeRisk = s.coffeeSev >= 0 ? s.coffeeSev : 0;
     const dc = s.dcValue === '是' || String(s.nativeText || '').includes('商业机房');
-    const proxy = s.proxyValue === '是' || proxyTxt.includes('vpn') || proxyTxt.includes('proxy');
+    const proxy = (s.proxyValue && !['否', '—'].includes(s.proxyValue)) || proxyTxt.includes('vpn') || proxyTxt.includes('proxy');
 
     if (s.blacklistValue === '命中' || s.blackSev >= 3) add(38);
     if (s.intelValue === '命中') add(26);
@@ -864,7 +883,7 @@ export default async function(ctx) {
         { type: 'image', src: `sf-symbol:${sevIcon(grade.sev)}`, color: col, width: SMALL_ICON, height: SMALL_ICON },
         { type: 'text', text: src, font: { size: SMALL_FONT, weight: 'medium' }, textColor: C_SUB, flex: 1, maxLines: 1 },
         { type: 'spacer' },
-        { type: 'text', text: val, font: { size: SMALL_FONT, weight: 'bold' }, textColor: col, maxLines: 1 }
+        { type: 'text', text: val, font: { size: SMALL_FONT, weight: 'bold' }, textColor: col, maxLines: 1, minScale: 0.7, lineBreakMode: 'tail' }
       ]
     };
   }
