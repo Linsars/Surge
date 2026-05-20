@@ -448,7 +448,7 @@ export default async function(ctx) {
         })(),
         (async () => {
           try {
-            const pcRes = await withTimeout(ctx.http.get(`https://proxycheck.io/v2/${encodeURIComponent(nIp)}?vpn=1&asn=1&risk=1`, { timeout: 4500 }), 4700, null);
+            const pcRes = await withTimeout(ctx.http.get(`https://proxycheck.io/v2/${encodeURIComponent(nIp)}?vpn=1&asn=1&risk=1&_=${Date.now()}`, { timeout: 4500 }), 4700, null);
             if (!pcRes) return;
             const pj = JSON.parse(await pcRes.text());
             const item = pj && pj[nIp];
@@ -457,8 +457,8 @@ export default async function(ctx) {
               const isProxy = String(item.proxy || '').toLowerCase() === 'yes';
               const typ = item.type ? String(item.type) : '';
               if (risk !== null) {
-                if (risk >= 80 || isProxy) proxySev = 4;
-                else if (risk >= 60) proxySev = 3;
+                if (risk >= 80) proxySev = 4;
+                else if (risk >= 60 || isProxy) proxySev = 3;
                 else if (risk >= 30) proxySev = 2;
                 else if (risk > 0) proxySev = 1;
                 else proxySev = 0;
