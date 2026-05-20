@@ -43,32 +43,8 @@ export default async function(ctx) {
     const timeout = new Promise(resolve => { timer = setTimeout(() => resolve(fallback), ms); });
     return Promise.race([promise.catch(() => fallback), timeout]).then(v => { clearTimeout(timer); return v; });
   }
-  function stripHtml(s) {
-    return String(s || '')
-      .replace(/<[^>]*>/g, '')
-      .replace(/&nbsp;/g, ' ')
-      .replace(/&amp;/g, '&')
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/&#39;/g, "'")
-      .replace(/&quot;/g, '"')
-      .replace(/\s+/g, ' ')
-      .trim();
-  }
-  function extractIpriskValue(html, label) {
-    const re = new RegExp('<tr><td>' + label + '</td><td>([\\s\\S]*?)</td></tr>', 'i');
-    const m = String(html || '').match(re);
-    return m && m[1] ? stripHtml(m[1]) : '';
-  }
-  function puritySev(score) {
-    const n = Number(score);
-    if (!Number.isFinite(n)) return -1;
-    if (n >= 85) return 0;
-    if (n >= 70) return 1;
-    if (n >= 55) return 2;
-    if (n >= 40) return 3;
-    return 4;
-  }
+  // HTML parsing is intentionally avoided for risk sources.
+  // Risk dimensions use direct self-check sources; no HTML risk-page parsing.
 
   async function checkChatGPT() {
     try {
@@ -361,6 +337,21 @@ export default async function(ctx) {
     });
   }
 
+  function buildNativeText(flags, org, typ) {
+    const f = flags || {};
+    const text = `${org || ''} ${typ || ''}`.toLowerCase();
+    const cloudNames = ['amazon', 'aws', 'google', 'microsoft', 'azure', 'oracle', 'alibaba', 'tencent', 'cloudflare', 'digitalocean', 'linode', 'akamai', 'vultr', 'hetzner', 'ovh'];
+    const isCloud = f.cloud || cloudNames.some(k => text.includes(k));
+    if (f.mobile) return '📱 移动网络';
+    if (f.residential && !f.datacenter) return '🏠 住宅宽带';
+    if (isCloud) return '☁️ 云服务器';
+    if (f.datacenter || String(typ || '').toLowerCase() === 'hosting') return '🏢 商业机房';
+    if (f.crawler) return '🤖 爬虫网络';
+    if (f.tor) return '🧅 Tor出口';
+    if (f.vpn || f.proxy) return '🔀 代理/VPN';
+    return '未知';
+  }
+
   async function getLandingInfo() {
     let nIp = "获取失败", nLoc = "未知位置", nativeText = "未知";
     let riskIPPureTxt = "—", ippSev = -1;
@@ -368,7 +359,17 @@ export default async function(ctx) {
     let riskCoffeeTxt = "—", coffeeSev = -1;
     let riskProxyTxt = "—", proxySev = -1;
     let riskBlackTxt = "—", blackSev = -1;
-    let ipriskScore = null, ipriskSev = -1, ipriskType = "—", ipriskLevel = "—", ipriskProxy = "—", ipriskDc = "—", ipriskTags = "";
+    let attrFlags = { residential: false, mobile: false, datacenter: false, cloud: false, proxy: false, vpn: false, tor: false, crawler: false };
+    let companyName = "", companyType = "", asnOrg = "", asnType = "";
+    let ipApiProxy = "—", ipApiHosting = "—";
+    let dshieldTxt = "—", dshieldSev = -1;
+    let sfsTxt = "—", sfsSev = -1;
+    let blockTxt = "—", blockSev = -1;
+    let torTxt = "否", torSev = 0;
+    let otxTxt = "—", otxSev = -1;
+    let greyTxt = "—", greySev = -1;
+    let pulseTxt = "—", pulseSev = -1;
+    let portTxt = "—", portSev = -1;
 
     nIp = await getLandingIPv4() || "获取失败";
 
@@ -398,7 +399,17 @@ export default async function(ctx) {
               let code = cj.countryCode || cj.country_code || "";
               if (code.toUpperCase() === 'TW') code = 'CN';
               nLoc = `${fmtFlag(code)} ${cj.country || ""} ${cj.city || ""}`.trim() || nLoc;
-              nativeText = cj.isResidential === true ? "🏠 原生住宅" : (cj.isResidential === false ? "🏢 商业机房" : (cj.is_datacenter ? "🏢 商业机房" : "未知"));
+              attrFlags.residential = attrFlags.residential || cj.isResidential === true;
+              attrFlags.datacenter = attrFlags.datacenter || cj.is_datacenter === true || cj.isResidential === false || String(cj.company_type || '').toLowerCase() === 'hosting';
+              attrFlags.mobile = attrFlags.mobile || cj.is_mobile === true;
+              attrFlags.proxy = attrFlags.proxy || cj.is_proxy === true;
+              attrFlags.vpn = attrFlags.vpn || cj.is_vpn === true;
+              attrFlags.tor = attrFlags.tor || cj.is_tor === true;
+              attrFlags.crawler = attrFlags.crawler || cj.is_crawler === true;
+              companyName = companyName || cj.company_name || cj.datacenter_name || '';
+              companyType = companyType || cj.company_type || '';
+              asnOrg = asnOrg || cj.asOrganization || cj.asname || '';
+              nativeText = buildNativeText(attrFlags, companyName || asnOrg, companyType || asnType);
               const score = ti(cj.trust_score);
               if (score !== null) {
                 if (score < 30) coffeeSev = 4;
@@ -416,6 +427,19 @@ export default async function(ctx) {
             const apiRes = await withTimeout(ctx.http.get(`https://api.ipapi.is/?q=${nIp}`, { timeout: 4500 }), 4700, null);
             if (!apiRes) return;
             const j = JSON.parse(await apiRes.text());
+            if (j) {
+              attrFlags.mobile = attrFlags.mobile || j.is_mobile === true;
+              attrFlags.datacenter = attrFlags.datacenter || j.is_datacenter === true || String(j.company?.type || '').toLowerCase() === 'hosting' || String(j.asn?.type || '').toLowerCase() === 'hosting';
+              attrFlags.proxy = attrFlags.proxy || j.is_proxy === true;
+              attrFlags.vpn = attrFlags.vpn || j.is_vpn === true;
+              attrFlags.tor = attrFlags.tor || j.is_tor === true;
+              attrFlags.crawler = attrFlags.crawler || j.is_crawler === true;
+              companyName = companyName || j.company?.name || j.datacenter?.datacenter || '';
+              companyType = companyType || j.company?.type || '';
+              asnOrg = asnOrg || j.asn?.org || j.asn?.descr || '';
+              asnType = asnType || j.asn?.type || '';
+              nativeText = buildNativeText(attrFlags, companyName || asnOrg, companyType || asnType);
+            }
             if (j && j.company && j.company.abuser_score) {
               const m = String(j.company.abuser_score).match(/([0-9.]+)\s*\(([^)]+)\)/);
               if (m) {
@@ -456,6 +480,13 @@ export default async function(ctx) {
               const risk = ti(item.risk);
               const isProxy = String(item.proxy || '').toLowerCase() === 'yes';
               const typ = item.type ? String(item.type) : '';
+              const typLow = typ.toLowerCase();
+              attrFlags.proxy = attrFlags.proxy || isProxy;
+              attrFlags.vpn = attrFlags.vpn || typLow.includes('vpn');
+              attrFlags.tor = attrFlags.tor || typLow.includes('tor');
+              companyName = companyName || item.provider || item.organisation || '';
+              asnOrg = asnOrg || item.provider || item.organisation || '';
+              nativeText = buildNativeText(attrFlags, companyName || asnOrg, companyType || asnType);
               if (risk !== null) {
                 if (risk >= 80) proxySev = 4;
                 else if (risk >= 60 || isProxy) proxySev = 3;
@@ -478,25 +509,113 @@ export default async function(ctx) {
         })(),
         (async () => {
           try {
-            const iprRes = await withTimeout(ctx.http.get(`https://iprisk.top/ip/${encodeURIComponent(nIp)}`, { timeout: 5200 }), 5400, null);
-            if (!iprRes || (iprRes.status && iprRes.status >= 400)) return;
-            const html = await iprRes.text();
-            const scoreTxt = extractIpriskValue(html, '纯净度评分');
-            const sm = scoreTxt.match(/(\d{1,3})\s*\/\s*100/);
-            if (sm) {
-              ipriskScore = Math.max(0, Math.min(100, Number(sm[1])));
-              ipriskSev = puritySev(ipriskScore);
+            const r = await withTimeout(ctx.http.get(`http://ip-api.com/json/${encodeURIComponent(nIp)}?fields=status,proxy,hosting,mobile,as,isp,org,countryCode,query`, { timeout: 3500 }), 3700, null);
+            if (!r) return;
+            const j = JSON.parse(await r.text());
+            if (j && j.status === 'success') {
+              attrFlags.proxy = attrFlags.proxy || j.proxy === true;
+              attrFlags.datacenter = attrFlags.datacenter || j.hosting === true;
+              attrFlags.mobile = attrFlags.mobile || j.mobile === true;
+              ipApiProxy = j.proxy === true ? '是' : '否';
+              ipApiHosting = j.hosting === true ? '是' : '否';
+              // mobile flag is stored in attrFlags.mobile.
+              asnOrg = asnOrg || j.as || j.org || j.isp || '';
+              nativeText = buildNativeText(attrFlags, companyName || asnOrg, companyType || asnType);
             }
-            ipriskLevel = extractIpriskValue(html, '风险等级') || ipriskLevel;
-            ipriskType = extractIpriskValue(html, 'IP 类型') || ipriskType;
-            ipriskProxy = extractIpriskValue(html, '是否代理/VPN') || ipriskProxy;
-            ipriskDc = extractIpriskValue(html, '是否机房 IP') || ipriskDc;
-            ipriskTags = extractIpriskValue(html, '标签') || '';
+          } catch (e) {}
+        })(),
+        (async () => {
+          try {
+            const r = await withTimeout(ctx.http.get(`https://isc.sans.edu/api/ip/${encodeURIComponent(nIp)}?json`, { timeout: 3500 }), 3700, null);
+            if (!r) return;
+            const d = JSON.parse(await r.text()).ip || {};
+            const attacks = ti(d.attacks), count = ti(d.count), maxrisk = ti(d.maxrisk);
+            if ((attacks || 0) > 0 || (count || 0) > 0 || (maxrisk || 0) > 0) {
+              dshieldSev = (maxrisk && maxrisk >= 7) || (attacks && attacks >= 100) ? 4 : 3;
+              dshieldTxt = attacks ? `${attacks}次` : (count ? `${count}条` : `风险${maxrisk}`);
+            } else { dshieldSev = 0; dshieldTxt = '未见'; }
+          } catch (e) {}
+        })(),
+        (async () => {
+          try {
+            const r = await withTimeout(ctx.http.get(`https://api.stopforumspam.org/api?ip=${encodeURIComponent(nIp)}&json`, { timeout: 3500 }), 3700, null);
+            if (!r) return;
+            const d = JSON.parse(await r.text()).ip || {};
+            const appears = Number(d.appears || 0), freq = Number(d.frequency || 0);
+            if (appears > 0 || freq > 0) { sfsSev = freq >= 3 ? 4 : 3; sfsTxt = freq ? `命中${freq}` : '命中'; }
+            else { sfsSev = 0; sfsTxt = '未见'; }
+          } catch (e) {}
+        })(),
+        (async () => {
+          try {
+            const r = await withTimeout(ctx.http.get(`https://api.blocklist.de/api.php?ip=${encodeURIComponent(nIp)}`, { timeout: 3500 }), 3700, null);
+            if (!r) return;
+            const txt = String(await r.text());
+            const attacks = Number((txt.match(/attacks:\s*(\d+)/i) || [])[1] || 0);
+            const reports = Number((txt.match(/reports:\s*(\d+)/i) || [])[1] || 0);
+            if (attacks > 0 || reports > 0) { blockSev = attacks >= 3 || reports >= 3 ? 4 : 3; blockTxt = attacks ? `攻击${attacks}` : `报告${reports}`; }
+            else { blockSev = 0; blockTxt = '未见'; }
+          } catch (e) {}
+        })(),
+        (async () => {
+          try {
+            const r = await withTimeout(ctx.http.get('https://check.torproject.org/torbulkexitlist', { timeout: 4200 }), 4400, null);
+            if (!r) return;
+            const txt = `\n${String(await r.text()).trim()}\n`;
+            if (txt.includes(`\n${nIp}\n`)) { attrFlags.tor = true; torSev = 4; torTxt = '是'; nativeText = buildNativeText(attrFlags, companyName || asnOrg, companyType || asnType); }
+            else { torSev = 0; torTxt = '否'; }
+          } catch (e) {}
+        })(),
+        (async () => {
+          try {
+            const r = await withTimeout(ctx.http.get(`https://otx.alienvault.com/api/v1/indicators/IPv4/${encodeURIComponent(nIp)}/general`, { timeout: 4200 }), 4400, null);
+            if (!r) return;
+            const d = JSON.parse(await r.text());
+            const pulses = Number(d?.pulse_info?.count || 0), rep = Number(d?.reputation || 0);
+            if (pulses > 0 || rep > 0) { otxSev = pulses >= 3 || rep >= 3 ? 4 : 3; otxTxt = pulses ? `${pulses}脉冲` : `信誉${rep}`; }
+            else { otxSev = 0; otxTxt = '未见'; }
+          } catch (e) {}
+        })(),
+        (async () => {
+          try {
+            const r = await withTimeout(ctx.http.get(`https://api.greynoise.io/v3/community/${encodeURIComponent(nIp)}`, { timeout: 3500 }), 3700, null);
+            if (!r) return;
+            const d = JSON.parse(await r.text());
+            if (d.noise === true) { greySev = 3; greyTxt = '扫描源'; }
+            else if (d.riot === true) { greySev = 0; greyTxt = 'RIOT'; }
+            else { greySev = 0; greyTxt = '未见'; }
+          } catch (e) {}
+        })(),
+        (async () => {
+          try {
+            const r = await withTimeout(ctx.http.get(`https://pulsedive.com/api/info.php?indicator=${encodeURIComponent(nIp)}`, { timeout: 4200 }), 4400, null);
+            if (!r) return;
+            const d = JSON.parse(await r.text());
+            if (d.error) { pulseSev = 0; pulseTxt = '未见'; return; }
+            const risk = String(d.risk || '').toLowerCase();
+            if (risk.includes('critical') || risk.includes('high')) { pulseSev = 4; pulseTxt = '高危'; }
+            else if (risk.includes('medium')) { pulseSev = 3; pulseTxt = '可疑'; }
+            else if (risk.includes('low')) { pulseSev = 1; pulseTxt = '低危'; }
+            else { pulseSev = 0; pulseTxt = '未见'; }
+          } catch (e) {}
+        })(),
+        (async () => {
+          try {
+            const r = await withTimeout(ctx.http.get(`https://internetdb.shodan.io/${encodeURIComponent(nIp)}`, { timeout: 4200 }), 4400, null);
+            if (!r || r.status === 404) { portSev = 0; portTxt = '未见'; return; }
+            const d = JSON.parse(await r.text());
+            const ports = Array.isArray(d.ports) ? d.ports : [];
+            const vulns = d.vulns && typeof d.vulns === 'object' ? Object.keys(d.vulns) : [];
+            if (vulns.length) { portSev = 4; portTxt = `${vulns.length}漏洞`; }
+            else if (ports.some(p => [22,23,3389,5900,6379,9200,9300,11211].includes(Number(p)))) { portSev = 3; portTxt = ports.slice(0, 3).join(','); }
+            else if (ports.length) { portSev = 1; portTxt = ports.slice(0, 3).join(','); }
+            else { portSev = 0; portTxt = '未见'; }
           } catch (e) {}
         })()
       ]);
     }
-    return { nIp, nLoc, nativeText, riskIPPureTxt, ippSev, riskIpapiTxt, apiSev, riskCoffeeTxt, coffeeSev, riskProxyTxt, proxySev, riskBlackTxt, blackSev, ipriskScore, ipriskSev, ipriskType, ipriskLevel, ipriskProxy, ipriskDc, ipriskTags };
+    nativeText = buildNativeText(attrFlags, companyName || asnOrg, companyType || asnType);
+    return { nIp, nLoc, nativeText, attrFlags, riskIPPureTxt, ippSev, riskIpapiTxt, apiSev, riskCoffeeTxt, coffeeSev, riskProxyTxt, proxySev, riskBlackTxt, blackSev, ipApiProxy, ipApiHosting, dshieldTxt, dshieldSev, sfsTxt, sfsSev, blockTxt, blockSev, torTxt, torSev, otxTxt, otxSev, greyTxt, greySev, pulseTxt, pulseSev, portTxt, portSev };
   }
 
   const [localInfo, landingInfo, unlockStatuses] = await Promise.all([
@@ -505,7 +624,7 @@ export default async function(ctx) {
     unlockPromise
   ]);
   const { lIp, lLoc, lIsp } = localInfo;
-  const { nIp, nLoc, nativeText, riskIPPureTxt, ippSev, riskIpapiTxt, apiSev, riskCoffeeTxt, coffeeSev, riskProxyTxt, proxySev, riskBlackTxt, blackSev, ipriskScore, ipriskSev, ipriskType, ipriskLevel, ipriskProxy, ipriskDc, ipriskTags } = landingInfo;
+  const { nIp, nLoc, nativeText, attrFlags, riskIPPureTxt, ippSev, riskIpapiTxt, apiSev, riskCoffeeTxt, coffeeSev, riskProxyTxt, proxySev, riskBlackTxt, blackSev, ipApiProxy, ipApiHosting, dshieldTxt, dshieldSev, sfsTxt, sfsSev, blockTxt, blockSev, torTxt, torSev, otxTxt, otxSev, greyTxt, greySev, pulseTxt, pulseSev, portTxt, portSev } = landingInfo;
   const [gptStatus, geminiStatus, youtubeStatus, netflixStatus, tiktokStatus, claudeStatus] = unlockStatuses;
 
   const proxySuccess = nIp !== "获取失败";
@@ -523,19 +642,17 @@ export default async function(ctx) {
 
   let riskGrades = [];
   let maxSev = -1;
-  let tgLoginPrediction = '无法判断';
+  const sourceGrades = proxySuccess ? [
+    { sev: ippSev, t: `IPPure: ${riskIPPureTxt}` },
+    { sev: apiSev, t: `ipapi: ${riskIpapiTxt}` },
+    { sev: coffeeSev, t: `NetCoffee: ${riskCoffeeTxt}` },
+    { sev: proxySev, t: `ProxyCheck: ${riskProxyTxt}` },
+    { sev: blackSev, t: `Blackbox: ${riskBlackTxt}` }
+  ] : [];
   if (proxySuccess) {
-    const sourceGrades = [
-      { sev: ippSev, t: `IPPure: ${riskIPPureTxt}` },
-      { sev: apiSev, t: `ipapi: ${riskIpapiTxt}` },
-      { sev: coffeeSev, t: `NetCoffee: ${riskCoffeeTxt}` },
-      { sev: proxySev, t: `ProxyCheck: ${riskProxyTxt}` },
-      { sev: blackSev, t: `Blackbox: ${riskBlackTxt}` }
-    ];
     sourceGrades.forEach(g => { if (g.sev > maxSev) maxSev = g.sev; });
-    tgLoginPrediction = tgLoginRiskText(maxSev);
     riskGrades = [
-      { sev: maxSev, t: `TG预测: ${tgLoginPrediction}` },
+      { sev: -1, t: 'TG预测: 计算中' },
       ...sourceGrades
     ];
   } else {
@@ -549,34 +666,45 @@ export default async function(ctx) {
       { sev: -1, t: 'Blackbox: —' }
     ];
   }
-  if (ipriskSev > maxSev) maxSev = ipriskSev;
-  if (proxySuccess) {
-    tgLoginPrediction = tgLoginRiskText(maxSev);
-    if (riskGrades[0]) riskGrades[0] = { sev: maxSev, t: `TG预测: ${tgLoginPrediction}` };
-  }
 
-  const tagText = String(ipriskTags || '');
-  const hasTag = (kw) => tagText.toLowerCase().includes(String(kw).toLowerCase());
   const yesNoSev = (v, yesSev = 3) => v === '是' ? yesSev : (v === '否' ? 0 : -1);
-  const dcValue = ipriskDc !== '—' ? ipriskDc : (nativeText.includes('商业机房') ? '是' : (nativeText.includes('原生住宅') ? '否' : '—'));
-  const proxyValue = ipriskProxy !== '—' ? ipriskProxy : (riskProxyTxt.includes('VPN') || riskProxyTxt.includes('Proxy') ? '是' : (riskProxyTxt.includes('Clean') ? '否' : '—'));
-  const blacklistValue = hasTag('黑名单') || blackSev >= 3 ? '命中' : (blackSev === 0 ? '未命中' : '—');
-  const intelValue = hasTag('情报') || hasTag('ThreatFox') || hasTag('Pulsedive') ? '命中' : (tagText ? '未见' : '—');
-  const dshieldValue = hasTag('DShield') ? '攻击记录' : (tagText ? '未见' : '—');
-  const pulsediveValue = hasTag('Pulsedive') ? '可疑' : (tagText ? '未见' : '—');
-  const portValue = hasTag('端口') || hasTag('Shodan') ? '暴露' : (tagText ? '未见' : '—');
+  const flags = attrFlags || {};
+  const proxyValue = flags.tor ? 'Tor' : ((flags.proxy || flags.vpn || ipApiProxy === '是' || riskProxyTxt.includes('VPN') || riskProxyTxt.includes('Proxy')) ? '是' : ((ipApiProxy === '否' || riskProxyTxt.includes('Clean')) ? '否' : '—'));
+  const torValue = flags.tor || torSev >= 4 ? '是' : (torTxt || '否');
+  const dcValue = (flags.datacenter || ipApiHosting === '是' || nativeText.includes('云') || nativeText.includes('机房')) ? '是' : ((flags.residential || flags.mobile || ipApiHosting === '否') ? '否' : '—');
+  const blacklistHit = blackSev >= 3 || sfsSev >= 3 || blockSev >= 3;
+  const blacklistClean = blackSev === 0 && sfsSev === 0 && blockSev === 0;
+  const blacklistValue = blacklistHit ? (blackSev >= 3 ? riskBlackTxt : (sfsSev >= 3 ? sfsTxt : blockTxt)) : (blacklistClean ? '未命中' : '—');
+  const intelHit = otxSev >= 3 || greySev >= 3 || pulseSev >= 3;
+  const intelClean = otxSev === 0 && greySev === 0;
+  const intelValue = intelHit ? (otxSev >= 3 ? otxTxt : (greySev >= 3 ? greyTxt : pulseTxt)) : (intelClean ? '未见' : '—');
+  const dshieldValue = dshieldSev >= 3 ? dshieldTxt : (dshieldSev === 0 ? '未见' : '—');
+  const pulsediveValue = pulseSev >= 3 ? pulseTxt : (pulseSev === 0 ? '未见' : '—');
+  const portValue = portSev >= 3 ? portTxt : (portSev >= 0 ? portTxt : '—');
+  const fraudTxt = riskIPPureTxt !== '—' ? riskIPPureTxt.replace('风险', '') : riskIpapiTxt;
   const riskDimensions = [
-    { sev: ipriskSev, t: `纯净度: ${ipriskScore !== null ? ipriskScore + '/100' : '—'}` },
-    { sev: yesNoSev(proxyValue, 4), t: `代理/VPN: ${proxyValue}` },
+    { sev: proxyValue === 'Tor' ? 4 : yesNoSev(proxyValue, 3), t: `代理/VPN: ${proxyValue}` },
+    { sev: torSev, t: `Tor出口: ${torValue}` },
     { sev: yesNoSev(dcValue, 2), t: `机房IP: ${dcValue}` },
-    { sev: blacklistValue === '命中' ? 4 : (blacklistValue === '未命中' ? 0 : -1), t: `黑名单: ${blacklistValue}` },
-    { sev: Math.max(ippSev, apiSev), t: `欺诈指数: ${riskIPPureTxt !== '—' ? riskIPPureTxt.replace('风险', '') : riskIpapiTxt}` },
+    { sev: blacklistHit ? 4 : (blacklistValue === '未命中' ? 0 : -1), t: `黑名单: ${blacklistValue}` },
+    { sev: Math.max(ippSev, apiSev), t: `欺诈指数: ${fraudTxt}` },
     { sev: apiSev, t: `ASN信誉: ${riskIpapiTxt}` },
-    { sev: intelValue === '命中' ? 3 : (intelValue === '未见' ? 0 : -1), t: `威胁情报: ${intelValue}` },
-    { sev: dshieldValue === '攻击记录' ? 3 : (dshieldValue === '未见' ? 0 : -1), t: `DShield: ${dshieldValue}` },
-    { sev: pulsediveValue === '可疑' ? 3 : (pulsediveValue === '未见' ? 0 : -1), t: `Pulsedive: ${pulsediveValue}` },
-    { sev: portValue === '暴露' ? 3 : (portValue === '未见' ? 0 : -1), t: `端口风险: ${portValue}` }
+    { sev: intelHit ? 3 : (intelValue === '未见' ? 0 : -1), t: `威胁情报: ${intelValue}` },
+    { sev: dshieldSev, t: `攻击记录: ${dshieldValue}` },
+    { sev: pulseSev, t: `可疑情报: ${pulsediveValue}` },
+    { sev: portSev, t: `端口风险: ${portValue}` }
   ];
+
+  if (proxySuccess) riskDimensions.forEach(g => { if (g.sev > maxSev) maxSev = g.sev; });
+
+  if (proxySuccess && riskGrades[0]) {
+    const tgRisk = calcTelegramLoginRisk({
+      proxyValue, dcValue, blacklistValue, intelValue, dshieldValue, pulsediveValue, portValue,
+      ippSev, apiSev, coffeeSev, proxySev, blackSev,
+      nativeText, riskProxyTxt, riskIPPureTxt, riskCoffeeTxt, riskIpapiTxt
+    });
+    riskGrades[0] = { sev: tgRisk.sev, t: `TG预测: ${tgRisk.text}` };
+  }
 
   function sevIcon(sev) {
     if (sev < 0) return 'questionmark.shield.fill';
@@ -593,13 +721,37 @@ export default async function(ctx) {
     if (sev >= 1) return '中低风险';
     return '纯净低危';
   }
-  function tgLoginRiskText(sev) {
-    if (sev < 0) return '未知';
-    if (sev >= 4) return '邮箱/收费';
-    if (sev >= 3) return '易邮箱';
-    if (sev >= 2) return '可能风控';
-    if (sev >= 1) return '稍有风险';
-    return '大概率正常';
+  // Telegram login prediction uses a dedicated weighted model below.
+  function calcTelegramLoginRisk(s) {
+    let score = 0;
+    const add = (v) => { score += v; };
+    const proxyTxt = String(s.riskProxyTxt || '').toLowerCase();
+    const coffeeRisk = s.coffeeSev >= 0 ? s.coffeeSev : 0;
+    const dc = s.dcValue === '是' || String(s.nativeText || '').includes('商业机房');
+    const proxy = s.proxyValue === '是' || proxyTxt.includes('vpn') || proxyTxt.includes('proxy');
+
+    if (s.blacklistValue === '命中' || s.blackSev >= 3) add(38);
+    if (s.intelValue === '命中') add(26);
+    if (s.dshieldValue === '攻击记录') add(20);
+    if (s.pulsediveValue === '可疑') add(20);
+    if (s.portValue === '暴露') add(12);
+
+    if (proxy && s.proxySev >= 4) add(30);
+    else if (proxy && s.proxySev >= 3) add(20);
+    else if (proxy) add(14);
+
+    if (dc) add(14);
+    if (s.ippSev >= 4) add(30); else if (s.ippSev >= 3) add(22); else if (s.ippSev >= 2) add(12); else if (s.ippSev >= 1) add(6);
+    if (s.apiSev >= 4) add(24); else if (s.apiSev >= 3) add(18); else if (s.apiSev >= 2) add(10);
+    if (coffeeRisk >= 4) add(22); else if (coffeeRisk >= 3) add(15); else if (coffeeRisk >= 2) add(8); else if (coffeeRisk === 0 && !proxy && !dc) add(-8);
+
+    if (!proxy && !dc && s.blackSev === 0 && s.ippSev <= 1 && s.apiSev <= 1 && coffeeRisk <= 1) add(-10);
+
+    if (score >= 70) return { sev: 4, text: '邮箱/收费' };
+    if (score >= 45) return { sev: 3, text: '易邮箱' };
+    if (score >= 25) return { sev: 2, text: '可能风控' };
+    if (score >= 10) return { sev: 1, text: '稍有风险' };
+    return { sev: 0, text: '大概率正常' };
   }
   function sevColor(sev) {
     if (sev < 0) return C_SUB;
