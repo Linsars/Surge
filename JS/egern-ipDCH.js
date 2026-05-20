@@ -728,13 +728,15 @@ export default async function(ctx) {
   const portValue = portSev >= 3 ? portTxt : (workerPorts || (portSev >= 0 ? portTxt : '—'));
   const portRiskSev = (Array.isArray(w.vulns) && w.vulns.length) ? 4 : (Array.isArray(w.sensitive_ports) && w.sensitive_ports.length ? 3 : portSev);
   const fraudTxt = riskIPPureTxt !== '—' ? riskIPPureTxt.replace('风险', '') : riskIpapiTxt;
+  const asnRiskTxt = w.cloud && w.cloud !== '否' ? `${w.cloud}/${riskIpapiTxt}` : riskIpapiTxt;
+  const asnRiskSev = w.cloud && w.cloud !== '否' ? Math.max(apiSev, 2) : apiSev;
   const riskDimensions = [
     { sev: proxyValue === 'Tor' ? 4 : yesNoSev(proxyValue, 3), t: `代理/VPN: ${proxyValue}` },
     { sev: torValue === '是' ? 4 : torSev, t: `Tor出口: ${torValue}` },
     { sev: yesNoSev(dcValue, 2), t: `机房IP: ${dcValue}` },
     { sev: blacklistHit ? 4 : (blacklistValue === '未命中' ? 0 : -1), t: `黑名单: ${blacklistValue}` },
     { sev: Math.max(ippSev, apiSev), t: `欺诈指数: ${fraudTxt}` },
-    { sev: apiSev, t: `ASN信誉: ${riskIpapiTxt}` },
+    { sev: asnRiskSev, t: `ASN风险: ${asnRiskTxt}` },
     { sev: intelHit ? 3 : (intelValue === '未收录' ? 0 : -1), t: `威胁情报: ${intelValue}` },
     { sev: dshieldSev, t: `攻击记录: ${dshieldValue}` },
     { sev: pulseSev, t: `可疑情报: ${pulsediveValue}` },
