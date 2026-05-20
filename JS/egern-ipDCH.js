@@ -470,17 +470,20 @@ export default async function(ctx) {
               asnType = asnType || j.asn?.type || '';
               nativeText = buildNativeText(attrFlags, companyName || asnOrg, companyType || asnType);
             }
-            if (j && j.company && j.company.abuser_score) {
-              const m = String(j.company.abuser_score).match(/([0-9.]+)\s*\(([^)]+)\)/);
-              if (m) {
-                const pct = Math.round(Number(m[1]) * 10000) / 100 + '%';
+            if (j) {
+              const scores = [j.company?.abuser_score, j.asn?.abuser_score].map(x => String(x || '').match(/([0-9.]+)\s*\(([^)]+)\)/)).filter(Boolean);
+              let best = null;
+              scores.forEach(m => {
+                const raw = Number(m[1]);
                 const lv = m[2].trim();
-                if (lv.includes('Very High')) apiSev = 4;
-                else if (lv.includes('High')) apiSev = 3;
-                else if (lv.includes('Elevated')) apiSev = 2;
-                else apiSev = 0;
-                riskIpapiTxt = pct;
-              }
+                let sev = 0;
+                if (lv.includes('Very High')) sev = 4;
+                else if (lv.includes('High')) sev = 3;
+                else if (lv.includes('Elevated')) sev = 2;
+                const item = { raw, sev, pct: Math.round(raw * 10000) / 100 + '%' };
+                if (!best || item.sev > best.sev || (item.sev === best.sev && item.raw > best.raw)) best = item;
+              });
+              if (best) { apiSev = best.sev; riskIpapiTxt = best.pct; }
             }
           } catch (e) {}
         })(),
@@ -657,7 +660,7 @@ export default async function(ctx) {
       ]);
     }
     nativeText = buildNativeText(attrFlags, companyName || asnOrg, companyType || asnType);
-    return { nIp, nLoc, nativeText, attrFlags, riskIPPureTxt, ippSev, riskIpapiTxt, apiSev, riskCoffeeTxt, coffeeSev, riskProxyTxt, proxySev, riskBlackTxt, blackSev, ipApiProxy, ipApiHosting, dshieldTxt, dshieldSev, sfsTxt, sfsSev, blockTxt, blockSev, spamTxt, spamSev, torTxt, torSev, otxTxt, otxSev, greyTxt, greySev, pulseTxt, pulseSev, portTxt, portSev, workerRisk };
+    return { nIp, nLoc, nativeText, attrFlags, asnType, riskIPPureTxt, ippSev, riskIpapiTxt, apiSev, riskCoffeeTxt, coffeeSev, riskProxyTxt, proxySev, riskBlackTxt, blackSev, ipApiProxy, ipApiHosting, dshieldTxt, dshieldSev, sfsTxt, sfsSev, blockTxt, blockSev, spamTxt, spamSev, torTxt, torSev, otxTxt, otxSev, greyTxt, greySev, pulseTxt, pulseSev, portTxt, portSev, workerRisk };
   }
 
   const [localInfo, landingInfo, unlockStatuses] = await Promise.all([
@@ -666,7 +669,7 @@ export default async function(ctx) {
     unlockPromise
   ]);
   const { lIp, lLoc, lIsp } = localInfo;
-  const { nIp, nLoc, nativeText, attrFlags, riskIPPureTxt, ippSev, riskIpapiTxt, apiSev, riskCoffeeTxt, coffeeSev, riskProxyTxt, proxySev, riskBlackTxt, blackSev, ipApiProxy, ipApiHosting, dshieldTxt, dshieldSev, sfsTxt, sfsSev, blockTxt, blockSev, spamTxt, spamSev, torTxt, torSev, otxTxt, otxSev, greyTxt, greySev, pulseTxt, pulseSev, portTxt, portSev, workerRisk } = landingInfo;
+  const { nIp, nLoc, nativeText, attrFlags, asnType, riskIPPureTxt, ippSev, riskIpapiTxt, apiSev, riskCoffeeTxt, coffeeSev, riskProxyTxt, proxySev, riskBlackTxt, blackSev, ipApiProxy, ipApiHosting, dshieldTxt, dshieldSev, sfsTxt, sfsSev, blockTxt, blockSev, spamTxt, spamSev, torTxt, torSev, otxTxt, otxSev, greyTxt, greySev, pulseTxt, pulseSev, portTxt, portSev, workerRisk } = landingInfo;
   const [gptStatus, geminiStatus, youtubeStatus, netflixStatus, tiktokStatus, claudeStatus] = unlockStatuses;
 
   const proxySuccess = nIp !== "获取失败";
@@ -716,9 +719,10 @@ export default async function(ctx) {
   const torValue = flags.tor || torSev >= 4 || w.tor === '是' ? '是' : (torTxt || '否');
   const dcValue = (w.datacenter === '是' || flags.datacenter || ipApiHosting === '是' || nativeText.includes('云') || nativeText.includes('机房')) ? '是' : ((w.datacenter === '否' || flags.residential || flags.mobile || ipApiHosting === '否') ? '否' : '—');
   const workerSpamHit = w.spamhaus && w.spamhaus !== '未命中';
-  const blacklistHit = blackSev >= 3 || sfsSev >= 3 || blockSev >= 3 || spamSev >= 4 || workerSpamHit;
-  const blacklistClean = blackSev === 0 && sfsSev === 0 && blockSev === 0 && spamSev === 0 && (w.spamhaus === '未命中' || !w.spamhaus);
-  const blacklistValue = blacklistHit ? (workerSpamHit ? w.spamhaus : (spamSev >= 4 ? spamTxt : (blackSev >= 3 ? riskBlackTxt : (sfsSev >= 3 ? sfsTxt : blockTxt)))) : (blacklistClean ? '未命中' : '—');
+  const banHit = sfsSev >= 3 || blockSev >= 3 || spamSev >= 4 || workerSpamHit;
+  const banClean = sfsSev === 0 && blockSev === 0 && spamSev === 0 && (w.spamhaus === '未命中' || !w.spamhaus);
+  const banValue = banHit ? (workerSpamHit ? w.spamhaus : (spamSev >= 4 ? spamTxt : (sfsSev >= 3 ? sfsTxt : blockTxt))) : (banClean ? '未命中' : '—');
+  const blacklistValue = blackSev >= 3 ? riskBlackTxt : (blackSev === 0 ? '正常' : '—');
   const intelHit = otxSev >= 3 || greySev >= 3 || pulseSev >= 3;
   const intelClean = otxSev === 0 && greySev === 0;
   const intelValue = intelHit ? (otxSev >= 3 ? otxTxt : (greySev >= 3 ? greyTxt : pulseTxt)) : (intelClean ? '未收录' : '—');
@@ -728,26 +732,28 @@ export default async function(ctx) {
   const portValue = portSev >= 3 ? portTxt : (workerPorts || (portSev >= 0 ? portTxt : '—'));
   const portRiskSev = (Array.isArray(w.vulns) && w.vulns.length) ? 4 : (Array.isArray(w.sensitive_ports) && w.sensitive_ports.length ? 3 : portSev);
   const fraudTxt = riskIPPureTxt !== '—' ? riskIPPureTxt.replace('风险', '') : riskIpapiTxt;
-  const asnRiskTxt = w.cloud && w.cloud !== '否' ? `${w.cloud}/${riskIpapiTxt}` : riskIpapiTxt;
+  const asnRiskTxt = w.cloud && w.cloud !== '否' ? `${w.cloud}/${riskIpapiTxt}` : (asnType ? `${asnType}/${riskIpapiTxt}` : riskIpapiTxt);
   const asnRiskSev = w.cloud && w.cloud !== '否' ? Math.max(apiSev, 2) : apiSev;
+  const workerScoreValue = typeof w.score === 'number' ? `${w.score}` : '—';
+  const workerScoreSev = typeof w.score === 'number' ? (w.score >= 70 ? 4 : (w.score >= 45 ? 3 : (w.score >= 25 ? 2 : (w.score >= 10 ? 1 : 0)))) : -1;
   const riskDimensions = [
     { sev: proxyValue === 'Tor' ? 4 : yesNoSev(proxyValue, 3), t: `代理/VPN: ${proxyValue}` },
     { sev: torValue === '是' ? 4 : torSev, t: `Tor出口: ${torValue}` },
-    { sev: yesNoSev(dcValue, 2), t: `机房IP: ${dcValue}` },
-    { sev: blacklistHit ? 4 : (blacklistValue === '未命中' ? 0 : -1), t: `黑名单: ${blacklistValue}` },
+    { sev: banHit ? 4 : (banValue === '未命中' ? 0 : -1), t: `封禁名单: ${banValue}` },
     { sev: Math.max(ippSev, apiSev), t: `欺诈指数: ${fraudTxt}` },
     { sev: asnRiskSev, t: `ASN风险: ${asnRiskTxt}` },
     { sev: intelHit ? 3 : (intelValue === '未收录' ? 0 : -1), t: `威胁情报: ${intelValue}` },
     { sev: dshieldSev, t: `攻击记录: ${dshieldValue}` },
     { sev: pulseSev, t: `可疑情报: ${pulsediveValue}` },
-    { sev: portRiskSev, t: `端口风险: ${portValue}` }
+    { sev: portRiskSev, t: `端口风险: ${portValue}` },
+    { sev: workerScoreSev, t: `综合评分: ${workerScoreValue}` }
   ];
 
   if (proxySuccess) riskDimensions.forEach(g => { if (g.sev > maxSev) maxSev = g.sev; });
 
   if (proxySuccess && riskGrades[0]) {
     const tgRisk = calcTelegramLoginRisk({
-      proxyValue, dcValue, blacklistValue, intelValue, dshieldValue, pulsediveValue, portValue,
+      proxyValue, dcValue, blacklistValue: banHit ? '命中' : banValue, intelValue, dshieldValue, pulsediveValue, portValue,
       ippSev, apiSev, coffeeSev, proxySev, blackSev,
       nativeText, riskProxyTxt, riskIPPureTxt, riskCoffeeTxt, riskIpapiTxt
     });
