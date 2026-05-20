@@ -18,6 +18,7 @@ export default async function(ctx) {
   const policy = String((ctx.env && ctx.env.POLICY) ? ctx.env.POLICY : "").trim();
   const BASE_UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1";
   const RISK_DATA_BASE = "https://raw.githubusercontent.com/Linsars/ip-risk-data/main/dist";
+  const RISK_WORKER_API = "https://iprisk.linsar.us.ci/check";
 
   async function get(url, headers, timeout) {
     const opts = { timeout: timeout || 8000 };
@@ -390,6 +391,7 @@ export default async function(ctx) {
     let greyTxt = "—", greySev = -1;
     let pulseTxt = "—", pulseSev = -1;
     let portTxt = "—", portSev = -1;
+    let workerRisk = null;
 
     nIp = await getLandingIPv4() || "获取失败";
 
@@ -410,6 +412,14 @@ export default async function(ctx) {
 
     if (nIp !== "获取失败") {
       await Promise.all([
+        (async () => {
+          try {
+            const wr = await withTimeout(ctx.http.get(`${RISK_WORKER_API}?ip=${encodeURIComponent(nIp)}`, { timeout: 4200 }), 4400, null);
+            if (!wr) return;
+            const wj = JSON.parse(await wr.text());
+            if (wj && wj.ok && wj.result) workerRisk = wj.result;
+          } catch (e) {}
+        })(),
         (async () => {
           try {
             const coffeeRes = await withTimeout(ctx.http.get(`https://ip.net.coffee/api/ip/lookup/${encodeURIComponent(nIp)}`, { timeout: 4500 }), 4700, null);
@@ -647,7 +657,7 @@ export default async function(ctx) {
       ]);
     }
     nativeText = buildNativeText(attrFlags, companyName || asnOrg, companyType || asnType);
-    return { nIp, nLoc, nativeText, attrFlags, riskIPPureTxt, ippSev, riskIpapiTxt, apiSev, riskCoffeeTxt, coffeeSev, riskProxyTxt, proxySev, riskBlackTxt, blackSev, ipApiProxy, ipApiHosting, dshieldTxt, dshieldSev, sfsTxt, sfsSev, blockTxt, blockSev, spamTxt, spamSev, torTxt, torSev, otxTxt, otxSev, greyTxt, greySev, pulseTxt, pulseSev, portTxt, portSev };
+    return { nIp, nLoc, nativeText, attrFlags, riskIPPureTxt, ippSev, riskIpapiTxt, apiSev, riskCoffeeTxt, coffeeSev, riskProxyTxt, proxySev, riskBlackTxt, blackSev, ipApiProxy, ipApiHosting, dshieldTxt, dshieldSev, sfsTxt, sfsSev, blockTxt, blockSev, spamTxt, spamSev, torTxt, torSev, otxTxt, otxSev, greyTxt, greySev, pulseTxt, pulseSev, portTxt, portSev, workerRisk };
   }
 
   const [localInfo, landingInfo, unlockStatuses] = await Promise.all([
@@ -656,7 +666,7 @@ export default async function(ctx) {
     unlockPromise
   ]);
   const { lIp, lLoc, lIsp } = localInfo;
-  const { nIp, nLoc, nativeText, attrFlags, riskIPPureTxt, ippSev, riskIpapiTxt, apiSev, riskCoffeeTxt, coffeeSev, riskProxyTxt, proxySev, riskBlackTxt, blackSev, ipApiProxy, ipApiHosting, dshieldTxt, dshieldSev, sfsTxt, sfsSev, blockTxt, blockSev, spamTxt, spamSev, torTxt, torSev, otxTxt, otxSev, greyTxt, greySev, pulseTxt, pulseSev, portTxt, portSev } = landingInfo;
+  const { nIp, nLoc, nativeText, attrFlags, riskIPPureTxt, ippSev, riskIpapiTxt, apiSev, riskCoffeeTxt, coffeeSev, riskProxyTxt, proxySev, riskBlackTxt, blackSev, ipApiProxy, ipApiHosting, dshieldTxt, dshieldSev, sfsTxt, sfsSev, blockTxt, blockSev, spamTxt, spamSev, torTxt, torSev, otxTxt, otxSev, greyTxt, greySev, pulseTxt, pulseSev, portTxt, portSev, workerRisk } = landingInfo;
   const [gptStatus, geminiStatus, youtubeStatus, netflixStatus, tiktokStatus, claudeStatus] = unlockStatuses;
 
   const proxySuccess = nIp !== "获取失败";
@@ -701,22 +711,26 @@ export default async function(ctx) {
 
   const yesNoSev = (v, yesSev = 3) => v === '是' ? yesSev : (v === '否' ? 0 : -1);
   const flags = attrFlags || {};
-  const proxyValue = flags.tor ? 'Tor' : ((flags.proxy || flags.vpn || ipApiProxy === '是' || riskProxyTxt.includes('VPN') || riskProxyTxt.includes('Proxy')) ? '是' : ((ipApiProxy === '否' || riskProxyTxt.includes('Clean')) ? '否' : '—'));
-  const torValue = flags.tor || torSev >= 4 ? '是' : (torTxt || '否');
-  const dcValue = (flags.datacenter || ipApiHosting === '是' || nativeText.includes('云') || nativeText.includes('机房')) ? '是' : ((flags.residential || flags.mobile || ipApiHosting === '否') ? '否' : '—');
-  const blacklistHit = blackSev >= 3 || sfsSev >= 3 || blockSev >= 3 || spamSev >= 4;
-  const blacklistClean = blackSev === 0 && sfsSev === 0 && blockSev === 0 && spamSev === 0;
-  const blacklistValue = blacklistHit ? (spamSev >= 4 ? spamTxt : (blackSev >= 3 ? riskBlackTxt : (sfsSev >= 3 ? sfsTxt : blockTxt))) : (blacklistClean ? '未命中' : '—');
+  const w = workerRisk || {};
+  const proxyValue = flags.tor ? 'Tor' : ((w.proxy === '是' || flags.proxy || flags.vpn || ipApiProxy === '是' || riskProxyTxt.includes('VPN') || riskProxyTxt.includes('Proxy')) ? '是' : ((w.proxy === '否' || ipApiProxy === '否' || riskProxyTxt.includes('Clean')) ? '否' : '—'));
+  const torValue = flags.tor || torSev >= 4 || w.tor === '是' ? '是' : (torTxt || '否');
+  const dcValue = (w.datacenter === '是' || flags.datacenter || ipApiHosting === '是' || nativeText.includes('云') || nativeText.includes('机房')) ? '是' : ((w.datacenter === '否' || flags.residential || flags.mobile || ipApiHosting === '否') ? '否' : '—');
+  const workerSpamHit = w.spamhaus && w.spamhaus !== '未命中';
+  const blacklistHit = blackSev >= 3 || sfsSev >= 3 || blockSev >= 3 || spamSev >= 4 || workerSpamHit;
+  const blacklistClean = blackSev === 0 && sfsSev === 0 && blockSev === 0 && spamSev === 0 && (w.spamhaus === '未命中' || !w.spamhaus);
+  const blacklistValue = blacklistHit ? (workerSpamHit ? w.spamhaus : (spamSev >= 4 ? spamTxt : (blackSev >= 3 ? riskBlackTxt : (sfsSev >= 3 ? sfsTxt : blockTxt)))) : (blacklistClean ? '未命中' : '—');
   const intelHit = otxSev >= 3 || greySev >= 3 || pulseSev >= 3;
   const intelClean = otxSev === 0 && greySev === 0;
   const intelValue = intelHit ? (otxSev >= 3 ? otxTxt : (greySev >= 3 ? greyTxt : pulseTxt)) : (intelClean ? '未收录' : '—');
   const dshieldValue = dshieldSev >= 3 ? dshieldTxt : (dshieldSev === 0 ? '无记录' : '—');
   const pulsediveValue = pulseSev >= 3 ? pulseTxt : (pulseSev === 0 ? '未收录' : '—');
-  const portValue = portSev >= 3 ? portTxt : (portSev >= 0 ? portTxt : '—');
+  const workerPorts = Array.isArray(w.sensitive_ports) && w.sensitive_ports.length ? w.sensitive_ports.join(',') : (Array.isArray(w.vulns) && w.vulns.length ? `${w.vulns.length}漏洞` : '');
+  const portValue = portSev >= 3 ? portTxt : (workerPorts || (portSev >= 0 ? portTxt : '—'));
+  const portRiskSev = (Array.isArray(w.vulns) && w.vulns.length) ? 4 : (Array.isArray(w.sensitive_ports) && w.sensitive_ports.length ? 3 : portSev);
   const fraudTxt = riskIPPureTxt !== '—' ? riskIPPureTxt.replace('风险', '') : riskIpapiTxt;
   const riskDimensions = [
     { sev: proxyValue === 'Tor' ? 4 : yesNoSev(proxyValue, 3), t: `代理/VPN: ${proxyValue}` },
-    { sev: torSev, t: `Tor出口: ${torValue}` },
+    { sev: torValue === '是' ? 4 : torSev, t: `Tor出口: ${torValue}` },
     { sev: yesNoSev(dcValue, 2), t: `机房IP: ${dcValue}` },
     { sev: blacklistHit ? 4 : (blacklistValue === '未命中' ? 0 : -1), t: `黑名单: ${blacklistValue}` },
     { sev: Math.max(ippSev, apiSev), t: `欺诈指数: ${fraudTxt}` },
@@ -724,7 +738,7 @@ export default async function(ctx) {
     { sev: intelHit ? 3 : (intelValue === '未收录' ? 0 : -1), t: `威胁情报: ${intelValue}` },
     { sev: dshieldSev, t: `攻击记录: ${dshieldValue}` },
     { sev: pulseSev, t: `可疑情报: ${pulsediveValue}` },
-    { sev: portSev, t: `端口风险: ${portValue}` }
+    { sev: portRiskSev, t: `端口风险: ${portValue}` }
   ];
 
   if (proxySuccess) riskDimensions.forEach(g => { if (g.sev > maxSev) maxSev = g.sev; });
@@ -735,7 +749,9 @@ export default async function(ctx) {
       ippSev, apiSev, coffeeSev, proxySev, blackSev,
       nativeText, riskProxyTxt, riskIPPureTxt, riskCoffeeTxt, riskIpapiTxt
     });
-    riskGrades[0] = { sev: tgRisk.sev, t: `TG预测: ${tgRisk.text}` };
+    const workerTgSev = w.tg === '邮箱/收费' ? 4 : (w.tg === '易邮箱' ? 3 : (w.tg === '可能风控' ? 2 : (w.tg === '稍有风险' ? 1 : (w.tg === '大概率正常' ? 0 : -1))));
+    if (workerTgSev > tgRisk.sev) riskGrades[0] = { sev: workerTgSev, t: `TG预测: ${w.tg}` };
+    else riskGrades[0] = { sev: tgRisk.sev, t: `TG预测: ${tgRisk.text}` };
   }
 
   function sevIcon(sev) {
