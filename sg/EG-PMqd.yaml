@@ -1,5 +1,5 @@
 name: PingMe 签到
-description: pingme2小时高频版
+description: pingme3小时高频版
 icon: https://raw.githubusercontent.com/axhani/icon/refs/heads/main/pingme&wetalk.png
 dns: {}
 scriptings:
@@ -10,7 +10,7 @@ scriptings:
     timeout: 60
 - schedule:
     name: PingMe签到
-    cron: * */2 * * *
+    cron: 0 */3 * * *
     script_url: https://raw.githubusercontent.com/158212892/QuantumultXMark/main/My/Scripts/PingMe_task.js
     timeout: 120
 mitm:
