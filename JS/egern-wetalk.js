@@ -86,6 +86,15 @@ function MD5(string) {
   return (WordToHex(a) + WordToHex(b) + WordToHex(c) + WordToHex(d)).toLowerCase();
 }
 
+
+function seededUuid(seed) {
+  let h = '', n = 0;
+  while (h.length < 32) h += MD5(`${seed}:uuid:${n++}`);
+  h = h.slice(0, 32);
+  const variant = (8 + (parseInt(h[16], 16) % 4)).toString(16);
+  return `${h.slice(0,8)}-${h.slice(8,12)}-4${h.slice(13,16)}-${variant}${h.slice(17,20)}-${h.slice(20,32)}`.toUpperCase();
+}
+
 function getUTCSignDate() {
   const now = new Date();
   const pad = n => String(n).padStart(2, '0');
@@ -137,19 +146,26 @@ function buildUA(baseUA, seed) {
   return `WeTalk/30.6.0 (com.innovationworks.wetalk; build:28; iOS ${iosVer}) Alamofire/5.4.3`;
 }
 
-function buildSignedParamsRaw(capture) {
+function buildSignedParamsRaw(capture, deviceSeed) {
   const params = {};
   Object.keys(capture.paramsRaw || {}).forEach(k => {
     if (k !== 'sign' && k !== 'signDate') params[k] = capture.paramsRaw[k];
   });
-  params.signDate = getUTCSignDate();
+
+  // per-account device ID（只改 uniquedeviceid，不动 callpin）
+  const overrideDevice = deviceSeed != null && $persistentStore.read("wetalk_per_account_device") === "true";
+  if (overrideDevice && 'uniquedeviceid' in params) {
+    const suffix = "";
+    params.uniquedeviceid = seededUuid(`WeTalk:device:${deviceSeed}`) + suffix;
+  }
+    params.signDate = getUTCSignDate();
   const signBase = Object.keys(params).sort().map(k => `${k}=${params[k]}`).join('&');
   params.sign = MD5(signBase + SECRET);
   return params;
 }
 
-function buildUrl(path, capture) {
-  const params = buildSignedParamsRaw(capture);
+function buildUrl(path, capture, deviceSeed) {
+  const params = buildSignedParamsRaw(capture, deviceSeed);
   const qs = Object.keys(params).map(k => `${k}=${encodeURIComponent(params[k])}`).join('&');
   return `https://api.wetalkapp.com/app/${path}?${qs}`;
 }
@@ -193,7 +209,7 @@ function runAccount(acc, index, total) {
   const msgs = [tag];
 
   function fetchApi(path) {
-    const url = buildUrl(path, acc.capture);
+    const url = buildUrl(path, acc.capture, index);
     return withTimeout(
       new Promise((resolve, reject) => {
         $httpClient.get({ url, headers }, (err, resp, data) => {
