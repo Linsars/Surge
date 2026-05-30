@@ -160,11 +160,9 @@ function buildSignedParamsRaw(capture, deviceSeed) {
     if (k !== 'sign' && k !== 'signDate') params[k] = capture.paramsRaw[k];
   });
 
-  // per-account device ID（只改 uniquedeviceid，不动 callpin）
-  const overrideDevice = deviceSeed != null && $persistentStore.read("pingme_per_account_device") === "true";
-  if (overrideDevice && 'uniquedeviceid' in params) {
-    const suffix = "PingMeIOS";
-    params.uniquedeviceid = seededUuid(`PingMe:device:${deviceSeed}`) + suffix;
+  // 每个账号使用独立的 uniquedeviceid（不变 callpin），让服务端认为不同设备
+  if (deviceSeed != null && 'uniquedeviceid' in params) {
+    params.uniquedeviceid = seededUuid(`PingMe:device:${deviceSeed}`) + "PingMeIOS";
   }
     params.signDate = getUTCSignDate();
   const signBase = Object.keys(params).sort().map(k => `${k}=${params[k]}`).join('&');
