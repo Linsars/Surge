@@ -163,6 +163,7 @@ function buildSignedParamsRaw(capture, deviceSeed) {
   // 每个账号使用独立的 uniquedeviceid（不变 callpin），让服务端认为不同设备
   if (deviceSeed != null && 'uniquedeviceid' in params) {
     params.uniquedeviceid = seededUuid(`PingMe:device:${deviceSeed}`) + "PingMeIOS";
+    console.log(`【${scriptName}】deviceID: ${params.uniquedeviceid.slice(0,12)}...(账号${deviceSeed+1})`);
   }
     params.signDate = getUTCSignDate();
   const signBase = Object.keys(params).sort().map(k => `${k}=${params[k]}`).join('&');
