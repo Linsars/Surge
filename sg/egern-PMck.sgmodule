@@ -2,8 +2,8 @@
 #!author=Linsar
 #!date=2026-04-22
 #!desc=PingMe 用简化格式，WeTalk 用完整格式，两个应用独立运行
-#!arguments=PingMe签到时间:1 0 * * *,WeTalk签到时间:20 8,20 * * *,开启Cookie抓取:false
-#!arguments-desc=PingMe签到时间: 默认每天凌晨1点；WeTalk签到时间: 默认每天8:20和20:20；开启Cookie抓取: 首次使用设为true，抓到后改为false
+#!arguments=PingMe签到时间:1 0 * * *,WeTalk签到时间:20 8 * * *,开启Cookie抓取:false
+#!arguments-desc=PingMe签到时间: 默认每天凌晨1点；WeTalk签到时间: 默认每天8:20；开启Cookie抓取: 首次使用设为true，抓到后改为false
 
 使用说明：
 1. PingMe 使用简化的 token 格式
