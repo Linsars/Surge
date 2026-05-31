@@ -86,15 +86,6 @@ function MD5(string) {
   return (WordToHex(a) + WordToHex(b) + WordToHex(c) + WordToHex(d)).toLowerCase();
 }
 
-
-function seededUuid(seed) {
-  let h = '', n = 0;
-  while (h.length < 32) h += MD5(`${seed}:uuid:${n++}`);
-  h = h.slice(0, 32);
-  const variant = (8 + (parseInt(h[16], 16) % 4)).toString(16);
-  return `${h.slice(0,8)}-${h.slice(8,12)}-4${h.slice(13,16)}-${variant}${h.slice(17,20)}-${h.slice(20,32)}`.toUpperCase();
-}
-
 function getUTCSignDate() {
   const now = new Date();
   const pad = n => String(n).padStart(2, '0');
@@ -154,24 +145,19 @@ function buildUA(baseUA, seed) {
   return `PingMe/1.0.0 (${model}; iOS ${iosVer}; Scale/${scale}) CFNetwork/${cfn} Darwin/${darwin}`;
 }
 
-function buildSignedParamsRaw(capture, deviceSeed) {
+function buildSignedParamsRaw(capture) {
   const params = {};
   Object.keys(capture.paramsRaw || {}).forEach(k => {
     if (k !== 'sign' && k !== 'signDate') params[k] = capture.paramsRaw[k];
   });
-
-  // 每个账号使用独立的 uniquedeviceid（不变 callpin），让服务端认为不同设备
-  if (deviceSeed != null && 'uniquedeviceid' in params) {
-    params.uniquedeviceid = seededUuid(`PingMe:device:${deviceSeed}`) + "PingMeIOS";
-  }
-    params.signDate = getUTCSignDate();
+  params.signDate = getUTCSignDate();
   const signBase = Object.keys(params).sort().map(k => `${k}=${params[k]}`).join('&');
   params.sign = MD5(signBase + SECRET);
   return params;
 }
 
-function buildUrl(path, capture, deviceSeed) {
-  const params = buildSignedParamsRaw(capture, deviceSeed);
+function buildUrl(path, capture) {
+  const params = buildSignedParamsRaw(capture);
   const qs = Object.keys(params).map(k => `${k}=${encodeURIComponent(params[k])}`).join('&');
   return `https://api.pingmeapp.net/app/${path}?${qs}`;
 }
@@ -215,7 +201,7 @@ function runAccount(acc, index, total) {
   const msgs = [tag];
 
   function fetchApi(path) {
-    const url = buildUrl(path, acc.capture, index);
+    const url = buildUrl(path, acc.capture);
     return withTimeout(
       new Promise((resolve, reject) => {
         $httpClient.get({ url, headers }, (err, resp, data) => {
@@ -262,9 +248,6 @@ function runAccount(acc, index, total) {
     }
     return next();
   }
-
-  // 显示实际使用的 device ID 前 12 位
-  msgs.push(`📱 deviceID: ${seededUuid(`PingMe:device:${index}`).slice(0,12)}...`);
 
   console.log(`【${scriptName}】开始执行 ${tag}`);
   return fetchApi('queryBalanceAndBonus').then(res => {
