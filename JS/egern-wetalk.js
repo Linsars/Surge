@@ -4,6 +4,7 @@ const storeKey = 'wetalk_accounts_v1';
 const SECRET = '0fOiukQq7jXZV2GRi9LGlO';
 const MAX_VIDEO = 5;
 const VIDEO_DELAY = 8000;
+const ACCOUNT_GAP = 3500;
 const REQUEST_TIMEOUT = 30000;
 
 const IOS_VERSIONS = ['17.5.1','17.6.1','17.4.1','17.2.1','16.7.8','17.6','17.3.1','18.0.1','17.1.2','16.6.1'];
@@ -174,6 +175,10 @@ function notify(title, body) {
   $notification.post(scriptName, title, body);
 }
 
+function sleep(ms) {
+  return new Promise(r => setTimeout(r, ms));
+}
+
 function withTimeout(promise, ms) {
   return Promise.race([
     promise,
@@ -252,9 +257,13 @@ if (!ids.length) {
   $done();
 } else {
   const total = ids.length;
+  let chain = Promise.resolve();
   const promises = ids.map((id, idx) => {
-    console.log(`【${scriptName}】开始处理账号 ${idx + 1}/${total} (id: ${id})`);
-    return runAccount(store.accounts[id], idx, total);
+    chain = chain.then(() => sleep(ACCOUNT_GAP));
+    return chain.then(() => {
+      console.log(`【${scriptName}】开始处理账号 ${idx + 1}/${total} (id: ${id})`);
+      return runAccount(store.accounts[id], idx, total);
+    });
   });
   Promise.all(promises).then(results => {
     console.log(`【${scriptName}】全部账号处理完成\n${results.join('\n')}`);
