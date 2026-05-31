@@ -7,7 +7,6 @@
 
 const scriptName = 'WeTalk';
 const storeKey = 'wetalk_accounts_v1';
-const SECRET = '0fOiukQq7jXZV2GRi9LGlO';
 
 function MD5(string) {
   function RotateLeft(lValue, iShiftBits) { return (lValue << iShiftBits) | (lValue >>> (32 - iShiftBits)); }

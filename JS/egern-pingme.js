@@ -219,30 +219,19 @@ function runAccount(acc, index, total) {
   }
 
   function doVideoLoop(count) {
-    let i = 0;
+    let i = 0, ok = 0;
     function next() {
-      if (i >= count) return Promise.resolve();
+      if (i >= count) {
+        msgs.push(`🎬${ok}次`);
+        return Promise.resolve();
+      }
       return new Promise(resolve => {
         setTimeout(() => {
           i++;
           fetchApi('videoBonus').then(res => {
-            try {
-              const d = JSON.parse(res.body);
-              if (d.retcode === 0) {
-                msgs.push(`🎬 视频${i}：+${d.result?.bonus || '?'} Coins`);
-                resolve(next());
-              } else {
-                msgs.push(`⏸ 视频${i}：${d.retmsg}`);
-                resolve();
-              }
-            } catch (e) {
-              msgs.push(`❌ 视频${i}：解析失败`);
-              resolve();
-            }
-          }).catch(err => {
-            msgs.push(`❌ 视频${i}：${err.message}`);
-            resolve();
-          });
+            try { const d = JSON.parse(res.body); if (d.retcode === 0) ok++; } catch(e) {}
+            resolve(next());
+          }).catch(() => resolve(next()));
         }, i === 0 ? 1500 : VIDEO_DELAY);
       });
     }
@@ -250,49 +239,20 @@ function runAccount(acc, index, total) {
   }
 
   console.log(`【${scriptName}】开始执行 ${tag}`);
-  return fetchApi('queryBalanceAndBonus').then(res => {
+  return doVideoLoop(MAX_VIDEO).then(() => fetchApi('checkIn')).then(res => {
     try {
       const d = JSON.parse(res.body);
-      if (d.retcode === 0) {
-        msgs.push(`💰 余额：${d.result.balance} Coins`);
-        console.log(`【${scriptName}】余额查询成功：${d.result.balance} Coins`);
-      } else {
-        msgs.push(`⚠️ 查询：${d.retmsg}`);
-        console.log(`【${scriptName}】余额查询失败：${d.retmsg}`);
-      }
-    } catch (e) {
-      msgs.push('❌ 查询：解析失败');
-      console.log(`【${scriptName}】余额查询解析失败：${res.body}`);
-    }
-    return fetchApi('checkIn');
-  }).then(res => {
-    try {
-      const d = JSON.parse(res.body);
-      if (d.retcode === 0) {
-        msgs.push(`✅ 签到：${(d.result?.bonusHint || d.retmsg || '').replace(/\n/g, ' ')}`);
-        console.log(`【${scriptName}】签到成功：${d.result?.bonusHint || d.retmsg}`);
-      } else {
-        msgs.push(`⚠️ 签到：${d.retmsg}`);
-        console.log(`【${scriptName}】签到失败：[${d.retcode}] ${d.retmsg}`);
-      }
-    } catch (e) {
-      msgs.push('❌ 签到：解析失败');
-      console.log(`【${scriptName}】签到解析失败：${res.body}`);
-    }
-    return doVideoLoop(MAX_VIDEO);
+      msgs.push(d.retcode === 0 ? '✅签到' : '⚠️签到');
+    } catch (e) { msgs.push('❌签到'); }
   }).then(() => fetchApi('queryBalanceAndBonus')).then(res => {
     try {
       const d = JSON.parse(res.body);
-      if (d.retcode === 0) {
-        msgs.push(`💰 最新余额：${d.result.balance} Coins`);
-        console.log(`【${scriptName}】最新余额：${d.result.balance} Coins`);
-      }
-    } catch (e) {}
-    return msgs.join('\n');
+      msgs.push(d.retcode === 0 ? `💰${d.result.balance}` : '💰?');
+    } catch (e) { msgs.push('💰?'); }
+    return msgs.join(' ');
   }).catch(err => {
-    msgs.push(`❌ 异常：${err.message}`);
-    console.log(`【${scriptName}】执行异常：${err.message}`);
-    return msgs.join('\n');
+    msgs.push(`❌异常`);
+    return msgs.join(' ');
   });
 }
 
