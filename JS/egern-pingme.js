@@ -134,13 +134,22 @@ function buildUA(baseUA, seed) {
   const darwin = pickItem(DARWIN_VERS, seed + 4);
   if (baseUA && typeof baseUA === 'string') {
     let ua = baseUA;
-    let changed = false;
-    if (/iOS \d+(\.\d+){0,2}/.test(ua)) { ua = ua.replace(/iOS \d+(\.\d+){0,2}/, `iOS ${iosVer}`); changed = true; }
-    if (/Scale\/\d+(\.\d+)?/.test(ua)) { ua = ua.replace(/Scale\/\d+(\.\d+)?/, `Scale/${scale}`); changed = true; }
-    if (/iPhone\d+,\d+/.test(ua)) { ua = ua.replace(/iPhone\d+,\d+/, model); changed = true; }
-    if (/CFNetwork\/[\d.]+/.test(ua)) { ua = ua.replace(/CFNetwork\/[\d.]+/, `CFNetwork/${cfn}`); changed = true; }
-    if (/Darwin\/[\d.]+/.test(ua)) { ua = ua.replace(/Darwin\/[\d.]+/, `Darwin/${darwin}`); changed = true; }
-    if (changed) return ua;
+    // 1. 替换 iOS 版本（当前 UA 永远有这个字段）
+    ua = ua.replace(/iOS \d+(\.\d+){0,2}/, `iOS ${iosVer}`);
+    // 2. 替换或注入 iPhone 机型
+    if (/iPhone\d+,\d+/.test(ua))
+      ua = ua.replace(/iPhone\d+,\d+/, model);
+    else
+      ua = ua.replace(/^([\w.\/]+) \(/, `$1 (${model}; `);
+    // 3. 替换或注入 Scale
+    if (/Scale\/\d+(\.\d+)?/.test(ua))
+      ua = ua.replace(/Scale\/\d+(\.\d+)?/, `Scale/${scale}`);
+    else
+      ua = ua.replace(/iOS \d+(\.\d+){0,2}/, `$& Scale/${scale}`);
+    // 4. 替换 Alamofire 为 CFNetwork + Darwin
+    ua = ua.replace(/Alamofire\/[\d.]+/,
+      `CFNetwork/${cfn} Darwin/${darwin}`);
+    return ua;
   }
   return `PingMe/1.0.0 (${model}; iOS ${iosVer}; Scale/${scale}) CFNetwork/${cfn} Darwin/${darwin}`;
 }

@@ -8,6 +8,10 @@ const ACCOUNT_GAP = 3500;
 const REQUEST_TIMEOUT = 30000;
 
 const IOS_VERSIONS = ['17.5.1','17.6.1','17.4.1','17.2.1','16.7.8','17.6','17.3.1','18.0.1','17.1.2','16.6.1'];
+const IOS_SCALES = ['2.00','3.00','3.00','2.00','3.00'];
+const IPHONE_MODELS = ['iPhone14,3','iPhone13,3','iPhone15,3','iPhone16,1','iPhone14,7','iPhone13,2','iPhone15,2','iPhone12,1'];
+const CFN_VERS = ['1410.0.3','1494.0.7','1568.100.1','1209.1','1474.0.4','1568.200.2'];
+const DARWIN_VERS = ['22.6.0','23.5.0','23.6.0','24.0.0','22.4.0'];
 
 function MD5(string) {
   function RotateLeft(lValue, iShiftBits) { return (lValue << iShiftBits) | (lValue >>> (32 - iShiftBits)); }
@@ -124,13 +128,30 @@ function pickItem(arr, seed) {
 
 function buildUA(baseUA, seed) {
   const iosVer = pickItem(IOS_VERSIONS, seed);
+  const scale = pickItem(IOS_SCALES, seed + 1);
+  const model = pickItem(IPHONE_MODELS, seed + 2);
+  const cfn = pickItem(CFN_VERS, seed + 3);
+  const darwin = pickItem(DARWIN_VERS, seed + 4);
   if (baseUA && typeof baseUA === 'string') {
     let ua = baseUA;
-    let changed = false;
-    if (/iOS \d+(\.\d+){0,2}/.test(ua)) { ua = ua.replace(/iOS \d+(\.\d+){0,2}/, `iOS ${iosVer}`); changed = true; }
-    if (changed) return ua;
+    // 1. 替换 iOS 版本
+    ua = ua.replace(/iOS \d+(\.\d+){0,2}/, `iOS ${iosVer}`);
+    // 2. 替换或注入 iPhone 机型
+    if (/iPhone\d+,\d+/.test(ua))
+      ua = ua.replace(/iPhone\d+,\d+/, model);
+    else
+      ua = ua.replace(/^([\w.\/]+) \(/, `$1 (${model}; `);
+    // 3. 替换或注入 Scale
+    if (/Scale\/\d+(\.\d+)?/.test(ua))
+      ua = ua.replace(/Scale\/\d+(\.\d+)?/, `Scale/${scale}`);
+    else
+      ua = ua.replace(/iOS \d+(\.\d+){0,2}/, `$& Scale/${scale}`);
+    // 4. 替换 Alamofire 为 CFNetwork + Darwin
+    ua = ua.replace(/Alamofire\/[\d.]+/,
+      `CFNetwork/${cfn} Darwin/${darwin}`);
+    return ua;
   }
-  return `WeTalk/30.6.0 (com.innovationworks.wetalk; build:28; iOS ${iosVer}) Alamofire/5.4.3`;
+  return `WeTalk/30.6.0 (${model}; iOS ${iosVer}; Scale/${scale}) CFNetwork/${cfn} Darwin/${darwin}`;
 }
 
 function buildSignedParamsRaw(capture) {
