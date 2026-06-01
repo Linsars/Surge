@@ -3,7 +3,7 @@
 #!author = Linsar
 
 [Proxy Group]
-PingMe轮询 = load-balance, algorithm=round-robin, 节点1, 节点2, 节点3, 节点4
+PingMe轮询 = load-balance, algorithm=round-robin, 填入你的策略组名
 
 [Rule]
 DOMAIN-SUFFIX,api.pingmeapp.net,PingMe轮询
