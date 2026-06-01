@@ -290,15 +290,18 @@ if (!ids.length) {
   $done();
 } else {
   const total = ids.length;
+  const results = [];
   let chain = Promise.resolve();
-  const promises = ids.map((id, idx) => {
-    chain = chain.then(() => sleep(ACCOUNT_GAP));
-    return chain.then(() => {
-      console.log(`【${scriptName}】开始处理账号 ${idx + 1}/${total} (id: ${id})`);
-      return runAccount(store.accounts[id], idx, total);
-    });
+  ids.forEach((id, idx) => {
+    chain = chain
+      .then(() => {
+        console.log(`【${scriptName}】开始处理账号 ${idx + 1}/${total} (id: ${id})`);
+        return runAccount(store.accounts[id], idx, total);
+      })
+      .then(text => { results.push(text); })
+      .then(() => idx < ids.length - 1 ? sleep(ACCOUNT_GAP) : null);
   });
-  Promise.all(promises).then(results => {
+  chain.then(() => {
     console.log(`【${scriptName}】全部账号处理完成\n${results.join('\n')}`);
     notify(`🎉 全部完成 (${total}个账号)`, results.join('\n'));
     $done();
