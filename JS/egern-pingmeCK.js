@@ -1,4 +1,4 @@
-//2026/04/22
+// 作者：Linsar | 2026-06-01 09:55
 /*
 @Name：PingMe Cookie 抓取（Egern 适配 - 完整格式）
 @Author：Linsar

@@ -1,4 +1,4 @@
-//2026/04/22
+// 作者：Linsar | 2026-06-01 09:55
 /*
 @Name：WeTalk Cookie 抓取（Egern 适配）
 @Author：Linsar 改自 ZenMoFiShi

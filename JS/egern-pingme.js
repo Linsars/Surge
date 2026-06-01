@@ -1,4 +1,4 @@
-//2026/04/22
+// 作者：Linsar | 2026-06-01 09:55
 const scriptName = 'PingMe';
 const storeKey = 'pingme_accounts_v1';
 const SECRET = '0fOiukQq7jXZV2GRi9LGlO';
