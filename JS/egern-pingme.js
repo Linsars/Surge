@@ -1,4 +1,4 @@
-// 作者：Linsar | 2026-06-01 10:53
+// 作者：Linsar | 2026-06-01
 const scriptName = 'PingMe';
 const storeKey = 'pingme_accounts_v1';
 const SECRET = '0fOiukQq7jXZV2GRi9LGlO';
@@ -134,39 +134,51 @@ function buildUA(baseUA, seed) {
   const darwin = pickItem(DARWIN_VERS, seed + 4);
   if (baseUA && typeof baseUA === 'string') {
     let ua = baseUA;
-    // 1. 替换 iOS 版本（当前 UA 永远有这个字段）
+    // 替换 iOS 版本
     ua = ua.replace(/iOS \d+(\.\d+){0,2}/, `iOS ${iosVer}`);
-    // 2. 替换或注入 iPhone 机型
+    // 替换或注入 iPhone 机型
     if (/iPhone\d+,\d+/.test(ua))
       ua = ua.replace(/iPhone\d+,\d+/, model);
     else
       ua = ua.replace(/^([\w.\/]+) \(/, `$1 (${model}; `);
-    // 3. 替换或注入 Scale
+    // 替换或注入 Scale
     if (/Scale\/\d+(\.\d+)?/.test(ua))
       ua = ua.replace(/Scale\/\d+(\.\d+)?/, `Scale/${scale}`);
     else
       ua = ua.replace(/iOS \d+(\.\d+){0,2}/, `$& Scale/${scale}`);
-    // 4. 替换 Alamofire 为 CFNetwork + Darwin
-    ua = ua.replace(/Alamofire\/[\d.]+/,
-      `CFNetwork/${cfn} Darwin/${darwin}`);
+    // 替换 CFNetwork + Darwin
+    ua = ua.replace(/Alamofire\/[\d.]+/, `CFNetwork/${cfn} Darwin/${darwin}`);
     return ua;
   }
   return `PingMe/1.0.0 (${model}; iOS ${iosVer}; Scale/${scale}) CFNetwork/${cfn} Darwin/${darwin}`;
 }
 
-function buildSignedParamsRaw(capture) {
+function randHex(n) {
+  let s = '';
+  for (let i = 0; i < n; i++) s += Math.floor(Math.random() * 16).toString(16);
+  return s.toUpperCase();
+}
+
+function genFakeDeviceId() {
+  return `${randHex(8)}-${randHex(4)}-${randHex(4)}-${randHex(4)}-${randHex(12)}PingMeIOS`;
+}
+
+function buildSignedParamsRaw(capture, overrideDeviceId) {
   const params = {};
   Object.keys(capture.paramsRaw || {}).forEach(k => {
     if (k !== 'sign' && k !== 'signDate') params[k] = capture.paramsRaw[k];
   });
+  if (overrideDeviceId && params.uniquedeviceid) {
+    params.uniquedeviceid = overrideDeviceId;
+  }
   params.signDate = getUTCSignDate();
   const signBase = Object.keys(params).sort().map(k => `${k}=${params[k]}`).join('&');
   params.sign = MD5(signBase + SECRET);
   return params;
 }
 
-function buildUrl(path, capture) {
-  const params = buildSignedParamsRaw(capture);
+function buildUrl(path, capture, overrideDeviceId) {
+  const params = buildSignedParamsRaw(capture, overrideDeviceId);
   const qs = Object.keys(params).map(k => `${k}=${encodeURIComponent(params[k])}`).join('&');
   return `https://api.pingmeapp.net/app/${path}?${qs}`;
 }
@@ -209,8 +221,9 @@ function runAccount(acc, index, total) {
   const headers = buildHeaders(acc.capture, ua);
   const msgs = [tag];
 
-  function fetchApi(path) {
-    const url = buildUrl(path, acc.capture);
+  function fetchApi(path, useFakeId) {
+    const overrideId = useFakeId ? genFakeDeviceId() : null;
+    const url = buildUrl(path, acc.capture, overrideId);
     return withTimeout(
       new Promise((resolve, reject) => {
         $httpClient.get({ url, headers }, (err, resp, data) => {
@@ -219,8 +232,7 @@ function runAccount(acc, index, total) {
             return;
           }
           const body = data || (err || '');
-          const status = resp ? resp.status : 0;
-          resolve({ statusCode: status, body });
+          resolve({ statusCode: resp ? resp.status : 0, body });
         });
       }),
       REQUEST_TIMEOUT
@@ -230,14 +242,15 @@ function runAccount(acc, index, total) {
   function doVideoLoop(count) {
     let i = 0, ok = 0;
     function next() {
-      if (i >= count) {
-        return Promise.resolve(ok);
-      }
+      if (i >= count) return Promise.resolve(ok);
       return new Promise(resolve => {
         setTimeout(() => {
           i++;
-          fetchApi('videoBonus').then(res => {
-            try { const d = JSON.parse(res.body); if (d.retcode === 0) ok++; } catch(e) {}
+          fetchApi('videoBonus', true).then(res => {
+            try {
+              const d = JSON.parse(res.body);
+              if (d.retcode === 0) ok++;
+            } catch(e) {}
             resolve(next());
           }).catch(() => resolve(next()));
         }, i === 0 ? 1500 : VIDEO_DELAY);
@@ -247,12 +260,12 @@ function runAccount(acc, index, total) {
   }
 
   console.log(`【${scriptName}】开始执行 ${tag}`);
-  return fetchApi('queryBalanceAndBonus').then(res => {
+  return fetchApi('queryBalanceAndBonus', false).then(res => {
     try {
       const d = JSON.parse(res.body);
       msgs.push(d.retcode === 0 ? `💰${d.result.balance}` : '💰?');
     } catch (e) { msgs.push('💰?'); }
-    return fetchApi('checkIn');
+    return fetchApi('checkIn', false);
   }).then(res => {
     try {
       const d = JSON.parse(res.body);
