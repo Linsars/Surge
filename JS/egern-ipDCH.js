@@ -757,7 +757,8 @@ export default async function(ctx) {
   const fraudBest = fraudCandidates.sort((a, b) => (b.sev - a.sev) || (b.val - a.val))[0];
   const fraudTxt = fraudBest ? `${Math.round(fraudBest.val * 100) / 100}` : '—';
   const fraudSev = fraudBest ? fraudBest.sev : -1;
-  const scoreCandidates = [typeof w.score === 'number' ? w.score : null, firstNum(riskProxyTxt), firstNum(riskIPPureTxt), firstNum(riskCoffeeTxt)].filter(v => typeof v === 'number' && Number.isFinite(v));
+  const filterRisk = (txt) => { const v = firstNum(txt); return v !== null && !String(txt || '').includes('信任') ? v : null; };
+  const scoreCandidates = [typeof w.score === 'number' ? w.score : null, filterRisk(riskProxyTxt), filterRisk(riskIPPureTxt), filterRisk(riskCoffeeTxt)].filter(v => typeof v === 'number' && Number.isFinite(v));
   if (proxyValue === 'Tor' || torValue === '是') scoreCandidates.push(90);
   if (!['否', '—'].includes(proxyValue)) scoreCandidates.push(60);
   if (banHit) scoreCandidates.push(85);
