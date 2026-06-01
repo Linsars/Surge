@@ -154,11 +154,12 @@ function buildUA(baseUA, seed) {
   return `WeTalk/30.6.0 (${model}; iOS ${iosVer}; Scale/${scale}) CFNetwork/${cfn} Darwin/${darwin}`;
 }
 
-function buildSignedParamsRaw(capture) {
+function buildSignedParamsRaw(capture, extraParams) {
   const params = {};
   Object.keys(capture.paramsRaw || {}).forEach(k => {
     if (k !== 'sign' && k !== 'signDate') params[k] = capture.paramsRaw[k];
   });
+  if (extraParams) Object.assign(params, extraParams);
   params.signDate = getUTCSignDate();
   const signBase = Object.keys(params).sort().map(k => `${k}=${params[k]}`).join('&');
   params.sign = MD5(signBase + SECRET);
