@@ -1,4 +1,4 @@
-// 作者：Linsar | 2026-06-01 09:55
+// 作者：Linsar | 2026-06-01 10:53
 const scriptName = 'WeTalk';
 const storeKey = 'wetalk_accounts_v1';
 const SECRET = '0fOiukQq7jXZV2GRi9LGlO';
