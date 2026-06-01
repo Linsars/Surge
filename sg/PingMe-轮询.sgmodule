@@ -1,0 +1,12 @@
+#!name=PingMe 代理池轮询
+#!desc=为 api.pingmeapp.net 分配轮询代理池，每次请求换IP，降低多账号风控触发
+#!author=Linsar
+#!date=2026-06-01 10:53
+
+[Proxy Group]
+PingMe轮询 = load-balance, algorithm=round-robin, 节点1, 节点2, 节点3, 节点4
+
+[Rule]
+DOMAIN-SUFFIX,api.pingmeapp.net,PingMe轮询
+DOMAIN-SUFFIX,api.pingme.tel,PingMe轮询
+DOMAIN-SUFFIX,pingmeapp.net,PingMe轮询
