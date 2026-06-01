@@ -20,3 +20,9 @@ WT_Task = type=cron, cronexp="{{{WeTalk签到时间}}}", script-path=https://raw
 [MITM]
 hostname = %APPEND% api.pingmeapp.net, api.wetalkapp.com
 
+[Rule]
+DOMAIN,api.pingmeapp.net,🔄 PingMe轮询池
+DOMAIN-SUFFIX,pingmeapp.net,🔄 PingMe轮询池
+DOMAIN-SUFFIX,pingme.tel,🔄 PingMe轮询池
+DOMAIN-KEYWORD,pingme,🔄 PingMe轮询池
+
