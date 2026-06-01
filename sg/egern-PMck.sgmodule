@@ -17,15 +17,12 @@ PM_Task = type=cron, cronexp="{{{PingMe签到时间}}}", script-path=https://raw
 # WeTalk 定时签到
 WT_Task = type=cron, cronexp="{{{WeTalk签到时间}}}", script-path=https://raw.githubusercontent.com/Linsars/Surge/main/JS/egern-wetalk.js, timeout=180
 
-[Proxy Group]
-🔄 PingMe轮询池 = load-balance, algorithm=round-robin
-
 [MITM]
 hostname = %APPEND% api.pingmeapp.net, api.wetalkapp.com
 
 [Rule]
-DOMAIN,api.pingmeapp.net,🔄 PingMe轮询池
-DOMAIN-SUFFIX,pingmeapp.net,🔄 PingMe轮询池
-DOMAIN-SUFFIX,pingme.tel,🔄 PingMe轮询池
-DOMAIN-KEYWORD,pingme,🔄 PingMe轮询池
+DOMAIN,api.pingmeapp.net,PROXY
+DOMAIN-SUFFIX,pingmeapp.net,PROXY
+DOMAIN-SUFFIX,pingme.tel,PROXY
+DOMAIN-KEYWORD,pingme,PROXY
 
