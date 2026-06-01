@@ -757,19 +757,21 @@ export default async function(ctx) {
   const fraudBest = fraudCandidates.sort((a, b) => (b.sev - a.sev) || (b.val - a.val))[0];
   const fraudTxt = fraudBest ? `${Math.round(fraudBest.val * 100) / 100}` : '—';
   const fraudSev = fraudBest ? fraudBest.sev : -1;
-  const filterRisk = (txt) => { const v = firstNum(txt); return v !== null && !String(txt || '').includes('信任') ? v : null; };
-  const scoreCandidates = [typeof w.score === 'number' ? w.score : null, filterRisk(riskProxyTxt), filterRisk(riskIPPureTxt), filterRisk(riskCoffeeTxt)].filter(v => typeof v === 'number' && Number.isFinite(v));
-  if (proxyValue === 'Tor' || torValue === '是') scoreCandidates.push(90);
-  if (!['否', '—'].includes(proxyValue)) scoreCandidates.push(60);
-  if (banHit) scoreCandidates.push(85);
-  if (Array.isArray(w.vulns) && w.vulns.length) scoreCandidates.push(90);
-  else if (portRiskSev >= 3) scoreCandidates.push(55);
-  if (asnRiskSev >= 3) scoreCandidates.push(60); else if (asnRiskSev >= 2) scoreCandidates.push(35);
-  const riskScore = scoreCandidates.length ? Math.round(Math.max(...scoreCandidates)) : null;
+  const banCount = [sfsSev >= 3, blockSev >= 3, spamSev >= 4, workerSpamHit].filter(Boolean).length;
   const anonSev = proxyValue === 'Tor' || torValue === '是' ? 4 : (['否', '—'].includes(proxyValue) ? yesNoSev(proxyValue, 3) : Math.max(proxySev, 3));
   const anonValue = torValue === '是' && proxyValue !== 'Tor' ? `Tor+${proxyValue}` : proxyValue;
   const isResidential = flags.residential === true;
   const residentialValue = isResidential ? '是' : (dcValue === '是' || !['—', '否'].includes(proxyValue) ? '否' : '—');
+  const riskScore = calcOverallRiskScore({
+    anonSev, tor: flags.tor || torValue === '是',
+    banHit, banCount,
+    fraudSev,
+    asnRiskSev,
+    intelSev,
+    portRiskSev,
+    residentialValue,
+    workerScore: typeof w.score === 'number' ? w.score : null
+  });
   const riskDimensions = [
     { sev: anonSev, t: `匿名网络: ${anonValue}` },
     { sev: banHit ? 4 : (banValue === '未命中' ? 0 : -1), t: `封禁名单: ${banValue}` },
@@ -838,6 +840,37 @@ export default async function(ctx) {
     if (score >= 25) return { sev: 2, text: '可能风控' };
     if (score >= 10) return { sev: 1, text: '稍有风险' };
     return { sev: 0, text: '大概率正常' };
+  }
+  // 总体风险评分 — 加权模型，与 TG 预测同思路
+  function calcOverallRiskScore(s) {
+    let score = 0;
+    if (s.tor || s.anonSev >= 4) score += 35;
+    else if (s.anonSev >= 3) score += 22;
+    else if (s.anonSev >= 2) score += 14;
+    else if (s.anonSev >= 1) score += 6;
+    else if (s.anonSev === 0) score -= 8;
+    if (s.banHit) score += Math.min(25 + (s.banCount || 1) * 8, 45);
+    if (s.fraudSev >= 4) score += 28;
+    else if (s.fraudSev >= 3) score += 18;
+    else if (s.fraudSev >= 2) score += 10;
+    else if (s.fraudSev >= 1) score += 5;
+    else if (s.fraudSev === 0) score -= 6;
+    if (s.asnRiskSev >= 4) score += 22;
+    else if (s.asnRiskSev >= 3) score += 14;
+    else if (s.asnRiskSev >= 2) score += 8;
+    else if (s.asnRiskSev === 0) score -= 5;
+    if (s.intelSev >= 4) score += 25;
+    else if (s.intelSev >= 3) score += 15;
+    if (s.portRiskSev >= 4) score += 30;
+    else if (s.portRiskSev >= 3) score += 18;
+    else if (s.portRiskSev >= 1) score += 8;
+    if (s.residentialValue === '是') score -= 12;
+    if (typeof s.workerScore === 'number') {
+      if (s.workerScore >= 70) score += 15;
+      else if (s.workerScore >= 45) score += 8;
+      else if (s.workerScore <= 10) score -= 5;
+    }
+    return Math.max(0, Math.min(100, Math.round(score)));
   }
   function sevColor(sev) {
     if (sev < 0) return C_SUB;
