@@ -102,14 +102,6 @@ function parseRawQuery(url) {
 }
 
 
-function seededUuid(seed) {
-  let h = '', n = 0;
-  while (h.length < 32) h += MD5(`${seed}:uuid:${n++}`);
-  h = h.slice(0, 32);
-  const variant = (8 + (parseInt(h[16], 16) % 4)).toString(16);
-  return `${h.slice(0,8)}-${h.slice(8,12)}-4${h.slice(13,16)}-${variant}${h.slice(17,20)}-${h.slice(20,32)}`.toUpperCase();
-}
-
 function fingerprintOf(paramsRaw) {
   const drop = { sign:1, signDate:1, timestamp:1, ts:1, nonce:1, random:1, reqTime:1, reqId:1, requestId:1 };
   const base = Object.keys(paramsRaw || {}).filter(k => !drop[k]).sort().map(k => `${k}=${paramsRaw[k]}`).join('&');
@@ -168,9 +160,10 @@ if (captureSwitch !== 'true') {
 
 const paramsRaw = parseRawQuery($request.url);
 const rawEmail = paramsRaw.email ? decodeURIComponent(paramsRaw.email) : String(paramsRaw.callpin || '');
-if (paramsRaw.uniquedeviceid) {
-  paramsRaw.uniquedeviceid = seededUuid('PingMe:' + rawEmail) + 'PingMeIOS';
-}
+// 保持原始 uniquedeviceid 不变，服务端校验需要匹配真实设备ID
+// if (paramsRaw.uniquedeviceid) {
+//   paramsRaw.uniquedeviceid = seededUuid('PingMe:' + rawEmail) + 'PingMeIOS';
+// }
 
 const headersMap = normalizeHeaderNameMap($request.headers || {});
 let baseUA = '';
