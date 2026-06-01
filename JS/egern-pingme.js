@@ -231,8 +231,7 @@ function runAccount(acc, index, total) {
     let i = 0, ok = 0;
     function next() {
       if (i >= count) {
-        msgs.push(`🎬${ok}次`);
-        return Promise.resolve();
+        return Promise.resolve(ok);
       }
       return new Promise(resolve => {
         setTimeout(() => {
@@ -248,16 +247,20 @@ function runAccount(acc, index, total) {
   }
 
   console.log(`【${scriptName}】开始执行 ${tag}`);
-  return doVideoLoop(MAX_VIDEO).then(() => fetchApi('checkIn')).then(res => {
-    try {
-      const d = JSON.parse(res.body);
-      msgs.push(d.retcode === 0 ? '✅签到' : '⚠️签到');
-    } catch (e) { msgs.push('❌签到'); }
-  }).then(() => fetchApi('queryBalanceAndBonus')).then(res => {
+  return fetchApi('queryBalanceAndBonus').then(res => {
     try {
       const d = JSON.parse(res.body);
       msgs.push(d.retcode === 0 ? `💰${d.result.balance}` : '💰?');
     } catch (e) { msgs.push('💰?'); }
+    return fetchApi('checkIn');
+  }).then(res => {
+    try {
+      const d = JSON.parse(res.body);
+      msgs.push(d.retcode === 0 ? '✅签到' : '⚠️签到');
+    } catch (e) { msgs.push('❌签到'); }
+    return doVideoLoop(MAX_VIDEO);
+  }).then(videoCount => {
+    if (videoCount > 0) msgs.push(`🎬${videoCount}次`);
     return msgs.join(' ');
   }).catch(err => {
     msgs.push(`❌异常`);
