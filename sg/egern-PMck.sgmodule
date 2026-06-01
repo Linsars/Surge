@@ -1,8 +1,8 @@
 #!name=PingMe + WeTalk 双应用签到
 #!author=Linsar
-#!desc=PingMe / WeTalk 双应用独立签到。CK 抓取 → 定时运行视频+签到+查余额
-#!arguments=PingMe签到时间:1 0 * * *,WeTalk签到时间:20 8 * * *,开启Cookie抓取:false
-#!arguments-desc=PingMe签到时间: 默认每天凌晨1点；WeTalk签到时间: 默认每天8:20；开启Cookie抓取: 首次使用设为true，抓到后改为false
+#!desc=2026-06-01 更新：默认3小时一次，视频每次换设备ID降低风控
+#!arguments=PingMe签到时间:0 */3 * * *,WeTalk签到时间:30 */3 * * *,开启Cookie抓取:false
+#!arguments-desc=PingMe签到时间: 默认每3小时（整点）；WeTalk签到时间: 默认每3小时（半点）；开启Cookie抓取: 首次使用设为true，抓到后改为false
 
 [Script]
 # PingMe Cookie 抓取

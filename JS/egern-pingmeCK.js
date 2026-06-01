@@ -152,12 +152,6 @@ function notify(title, body) {
   $notification.post(scriptName, title, body);
 }
 
-// 检查开关
-const captureSwitch = $persistentStore.read('pingme_cookie_capture');
-if (captureSwitch !== 'true') {
-  $done({});
-}
-
 const paramsRaw = parseRawQuery($request.url);
 const rawEmail = paramsRaw.email ? decodeURIComponent(paramsRaw.email) : String(paramsRaw.callpin || '');
 // 保持原始 uniquedeviceid 不变，服务端校验需要匹配真实设备ID
