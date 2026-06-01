@@ -741,13 +741,24 @@ export default async function(ctx) {
     const v = String(s || '').replace(/\b(Network|Services|Limited|Ltd|Inc|LLC|Co\.?|Corporation|Company)\b/gi, '').replace(/\s+/g, ' ').trim();
     return v.length > 12 ? `${v.slice(0, 11)}…` : v;
   };
-  const asnLabel = w.cloud && w.cloud !== '否' ? compactName(w.cloud) : (asnType ? compactName(asnType) : '');
-  const asnRiskTxt = asnLabel ? `${asnLabel}/${riskIpapiTxt}` : riskIpapiTxt;
-  const asnRiskSev = w.cloud && w.cloud !== '否' ? Math.max(apiSev, 2) : apiSev;
   const firstNum = s => {
     const m = String(s || '').match(/(\d+(?:\.\d+)?)/);
     return m ? Number(m[1]) : null;
   };
+  const sevFromVal = v => v >= 80 ? 4 : (v >= 60 ? 3 : (v >= 30 ? 2 : (v >= 10 ? 1 : 0)));
+  const asnLabel = w.cloud && w.cloud !== '否' ? compactName(w.cloud) : (asnType ? compactName(asnType) : '');
+  // ASN风险: 多源加权复合 → ipapi abuser + Worker分 + NetCoffee反信任 + Proxy风险
+  const asnSrcs = [];
+  { const v = firstNum(riskIpapiTxt); if (v !== null && v > 0) asnSrcs.push({ val: v, w: 1.0 }); }
+  if (typeof w.score === 'number' && w.score > 0) asnSrcs.push({ val: w.score, w: 0.4 });
+  { const v = firstNum(riskCoffeeTxt); if (v !== null && v > 0) asnSrcs.push({ val: Math.max(0, 100 - v), w: 0.3 }); }
+  { const v = firstNum(riskProxyTxt); if (v !== null && v > 0) asnSrcs.push({ val: v, w: 0.3 }); }
+  const asnComposite = asnSrcs.length > 0 ? Math.round(asnSrcs.reduce((s,e) => s + e.val * e.w, 0) / asnSrcs.reduce((s,e) => s + e.w, 0)) : null;
+  const asnRiskVal = asnComposite !== null ? `${asnComposite}` : riskIpapiTxt;
+  const asnRiskTxt = asnLabel ? `${asnLabel}/${asnRiskVal}` : asnRiskVal;
+  const asnRiskSev = asnComposite !== null
+    ? (w.cloud && w.cloud !== '否' ? Math.max(sevFromVal(asnComposite), 2) : sevFromVal(asnComposite))
+    : (w.cloud && w.cloud !== '否' ? Math.max(apiSev, 2) : apiSev);
   const fraudEntries = (() => {
     const r = [];
     const ippV = firstNum(riskIPPureTxt);
@@ -769,8 +780,14 @@ export default async function(ctx) {
   const fraudTxt = fraudEntries ? fraudEntries.txt : '—';
   const fraudSev = fraudEntries ? fraudEntries.sev : -1;
   const banCount = [sfsSev >= 3, blockSev >= 3, spamSev >= 4, workerSpamHit].filter(Boolean).length;
-  const anonSev = proxyValue === 'Tor' || torValue === '是' ? 4 : (['否', '—'].includes(proxyValue) ? yesNoSev(proxyValue, 3) : Math.max(proxySev, 3));
+  // 匿名网络: 多源加权复合 → Worker + ProxyCheck + ipapi flags
+  const anonSrcs = [];
+  if (w.proxy === '是' && w.proxy_risk != null) anonSrcs.push({ val: w.proxy_risk, w: 1.0 });
+  if (riskProxyTxt && !['正常', '—'].includes(riskProxyTxt)) { const r = firstNum(riskProxyTxt); if (r !== null && r > 0) anonSrcs.push({ val: r, w: 0.9 }); }
+  if (flags.vpn || flags.proxy) anonSrcs.push({ val: 50, w: 0.5 });
+  const anonComposite = anonSrcs.length > 0 ? Math.round(anonSrcs.reduce((s,e) => s + e.val * e.w, 0) / anonSrcs.reduce((s,e) => s + e.w, 0)) : null;
   const anonValue = torValue === '是' && proxyValue !== 'Tor' ? `Tor+${proxyValue}` : proxyValue;
+  const anonSev = proxyValue === 'Tor' || torValue === '是' ? 4 : (anonComposite !== null ? sevFromVal(anonComposite) : yesNoSev(proxyValue, 3));
   const isResidential = flags.residential === true;
   const residentialValue = isResidential ? '是' : (dcValue === '是' || !['—', '否'].includes(proxyValue) ? '否' : '—');
   const riskScore = calcOverallRiskScore({
