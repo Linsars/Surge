@@ -238,7 +238,11 @@ function runAccount(acc, index, total) {
         setTimeout(() => {
           i++;
           fetchApi('videoBonus').then(res => {
-            try { const d = JSON.parse(res.body); if (d.retcode === 0) ok++; } catch(e) {}
+            try {
+              const d = JSON.parse(res.body);
+              if (d.retcode === 0) { ok++; }
+              else if (i <= 3) { msgs.push(`⚠️视频${i}: ${d.msg || d.retcode}`); }
+            } catch(e) { if (i <= 3) msgs.push(`⚠️视频${i}: 解析失败`); }
             resolve(next());
           }).catch(() => resolve(next()));
         }, i === 0 ? 1500 : VIDEO_DELAY);
