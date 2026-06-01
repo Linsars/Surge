@@ -154,20 +154,19 @@ function buildUA(baseUA, seed) {
   return `PingMe/1.0.0 (${model}; iOS ${iosVer}; Scale/${scale}) CFNetwork/${cfn} Darwin/${darwin}`;
 }
 
-function buildSignedParamsRaw(capture, extraParams) {
+function buildSignedParamsRaw(capture) {
   const params = {};
   Object.keys(capture.paramsRaw || {}).forEach(k => {
     if (k !== 'sign' && k !== 'signDate') params[k] = capture.paramsRaw[k];
   });
-  if (extraParams) Object.assign(params, extraParams);
   params.signDate = getUTCSignDate();
   const signBase = Object.keys(params).sort().map(k => `${k}=${params[k]}`).join('&');
   params.sign = MD5(signBase + SECRET);
   return params;
 }
 
-function buildUrl(path, capture, extraParams) {
-  const params = buildSignedParamsRaw(capture, extraParams);
+function buildUrl(path, capture) {
+  const params = buildSignedParamsRaw(capture);
   const qs = Object.keys(params).map(k => `${k}=${encodeURIComponent(params[k])}`).join('&');
   return `https://api.pingmeapp.net/app/${path}?${qs}`;
 }
@@ -210,8 +209,8 @@ function runAccount(acc, index, total) {
   const headers = buildHeaders(acc.capture, ua);
   const msgs = [tag];
 
-  function fetchApi(path, extraParams) {
-    const url = buildUrl(path, acc.capture, extraParams);
+  function fetchApi(path) {
+    const url = buildUrl(path, acc.capture);
     return withTimeout(
       new Promise((resolve, reject) => {
         $httpClient.get({ url, headers }, (err, resp, data) => {
@@ -228,52 +227,18 @@ function runAccount(acc, index, total) {
     );
   }
 
-  function solveCaptcha(captchaId, captchaImage) {
-    return new Promise(resolve => {
-      if (!captchaId || !captchaImage) { resolve(''); return; }
-      let imageData = captchaImage;
-      if (captchaImage.startsWith('data:image')) {
-        imageData = captchaImage.split(',')[1] || captchaImage;
-      }
-      $httpClient.post({
-        url: 'http://127.0.0.1:19999',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: captchaId, image: imageData }),
-        timeout: 20000
-      }, (err, resp) => {
-        if (err || !resp || !resp.body) { resolve(''); return; }
-        try {
-          const ocr = JSON.parse(resp.body);
-          resolve(ocr.success && ocr.text ? ocr.text : '');
-        } catch(e) { resolve(''); }
-      });
-    });
-  }
-
   function doVideoLoop(count) {
     let i = 0, ok = 0;
     function next() {
-      if (i >= count) return Promise.resolve(ok);
+      if (i >= count) {
+        return Promise.resolve(ok);
+      }
       return new Promise(resolve => {
         setTimeout(() => {
           i++;
           fetchApi('videoBonus').then(res => {
-            try {
-              const d = JSON.parse(res.body);
-              if (d.retcode === 0) { ok++; resolve(next()); }
-              else if (d.retmsg && d.retmsg.includes('驗證碼')) {
-                solveCaptcha(d.captchaId, d.captchaImage || d.captchaUrl).then(code => {
-                  if (code) {
-                    fetchApi('confirmCaptcha', {
-                      captchaId: d.captchaId, captchaCode: code
-                    }).then(cr => {
-                      try { if (JSON.parse(cr.body).retcode === 0) ok++; } catch(e) {}
-                      resolve(next());
-                    }).catch(() => resolve(next()));
-                  } else { resolve(next()); }
-                });
-              } else { resolve(next()); }
-            } catch(e) { resolve(next()); }
+            try { const d = JSON.parse(res.body); if (d.retcode === 0) ok++; } catch(e) {}
+            resolve(next());
           }).catch(() => resolve(next()));
         }, i === 0 ? 1500 : VIDEO_DELAY);
       });
