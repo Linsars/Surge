@@ -748,15 +748,26 @@ export default async function(ctx) {
     const m = String(s || '').match(/(\d+(?:\.\d+)?)/);
     return m ? Number(m[1]) : null;
   };
-  const fraudCandidates = [
-    { src: 'IPPure', val: firstNum(riskIPPureTxt), sev: ippSev },
-    { src: 'Proxy', val: firstNum(riskProxyTxt), sev: proxySev },
-    { src: 'NetCoffee', val: firstNum(riskCoffeeTxt), sev: coffeeSev },
-    { src: 'ipapi', val: firstNum(riskIpapiTxt), sev: apiSev }
-  ].filter(x => typeof x.val === 'number' && Number.isFinite(x.val));
-  const fraudBest = fraudCandidates.sort((a, b) => (b.sev - a.sev) || (b.val - a.val))[0];
-  const fraudTxt = fraudBest ? `${Math.round(fraudBest.val * 100) / 100}` : '—';
-  const fraudSev = fraudBest ? fraudBest.sev : -1;
+  const fraudEntries = (() => {
+    const r = [];
+    const ippV = firstNum(riskIPPureTxt);
+    if (ippV !== null && ippV > 0) r.push({ val: ippV, w: 1.0 });
+    const pcV = firstNum(riskProxyTxt);
+    if (pcV !== null && pcV > 0) r.push({ val: pcV, w: 0.9 });
+    const ncV = firstNum(riskCoffeeTxt);
+    if (ncV !== null && ncV > 0) r.push({ val: Math.max(0, 100 - ncV), w: 0.6 });
+    const apiV = firstNum(riskIpapiTxt);
+    if (apiV !== null && apiV > 0) r.push({ val: apiV, w: 0.8 });
+    if (!r.length) return null;
+    const totalW = r.reduce((s, e) => s + e.w, 0);
+    const wAvg = r.reduce((s, e) => s + e.val * e.w, 0) / totalW;
+    const maxVal = Math.max(...r.map(e => e.val));
+    const blended = Math.round(wAvg * 0.7 + maxVal * 0.3);
+    const sev = blended >= 80 ? 4 : (blended >= 60 ? 3 : (blended >= 30 ? 2 : (blended >= 10 ? 1 : 0)));
+    return { txt: `${blended}`, sev };
+  })();
+  const fraudTxt = fraudEntries ? fraudEntries.txt : '—';
+  const fraudSev = fraudEntries ? fraudEntries.sev : -1;
   const banCount = [sfsSev >= 3, blockSev >= 3, spamSev >= 4, workerSpamHit].filter(Boolean).length;
   const anonSev = proxyValue === 'Tor' || torValue === '是' ? 4 : (['否', '—'].includes(proxyValue) ? yesNoSev(proxyValue, 3) : Math.max(proxySev, 3));
   const anonValue = torValue === '是' && proxyValue !== 'Tor' ? `Tor+${proxyValue}` : proxyValue;
