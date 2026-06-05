@@ -1,8 +1,8 @@
 #!name=PingMe + WeTalk 双应用签到
 #!author=Linsar
 #!desc=2026-06-01 更新：默认3小时一次，视频每次换设备ID降低风控
-#!arguments=PingMe签到时间:0 */3 * * *,WeTalk签到时间:30 */3 * * *,开启Cookie抓取:false
-#!arguments-desc=PingMe签到时间: 默认每3小时（整点）；WeTalk签到时间: 默认每3小时（半点）；开启Cookie抓取: 首次使用设为true，抓到后改为false
+#!arguments=PingMe签到时间:0 */3 * * *,WeTalk签到时间:30 */3 * * *,开启Cookie抓取:false,最大视频次数:5
+#!arguments-desc=PingMe签到时间: 默认每3小时（整点）；WeTalk签到时间: 默认每3小时（半点）；开启Cookie抓取: 首次使用设为true，抓到后改为false；最大视频次数: 每次运行最多看几个视频
 
 [Script]
 # PingMe Cookie 抓取
@@ -12,10 +12,10 @@ PM_Capture = type=http-request, pattern=^https:\/\/api\.pingmeapp\.net\/app\/que
 WT_Capture = type=http-request, pattern=^https:\/\/api\.wetalkapp\.com\/app\/queryBalanceAndBonus, requires-body=false, script-path=https://raw.githubusercontent.com/Linsars/Surge/main/JS/egern-wetalkCK.js, timeout=120, enable={{{开启Cookie抓取}}}
 
 # PingMe 定时签到
-PM_Task = type=cron, cronexp="{{{PingMe签到时间}}}", script-path=https://raw.githubusercontent.com/Linsars/Surge/main/JS/egern-pingme.js, timeout=180
+PM_Task = type=cron, cronexp="{{{PingMe签到时间}}}", script-path=https://raw.githubusercontent.com/Linsars/Surge/main/JS/egern-pingme.js, timeout=180, argument=MAX_VIDEO={{{最大视频次数}}}
 
 # WeTalk 定时签到
-WT_Task = type=cron, cronexp="{{{WeTalk签到时间}}}", script-path=https://raw.githubusercontent.com/Linsars/Surge/main/JS/egern-wetalk.js, timeout=180
+WT_Task = type=cron, cronexp="{{{WeTalk签到时间}}}", script-path=https://raw.githubusercontent.com/Linsars/Surge/main/JS/egern-wetalk.js, timeout=180, argument=MAX_VIDEO={{{最大视频次数}}}
 
 [MITM]
 hostname = %APPEND% api.pingmeapp.net, api.wetalkapp.com

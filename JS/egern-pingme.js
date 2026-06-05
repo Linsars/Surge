@@ -2,7 +2,7 @@
 const scriptName = 'PingMe';
 const storeKey = 'pingme_accounts_v1';
 const SECRET = '0fOiukQq7jXZV2GRi9LGlO';
-const MAX_VIDEO = 5;
+const MAX_VIDEO = parseInt($argument?.MAX_VIDEO) || 5;
 const VIDEO_DELAY = 8000;
 const ACCOUNT_GAP = 3500;
 const REQUEST_TIMEOUT = 30000;
