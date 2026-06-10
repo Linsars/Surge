@@ -11,6 +11,13 @@ compat_arguments_desc: |
   exchangePoints: 兑换积分档位（可选 100/200/500，默认 100）
   checkinHour: 签到时间（0-23，默认 7=早上7点）。cron 直接按此小时触发，无空转
 
+  📌 首次使用：
+  1. 确认已开启该模块的「MitM」和「脚本」开关
+  2. 在 Safari/Egern 浏览器打开 https://glados.network/console/account
+  3. 登录你的 GLaDOS 账号
+  4. 脚本自动截取 Cookie 并保存（会弹出通知）
+  5. 抓包成功后无需再做此操作，定时任务自动运行
+
 scriptings:
   - http_request:
       name: GLaDOS Cookie 抓包
