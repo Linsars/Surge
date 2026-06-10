@@ -6,18 +6,15 @@ icon: "antenna.radiowaves.left.and.right"
 compat_arguments:
   exchangePoints: "100"
   checkinHour: "7"
-  manualCookie: ""
-  manualDomain: "glados.network"
 
 compat_arguments_desc: |
   exchangePoints: 兑换积分档位（可选 100/200/500，默认 100）
   checkinHour: 签到时间（0-23，默认 7=早上7点）
-  manualCookie: 手动添加 Cookie（粘贴完整 cookie 字符串）。填好后下次签到自动导入，导入成功后清空此项即可。
-  manualDomain: 手动添加 Cookie 对应的域名（默认 glados.network）
 
-  📌 首次使用（两种方式任选）：
-  方式 A — 自动抓包：开启 MitM → 浏览器打开 https://glados.network/console/account 登录即可
-  方式 B — 手动添加：在 manualCookie 粘贴 cookie → 等一次签到运行 → 清空 manualCookie
+  📌 首次使用：
+  开启 MitM → 浏览器打开 https://glados.network/console/account 登录即可自动抓包
+
+  多账号：同一域名重复登录一次即可追加 Cookie
 
 scriptings:
   - http_request:
