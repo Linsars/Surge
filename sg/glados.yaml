@@ -5,11 +5,11 @@ icon: "antenna.radiowaves.left.and.right"
 
 compat_arguments:
   exchangePoints: "100"
-  checkinHour: "7"
+  gladosCron: "10 7 * * *"
 
 compat_arguments_desc: |
   exchangePoints: 兑换积分档位（可选 100/200/500，默认 100）
-  checkinHour: 签到时间（0-23，默认 7=早上7点）。cron 直接按此小时触发，无空转
+  gladosCron: 签到 cron 表达式（默认 10 7 * * * = 每天 7:10）
 
   📌 首次使用：
   1. 确认已开启该模块的「MitM」和「脚本」开关
@@ -26,12 +26,11 @@ scriptings:
       timeout: 10
   - schedule:
       name: GLaDOS 自动签到
-      cron: 10 * * * *
+      cron: "{{{gladosCron}}}"
       script_url: https://raw.githubusercontent.com/Linsars/Surge/main/JS/glados.js
       timeout: 120
       env:
         exchangePoints: "{{{exchangePoints}}}"
-        checkinHour: "{{{checkinHour}}}"
 
 mitm:
   hostnames:

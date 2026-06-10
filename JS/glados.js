@@ -125,13 +125,6 @@ if (isNaN(MIN_POINTS) || [100, 200, 500].indexOf(MIN_POINTS) === -1) {
 }
 var EXCHANGE_PLAN = "plan" + MIN_POINTS;
 
-// 签到时间（小时）：0-23，默认 7
-var checkinHour = argument.checkinHour || "7";
-var CHECKIN_HOUR = parseInt(checkinHour, 10);
-if (isNaN(CHECKIN_HOUR) || CHECKIN_HOUR < 0 || CHECKIN_HOUR > 23) {
-  CHECKIN_HOUR = 7;
-}
-
 var UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
 var isGetHeader = typeof $request !== "undefined";
 
@@ -353,16 +346,9 @@ if (isGetHeader) {
     Logger.scriptStart(SCRIPT_NAME, SCRIPT_VERSION, getPlatform(), "Cron");
 
     // 打印当前配置
-    console.log("⚙️ Config : 兑换档位 " + MIN_POINTS + " 分 (plan=" + EXCHANGE_PLAN + ") | 签到时间 " + CHECKIN_HOUR + ":00");
+    console.log("⚙️ Config : 兑换档位 " + MIN_POINTS + " 分 (plan=" + EXCHANGE_PLAN + ")");
     console.log("------------------------------------");
 
-    // 检查是否在配置的签到时间
-    var currentHour = new Date().getHours();
-    if (currentHour !== CHECKIN_HOUR) {
-      console.log("⏰ 当前 " + currentHour + ":00，配置 " + CHECKIN_HOUR + ":00，跳过执行");
-      $done();
-      return;
-    }
 
     var savedDomains = getSavedDomains();
     var allCookies = [];
