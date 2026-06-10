@@ -6,17 +6,18 @@ icon: "antenna.radiowaves.left.and.right"
 compat_arguments:
   exchangePoints: "100"
   checkinHour: "7"
+  manualCookie: ""
+  manualDomain: "glados.network"
 
 compat_arguments_desc: |
   exchangePoints: 兑换积分档位（可选 100/200/500，默认 100）
-  checkinHour: 签到时间（0-23，默认 7=早上7点）。GLaDOS 每天只能签到一次，cron 精确按此小时执行。
+  checkinHour: 签到时间（0-23，默认 7=早上7点）
+  manualCookie: 手动添加 Cookie（粘贴完整 cookie 字符串）。填好后下次签到自动导入，导入成功后清空此项即可。
+  manualDomain: 手动添加 Cookie 对应的域名（默认 glados.network）
 
-  📌 首次使用：
-  1. 确认已开启该模块的「MitM」和「脚本」开关
-  2. 在 Safari/Egern 浏览器打开 https://glados.network/console/account
-  3. 登录你的 GLaDOS 账号
-  4. 脚本自动截取 Cookie 并保存（会弹出通知）
-  5. 抓包成功后无需再做此操作，定时任务自动运行
+  📌 首次使用（两种方式任选）：
+  方式 A — 自动抓包：开启 MitM → 浏览器打开 https://glados.network/console/account 登录即可
+  方式 B — 手动添加：在 manualCookie 粘贴 cookie → 等一次签到运行 → 清空 manualCookie
 
 scriptings:
   - http_request:
@@ -31,6 +32,8 @@ scriptings:
       timeout: 120
       env:
         exchangePoints: "{{{exchangePoints}}}"
+        manualCookie: "{{{manualCookie}}}"
+        manualDomain: "{{{manualDomain}}}"
 
 mitm:
   hostnames:

@@ -349,7 +349,25 @@ if (isGetHeader) {
     console.log("⚙️ Config : 兑换档位 " + MIN_POINTS + " 分 (plan=" + EXCHANGE_PLAN + ")");
     console.log("------------------------------------");
 
-
+    // ========== 手动 Cookie 导入 ==========
+    if (argument.manualCookie) {
+      var importDomain = argument.manualDomain || "glados.network";
+      console.log("📥 检测到 manualCookie，正在导入到 " + importDomain + " ...");
+      var key = cookiesKeyFor(importDomain);
+      var raw = $store.read(key);
+      var list = [];
+      try { list = JSON.parse(raw) || []; } catch (e) { list = []; }
+      if (!Array.isArray(list)) list = [];
+      if (list.indexOf(argument.manualCookie) === -1) {
+        list.push(argument.manualCookie);
+        $store.write(JSON.stringify(list), key);
+        addDomain(importDomain);
+        console.log("✅ manualCookie 已导入 " + importDomain + "，账号 #" + list.length);
+      } else {
+        console.log("⚠️ manualCookie 已存在，跳过");
+      }
+    }
+    // ===================================
     var savedDomains = getSavedDomains();
     var allCookies = [];
     for (var d = 0; d < savedDomains.length; d++) {
