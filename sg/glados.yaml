@@ -30,10 +30,6 @@ scriptings:
       cron: "10 {{{checkinHour}}} * * *"
       script_url: https://raw.githubusercontent.com/Linsars/Surge/main/JS/glados.js
       timeout: 120
-      env:
-        exchangePoints: "{{{exchangePoints}}}"
-        manualCookie: "{{{manualCookie}}}"
-        manualDomain: "{{{manualDomain}}}"
 
 mitm:
   hostnames:

@@ -115,7 +115,11 @@ var DOMAINS_LIST_KEY = "GLaDOS_Domains";
 
 // ========== 自定义参数：兑换积分档位 + 签到时间 ==========
 // Loon plugin 通过 #!parameter 传入，QX/Surge 通过 $argument 传入
+// Egern YAML 通过 $env._compat.$argument 传入
 var argument = typeof $argument !== "undefined" ? $argument : {};
+if (typeof $env !== "undefined" && $env._compat && $env._compat.$argument) {
+  argument = Object.assign(argument, $env._compat.$argument);
+}
 
 // 兑换档位：100 / 200 / 500，默认 100
 var exchangePoints = argument.exchangePoints || "100";
