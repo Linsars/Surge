@@ -9,7 +9,7 @@ compat_arguments:
 
 compat_arguments_desc: |
   exchangePoints: 兑换积分档位（可选 100/200/500，默认 100）
-  checkinHour: 签到时间（0-23，默认 7=早上7点。每小时第10分钟触发，不匹配的小时自动跳过）
+  checkinHour: 签到时间（0-23，默认 7=早上7点）。cron 直接按此小时触发，无空转
 
 scriptings:
   - http_request:
