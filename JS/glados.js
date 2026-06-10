@@ -109,7 +109,7 @@ var Logger = {
 
 // ========== 工具函数 ==========
 var SCRIPT_NAME = "GLaDOS";
-var SCRIPT_VERSION = "v1.3.1";
+var SCRIPT_VERSION = "v1.3.2";
 var COOKIES_KEY_PREFIX = "GLaDOS_Cookies";
 var DOMAINS_LIST_KEY = "GLaDOS_Domains";
 
