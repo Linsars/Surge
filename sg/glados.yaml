@@ -24,7 +24,7 @@ scriptings:
       timeout: 10
   - http_request:
       name: NodeLoc Cookie 抓包
-      match: ^https://www\.nodeloc\.com/
+      match: ^https://www\.nodeloc\.com/$
       script_url: https://raw.githubusercontent.com/Linsars/Surge/main/JS/glados.js
       timeout: 10
   - schedule:

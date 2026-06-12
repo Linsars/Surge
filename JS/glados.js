@@ -340,7 +340,9 @@ if (isGetHeader) {
     Logger.status("✅", result.isNew ? "新账号已保存" : "已存在");
     Logger.field("Account", label);
     Logger.field("Domain", host);
-    notifyFn("GLaDOS 抓包", result.isNew ? "新账号已保存" : "已存在", label + " | " + host);
+    if (result.isNew) {
+      notifyFn("Cookie 抓包", "新账号已保存", label + " | " + host);
+    }
     $done({});
   }
 } else {
