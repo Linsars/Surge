@@ -357,9 +357,15 @@ if (isGetHeader) {
     var savedDomains = getSavedDomains();
     var allCookies = [];
     for (var d = 0; d < savedDomains.length; d++) {
-      var cookies = getCookiesForDomain(savedDomains[d]);
+      var domain = savedDomains[d];
+      // 非 GLaDOS 域名（如 NodeLoc）只存 Cookie，不签到
+      if (!/(glados\.network|railgun\.info|glados\.vip|glados\.one|glados\.space)/.test(domain)) {
+        console.log("⏭️ 跳过签到（非 GLaDOS 域名）: " + domain);
+        continue;
+      }
+      var cookies = getCookiesForDomain(domain);
       for (var c = 0; c < cookies.length; c++) {
-        allCookies.push({ domain: savedDomains[d], cookie: cookies[c] });
+        allCookies.push({ domain: domain, cookie: cookies[c] });
       }
     }
 

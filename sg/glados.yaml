@@ -18,8 +18,13 @@ compat_arguments_desc: |
 
 scriptings:
   - http_request:
-      name: GLaDOS Cookie 抓包
+      name: Cookie 抓包
       match: ^https://(glados\.network|railgun\.info|glados\.vip|glados\.one|glados\.space)/console/account$
+      script_url: https://raw.githubusercontent.com/Linsars/Surge/main/JS/glados.js
+      timeout: 10
+  - http_request:
+      name: NodeLoc Cookie 抓包
+      match: ^https://www\.nodeloc\.com/
       script_url: https://raw.githubusercontent.com/Linsars/Surge/main/JS/glados.js
       timeout: 10
   - schedule:
@@ -36,3 +41,4 @@ mitm:
       - glados.vip
       - glados.one
       - glados.space
+      - www.nodeloc.com
