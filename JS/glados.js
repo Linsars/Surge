@@ -180,8 +180,24 @@ function saveCookie(domain, cookie) {
   try {
     if (!cookie) return { isNew: false, index: -1 };
     var cookies = getCookiesForDomain(domain);
-    var existingIdx = cookies.indexOf(cookie);
-    if (existingIdx !== -1) return { isNew: false, index: existingIdx };
+    // 提取 session 标识用于去重（koa:sess / _forum_session）
+    var sessionId = (cookie.match(/(koa:sess|_forum_session)=([^;]+)/) || [])[2] || cookie;
+    var existingIdx = -1;
+    for (var i = 0; i < cookies.length; i++) {
+      var existingSession = (cookies[i].match(/(koa:sess|_forum_session)=([^;]+)/) || [])[2] || cookies[i];
+      if (existingSession === sessionId) {
+        existingIdx = i;
+        break;
+      }
+    }
+    if (existingIdx !== -1) {
+      // 同一 session，覆盖更新（token 可能变了）
+      if (cookies[existingIdx] !== cookie) {
+        cookies[existingIdx] = cookie;
+        $store.write(JSON.stringify(cookies), cookiesKeyFor(domain));
+      }
+      return { isNew: false, index: existingIdx };
+    }
     cookies.push(cookie);
     $store.write(JSON.stringify(cookies), cookiesKeyFor(domain));
     addDomain(domain);
