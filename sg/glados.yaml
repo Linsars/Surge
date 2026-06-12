@@ -12,9 +12,10 @@ compat_arguments_desc: |
   checkinHour: 签到时间（0-23，默认 7=早上7点）
 
   📌 首次使用：
-  开启 MitM → 浏览器打开 https://glados.network/console/account 登录即可自动抓包
+  GLaDOS — 使用浏览器打开 https://glados.network/console/account 即可自动抓包
+  NodeLoc — 使用浏览器打开 https://www.nodeloc.com/my/preferences 即可自动抓包
 
-  多账号：同一域名重复登录一次即可追加 Cookie
+  多账号：同一域名重复登一次即可追加 Cookie
 
 scriptings:
   - http_request:
@@ -24,7 +25,7 @@ scriptings:
       timeout: 10
   - http_request:
       name: NodeLoc Cookie 抓包
-      match: ^https://www\.nodeloc\.com/$
+      match: ^https://www\.nodeloc\.com/my/preferences
       script_url: https://raw.githubusercontent.com/Linsars/Surge/main/JS/glados.js
       timeout: 10
   - schedule:
