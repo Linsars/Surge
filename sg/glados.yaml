@@ -13,7 +13,7 @@ compat_arguments_desc: |
 
   📌 首次使用：
   GLaDOS — 使用浏览器打开 https://glados.network/console/account 即可自动抓包
-  NodeLoc — 使用浏览器打开 https://www.nodeloc.com/u/linsar/preferences/account 即可自动抓包
+  NodeLoc — 浏览器打开 https://www.nodeloc.com/my/preferences 即可自动抓包
 
   多账号：同一域名重复登一次即可追加 Cookie
 
