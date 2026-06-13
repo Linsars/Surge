@@ -1,5 +1,5 @@
 name: "GLaDOS 自动签到"
-description: "GLaDOS / Railgun 自动签到 + 积分兑换（可配档位/签到时间）"
+description: "GLaDOS / Railgun 自动签到 + 积分兑换 + NodeLoc / NodeSeek 自动阅读"
 author: "Linsar"
 icon: "antenna.radiowaves.left.and.right"
 
@@ -14,8 +14,9 @@ compat_arguments_desc: |
   📌 首次使用：
   GLaDOS — 使用浏览器打开 https://glados.network/console/account 即可自动抓包
   NodeLoc — 点头像 → 摘要 → 账户即可自动抓包
+  NodeSeek — 点头像 → 设置即可自动抓包
 
-  多账号：同一域名重复登一次即可追加 Cookie
+  多账号：同一域名重复登一次即可追加 Cookie。支持同时使用所有平台。
 
 scriptings:
   - http_request:
@@ -26,6 +27,11 @@ scriptings:
   - http_request:
       name: NodeLoc Cookie 抓包
       match: ^https://www\.nodeloc\.com/(my/preferences|u/[^/]+/preferences/account)
+      script_url: https://raw.githubusercontent.com/Linsars/Surge/main/JS/glados.js
+      timeout: 10
+  - http_request:
+      name: NodeSeek Cookie 抓包
+      match: ^https://nodeseek\.cc/(my/preferences|u/[^/]+/preferences/account)
       script_url: https://raw.githubusercontent.com/Linsars/Surge/main/JS/glados.js
       timeout: 10
   - schedule:
@@ -43,3 +49,4 @@ mitm:
       - glados.one
       - glados.space
       - www.nodeloc.com
+      - nodeseek.cc
