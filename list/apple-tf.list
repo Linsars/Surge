@@ -1,0 +1,27 @@
+# ========================
+# Apple TestFlight & iOS 下载 & 服务直连规则
+# 适用于 Surge / Stash / Shadowrocket / egern
+# 更新时间: 2026-06-25
+# 全部使用 DIRECT 策略
+# ========================
+
+DOMAIN,setup.icloud.com
+DOMAIN,beta.apple.com
+DOMAIN,testflight.apple.com
+DOMAIN,ingest.sentry.io
+DOMAIN,xp.apple.com
+DOMAIN,bag.itunes.apple.com
+DOMAIN,sandbox.itunes.apple.com
+DOMAIN,fpinit.itunes.apple.com
+DOMAIN,iosapps.itunes.apple.com
+DOMAIN,downloaddispatch.itunes.apple.com
+DOMAIN,updates.cdn-apple.com
+DOMAIN,amp-api-search-edge.apps.apple.com
+DOMAIN,apptrailers.itunes.apple.com
+DOMAIN,amp-api-edge.apps.apple.com
+DOMAIN,gateway.icloud.com
+DOMAIN,gsa.apple.com
+DOMAIN,ts.itunes.apple.com
+
+# 关键字匹配
+DOMAIN-KEYWORD,testflight
