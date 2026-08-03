@@ -6,7 +6,7 @@ try {
     obj.activationRequired = false;
     if (obj.authorizationExpiresAt === null || obj.authorizationExpiresAt === undefined) {
       // 授权有效期设到 2099 年；app 若要求毫秒时间戳，改成 4092595200000
-      obj.authorizationExpiresAt = '2099-12-31T15:59:59Z';
+      obj.authorizationExpiresAt = 4092595200000;  // 毫秒时间戳形式
     }
     $done({ body: JSON.stringify(obj) });
   } else {
