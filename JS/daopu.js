@@ -4,10 +4,8 @@ try {
   if (obj && typeof obj === 'object') {
     obj.activated = true;
     obj.activationRequired = false;
-    if (obj.authorizationExpiresAt === null || obj.authorizationExpiresAt === undefined) {
-      // 必须用 ISO 字符串：实测数字(毫秒时间戳)会导致 App 闪退
-      obj.authorizationExpiresAt = '2099-12-31T15:59:59Z';
-    }
+    // authorizationExpiresAt 保持服务器原值(null)不动！
+    // 实测：改成 ISO 字符串 → App 报"数据格式不正确"；改成数字 → 闪退
     $done({ body: JSON.stringify(obj) });
   } else {
     $done({});
