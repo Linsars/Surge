@@ -1,0 +1,9 @@
+#!name=刀铺 激活绕过
+#!desc=拦截激活验证
+#!system=ios
+
+[Script]
+刀铺激活绕过 = type=http-response, pattern=^https?:\/\/tg\.zifumh\.cn\/api\/activation\.php, requires-body=true, max-size=0, script-path=https://github.com/Linsars/Surge/main/js/daopu.js, timeout=10
+
+[MITM]
+hostname = %APPEND% tg.zifumh.cn
